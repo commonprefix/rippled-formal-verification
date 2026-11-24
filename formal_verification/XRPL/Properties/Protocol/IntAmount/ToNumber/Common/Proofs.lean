@@ -4,9 +4,7 @@ import XRPL.Properties.Protocol.Number.Constructors.FromRepExact
 
 /-! # Proof of the `IntAmount.toNumber` theorem
 
-`toNumber x mode = Number.from_rep x.value 0 …`, which (for `value ≠ Int64.minValue`) is
-value-exact via `Number.from_rep_exact`. No rounding, since an exponent-0 integer mantissa
-scales up into `largeRange` exactly. -/
+Any value but the smallest `Int64` scales into the `Number` range exactly, so the conversion never rounds. -/
 
 namespace XRPL.Model.Protocol
 

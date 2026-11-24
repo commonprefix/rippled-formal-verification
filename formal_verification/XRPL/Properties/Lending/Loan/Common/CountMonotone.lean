@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.SetMonotone
 import XRPL.Properties.Lending.Loan.Common.SetValue
 import XRPL.Properties.Lending.Loan.Common.RoundingError
@@ -121,13 +122,13 @@ private lemma STAmount.representable_ge (nt : NumericType) (x : Number) (hx : x.
 payment factor. -/
 private lemma loanPrincipalFromPeriodicPayment_div (pp rate f tpo : Number) (k : UInt32) (hk : k ≠ 0)
     (hz : rate.operator_eq Number.zero = false)
-    (hf : computePaymentFactor rate (Number.ofInt64 k.toInt64) k = .ok f)
+    (hf : computePaymentFactor rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok f)
     (h : loanPrincipalFromPeriodicPayment pp rate k = .ok tpo) : pp.operator_div f .to_nearest = .ok tpo := by
   unfold loanPrincipalFromPeriodicPayment at h
   dsimp only at h
-  rw [if_neg (by simp [hk])] at h
+  rw [ite_eq_right (by simp [hk])] at h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
-  rw [if_neg (by rw [hz]; decide)] at h
+  rw [ite_eq_right (by rw [hz]; decide)] at h
   obtain ⟨f', hf', h⟩ := bind_ok_peel _ _ _ h
   rw [hf, Except.ok.injEq] at hf'
   subst hf'
@@ -196,7 +197,7 @@ lemma Loan.create_periodicPayment_count_antitone_proof (broker : LoanBroker) (v 
   · -- no interest: the principal over the count
     have hcn := Number.ofInt64_count n
     have hcN := Number.ofInt64_count (n + 1)
-    have hnpos : (0 : ℚ) < (Number.ofInt64 n.toInt64).toRat := by
+    have hnpos : (0 : ℚ) < (Number.ofInt64 n.toInt64 .to_nearest).toRat := by
       rw [hcn]; have : n.toNat ≠ 0 := fun h => hn0 (UInt32.toNat_inj.mp (by simpa using h)); positivity
     exact operator_div_den_antitone _ _ _ _ _ hp hNn' hNN' hd₁ hd₂ (hm _ hpos₁) (hm _ hpos₂) hpos hnpos
       (by rw [hcn, hcN, hNn]; push_cast; linarith)

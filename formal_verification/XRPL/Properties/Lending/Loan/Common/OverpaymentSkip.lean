@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.RoundAnySign
 import XRPL.Properties.Lending.Loan.Common.PayCharge
 import XRPL.Properties.Lending.Loan.Common.DefaultCoverTotal
@@ -65,8 +66,8 @@ private lemma STAmount.ofNumber_fractional_towards_zero_ok (r : Number) (hn : r.
     simpa using Number.signum_nonneg_of_negative_false r hneg
   have hnorm' : r.normalizeToRange kMinValue kMaxValue .towards_zero = .ok (mant, exp) := hnorm
   unfold STAmount.ofNumber
-  rw [if_neg (by decide), hs]
-  simp only [Bool.false_eq_true, if_false, hnorm']
+  rw [ite_eq_right (by decide), hs]
+  simp only [Bool.false_eq_true, ite_false, hnorm']
   have h_int : ¬ (STAmount.unchecked .fractional mant.toUInt64 exp false).integral = true := by
     simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
   have h_fit : mant.toUInt64.toNat < 2 ^ 63 := by omega
@@ -83,7 +84,7 @@ private lemma STAmount.ofNumber_fractional_towards_zero_ok (r : Number) (hn : r.
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    rw [STAmount.iou_eq .towards_zero h_int]
+    rw [STAmount.iou_eq .towards_zero h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp false .towards_zero hmtu_lo hmtu_hi
@@ -91,7 +92,7 @@ private lemma STAmount.ofNumber_fractional_towards_zero_ok (r : Number) (hn : r.
   rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hmant_pos)), ok_bind,
     STAmount.checked]
   unfold STAmount.canonicalize
-  rw [if_neg h_int, hiou, if_neg (by omega)]
+  rw [ite_eq_right h_int, hiou, ite_eq_right (by omega)]
   split_ifs <;> exact ⟨_, rfl⟩
 
 /-- An amount at least zero that the asset holds exactly rounds towards zero without error, at a scale in

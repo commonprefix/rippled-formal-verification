@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.LoanBroker.Common.CoverExact
 
 /-! # A deposit credits the amount floored to whole base units
@@ -84,7 +85,7 @@ private lemma roundToNumericType_frac_downward_ge_units (x c : Number) (k : ℕ)
     have hret := ofNumber_frac_downward_ge_units x ret k e hx hk1 hk he.1 hle hof
     have hint : ret.integral = false := by
       unfold STAmount.integral; rw [STAmount.ofNumber_mNumericType _ _ _ _ hof]; rfl
-    simp only [hint, Bool.false_eq_true, if_false] at h
+    simp only [hint, Bool.false_eq_true, ite_false] at h
     cases hre : STAmount.roundToExponent ret e .downward with
     | error err => rw [hre] at h; exact absurd h (by simp)
     | ok rounded =>
@@ -135,7 +136,7 @@ lemma LoanBroker.coverDeposit_floor (lb : LoanBroker) (v : Vault) (amount : STAm
   by_cases hi : lb.numericType.isIntegral = true
   · have hb0 : v.baseExponent = 0 := hint hi
     unfold sumRoundAndSubtract at hs
-    rw [if_pos hi] at hs
+    rw [ite_eq_left hi] at hs
     simp only [bind_pure] at hs
     have hai : amount.integral = true := by unfold STAmount.integral; rw [hat]; exact hi
     have hden : aN.toRat.den = 1 := by rw [hav]; exact STAmount.IntegralCanonical.den_eq_one amount (hc.1 hai).1
@@ -155,7 +156,7 @@ lemma LoanBroker.coverDeposit_floor (lb : LoanBroker) (v : Vault) (amount : STAm
 
   have hs' := hs
   unfold sumRoundAndSubtract at hs'
-  rw [if_neg (by decide)] at hs'
+  rw [ite_eq_right (by decide)] at hs'
   obtain ⟨_, -, hs'⟩ := bind_ok_peel _ _ _ hs'
   obtain ⟨E, hE, hs'⟩ := bind_ok_peel _ _ _ hs'
   obtain ⟨sum, hsum, hs'⟩ := bind_ok_peel _ _ _ hs'

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayoffSettle
 import XRPL.Properties.Lending.Loan.Common.CreditTotal
 import XRPL.Properties.Lending.Ledger.Common.PaymentShareLarge
@@ -46,7 +47,7 @@ private lemma Vault.pay_adjust (v : Vault) (hasset : Vault.HoldsAsset v) (toPool
   have hp10 : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
   have hp1 : (10 : ℚ) ^ v.baseExponent ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) hbase.2
   have hint0 : v.numericType.isIntegral = true → v.baseExponent = 0 := by
-    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [if_pos h]
+    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [ite_eq_left h]
   have hAA0 : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
   have hAAN := v.wf.assetsAvailable_norm
   obtain ⟨d, hd16, hdv⟩ := hdep
@@ -194,8 +195,8 @@ private lemma numberExponent_frac_ok (n : Number) (b : Int) (hn : n.isNormalized
     (hlt : n.toRat < 10 ^ 90) : ∃ e, numberExponent n b .fractional = .ok e := by
   unfold numberExponent
   by_cases hz : n.operator_eq Number.zero = true
-  · rw [if_pos hz]; exact ⟨b, rfl⟩
-  · rw [if_neg hz]
+  · rw [ite_eq_left hz]; exact ⟨b, rfl⟩
+  · rw [ite_eq_right hz]
     obtain ⟨st, hst, -⟩ := STAmount.ofNumber_fractional_ok_fczr n .downward hn (by rw [abs_of_nonneg h0]; exact hlt)
     rw [hst]
     exact ⟨_, rfl⟩
@@ -280,7 +281,7 @@ private lemma vault_credit_moves (nt : NumericType) (A c toPool aa A' : Number) 
     obtain ⟨hcrv, -⟩ := hcrx toPool hto
     have hsv : st.toRat = c.toRat := by
       unfold sumRoundAndSubtract at hst
-      rw [if_pos hint'] at hst
+      rw [ite_eq_left hint'] at hst
       obtain ⟨x, hx, hst⟩ := bind_ok_peel _ _ _ hst
       obtain rfl : x = st := Except.ok.inj hst
       exact STAmount.ofNumber_integral_exact _ c _ x hint' hc (by rw [hk]; exact Rat.den_natCast k) hx
@@ -335,7 +336,7 @@ lemma Loan.pay_ok_of_room (loan : Loan) (v : Vault) (pt : LoanPaymentType) (amou
   have hp10 : (0 : ℚ) < 10 ^ p.pool.baseExponent := zpow_pos (by norm_num) _
   have hp1 : (10 : ℚ) ^ p.pool.baseExponent ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) hbase.2
   have hint0 : p.pool.numericType.isIntegral = true → p.pool.baseExponent = 0 := by
-    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [if_pos h]
+    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [ite_eq_left h]
   have hAA0 : 0 ≤ p.pool.assetsAvailable.toRat := p.pool.exact.assetsAvailable_nonneg
   have hAAN := p.pool.wf.assetsAvailable_norm
   have hgA : Number.OnGrid p.pool.baseExponent p.pool.assetsAvailable := by

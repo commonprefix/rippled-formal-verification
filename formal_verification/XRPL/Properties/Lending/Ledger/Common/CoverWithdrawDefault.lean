@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.Scope
 import XRPL.Properties.Lending.Ledger.Common.VaultSteps
 import XRPL.Properties.Lending.Loan.Common.ManageLedger
@@ -8,9 +9,8 @@ import XRPL.Properties.Protocol.Common.TenthBipsTotality
 
 /-! # A cover withdrawal before a default
 
-A LoanBrokerCoverWithdraw leaves the broker at or above its minimum cover. A default takes at most the
-liquidation amount from the cover, and the liquidation amount is never above the minimum cover. So the
-default pays the vault the same amount with or without the withdrawal. -/
+A cover withdrawal leaves at least the minimum cover, and a default takes at most the liquidation amount, which is
+never above it. So the default pays the vault the same with or without the withdrawal. -/
 
 namespace XRPL.Model.Lending
 
@@ -23,7 +23,7 @@ open private LoanBroker.hasMinimumCover_iff from XRPL.Properties.Lending.LoanBro
 private lemma Number.min_eq_left_of_le (x y : Number) (hx : x.isNormalized) (hy : y.isNormalized)
     (h : x.toRat ≤ y.toRat) : Number.min x y = x := by
   unfold Number.min
-  rw [if_neg]
+  rw [ite_eq_right]
   intro hlt
   exact absurd ((Number.operator_lt_iff _ _ hy hx).mp hlt) (not_lt.mpr h)
 
@@ -228,11 +228,11 @@ lemma LendingLedger.coverWithdraw_default_same_proof (l la lab lb : LendingLedge
   have hslot (j : Nat) : (l.commitBroker { index := k, broker := some res.loanBroker' }).broker? j =
       if j = k then some res.loanBroker' else l.broker? j := by
     rw [LendingLedger.broker?_commitBroker]
-    simp only [if_pos hklt]
+    simp only [ite_eq_left hklt]
   rw [hslot] at hbk₂
   by_cases hk : e₂.brokerIndex = k
   · -- the loan's own broker: its cover fell, and it still holds the minimum cover
-    rw [if_pos hk] at hbk₂
+    rw [ite_eq_left hk] at hbk₂
     have hb₂ : loan₂.broker = res.loanBroker' := (Option.some.inj hbk₂).symm
     have hb₁ : loan.broker = b₀ := by
       rw [hk, hb₀] at hbk
@@ -277,7 +277,7 @@ lemma LendingLedger.coverWithdraw_default_same_proof (l la lab lb : LendingLedge
         (by rw [hcrl₂]; exact hliq))
     exact (Loan.manageDefault_pool_eq loan loan₂ l.vault r r₂ hloan hcover hdef hdef₂).symm
   · -- another broker's loan: the default reads the same loan and broker as without the withdrawal
-    rw [if_neg hk] at hbk₂
+    rw [ite_eq_right hk] at hbk₂
     rw [hbk] at hbk₂
     have hbeq : loan₂.broker = loan.broker := (Option.some.inj hbk₂).symm
     have hcover : loan.defaultCover l.vault = loan₂.defaultCover l.vault := by

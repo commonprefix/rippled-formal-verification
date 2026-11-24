@@ -13,7 +13,7 @@ lemma Number.mantissa_toInt (n : Number) :
         (if n.mantissa_ > maxRep then ((n.mantissa_.toNat / 10 : ℕ) : ℤ) else (n.mantissa_.toNat : ℤ)) := by
   unfold Number.mantissa
   by_cases hcusp : n.mantissa_ > maxRep
-  · rw [if_pos hcusp, if_pos hcusp]
+  · rw [ite_eq_left hcusp, ite_eq_left hcusp]
     have hdiv_nat : (n.mantissa_ / 10).toNat = n.mantissa_.toNat / 10 := by
       rw [UInt64.toNat_div]; rfl
     have hfit : (n.mantissa_ / 10).toNat < 2 ^ 63 := by
@@ -21,18 +21,18 @@ lemma Number.mantissa_toInt (n : Number) :
       have hlt : n.mantissa_.toNat < 2 ^ 64 := n.mantissa_.toNat_lt
       omega
     by_cases hneg : n.negative_
-    · rw [if_pos hneg, if_pos hneg]
+    · rw [ite_eq_left hneg, ite_eq_left hneg]
       rw [UInt64.neg_toInt64_toInt_of_lt _ hfit, hdiv_nat]; push_cast; ring
-    · rw [if_neg hneg, if_neg hneg]
+    · rw [ite_eq_right hneg, ite_eq_right hneg]
       rw [UInt64.toInt64_toInt_of_lt _ hfit, hdiv_nat]; push_cast; ring
-  · rw [if_neg hcusp, if_neg hcusp]
+  · rw [ite_eq_right hcusp, ite_eq_right hcusp]
     have hle : n.mantissa_.toNat ≤ maxRep.toNat :=
       le_of_not_gt (fun hc => hcusp (UInt64.lt_iff_toNat_lt.mpr hc))
     have hfit : n.mantissa_.toNat < 2 ^ 63 := lt_of_le_of_lt hle maxRep_lt_2pow63
     by_cases hneg : n.negative_
-    · rw [if_pos hneg, if_pos hneg]
+    · rw [ite_eq_left hneg, ite_eq_left hneg]
       rw [UInt64.neg_toInt64_toInt_of_lt _ hfit]; ring
-    · rw [if_neg hneg, if_neg hneg]
+    · rw [ite_eq_right hneg, ite_eq_right hneg]
       rw [UInt64.toInt64_toInt_of_lt _ hfit]; ring
 
 theorem Number.mantissa_mul_exponent_eq_toRat_proof (n : Number) (hn : n.isNormalized) :
@@ -40,7 +40,7 @@ theorem Number.mantissa_mul_exponent_eq_toRat_proof (n : Number) (hn : n.isNorma
   rw [Number.mantissa_toInt n]
   unfold Number.exponent
   by_cases hcusp : n.mantissa_ > maxRep
-  · rw [if_pos hcusp, if_pos hcusp]
+  · rw [ite_eq_left hcusp, ite_eq_left hcusp]
     -- cusp clause: mantissa_.toNat % 10 = 0, so (m/10)*10 = m
     have hcusp_nat : maxRep.toNat < n.mantissa_.toNat := UInt64.lt_iff_toNat_lt.mp hcusp
     have hmod : n.mantissa_.toNat % 10 = 0 := by
@@ -56,23 +56,23 @@ theorem Number.mantissa_mul_exponent_eq_toRat_proof (n : Number) (hn : n.isNorma
     have hzpow : (10 : ℚ) ^ (n.exponent_ + 1) = (10 : ℚ) ^ n.exponent_ * 10 :=
       zpow_add_one₀ (by norm_num) _
     by_cases hneg : n.negative_ = false
-    · rw [hneg, if_neg (by decide), Number.toRat_of_nonneg n hneg, hzpow, Int.cast_mul,
+    · rw [hneg, ite_eq_right (by decide), Number.toRat_of_nonneg n hneg, hzpow, Int.cast_mul,
           Int.cast_one, Int.cast_natCast]
       rw [show (1 : ℚ) * (↑(n.mantissa_.toNat / 10) : ℚ) * ((10 : ℚ) ^ n.exponent_ * 10)
             = (↑(n.mantissa_.toNat / 10) : ℚ) * 10 * (10 : ℚ) ^ n.exponent_ from by ring,
           hdivQ]
     · rw [Bool.not_eq_false] at hneg
-      rw [hneg, if_pos (by decide), Number.toRat_of_neg n hneg, hzpow, Int.cast_mul, Int.cast_neg,
+      rw [hneg, ite_eq_left (by decide), Number.toRat_of_neg n hneg, hzpow, Int.cast_mul, Int.cast_neg,
           Int.cast_one, Int.cast_natCast]
       rw [show (-1 : ℚ) * (↑(n.mantissa_.toNat / 10) : ℚ) * ((10 : ℚ) ^ n.exponent_ * 10)
             = -((↑(n.mantissa_.toNat / 10) : ℚ) * 10 * (10 : ℚ) ^ n.exponent_) from by ring,
           hdivQ]
-  · rw [if_neg hcusp, if_neg hcusp]
+  · rw [ite_eq_right hcusp, ite_eq_right hcusp]
     by_cases hneg : n.negative_ = false
-    · rw [hneg, if_neg (by decide), Number.toRat_of_nonneg n hneg]
+    · rw [hneg, ite_eq_right (by decide), Number.toRat_of_nonneg n hneg]
       push_cast; ring
     · rw [Bool.not_eq_false] at hneg
-      rw [hneg, if_pos (by decide), Number.toRat_of_neg n hneg]
+      rw [hneg, ite_eq_left (by decide), Number.toRat_of_neg n hneg]
       push_cast; ring
 
 /-- The public mantissa of any `Number`, normalized or not, fits the signed rep. -/
@@ -82,10 +82,10 @@ lemma Number.mantissa_natAbs_le (n : Number) : n.mantissa.toInt.natAbs ≤ maxRe
     cases n.negative_ <;> decide
   rw [hsign, one_mul]
   by_cases hcusp : n.mantissa_ > maxRep
-  · rw [if_pos hcusp, Int.natAbs_natCast]
+  · rw [ite_eq_left hcusp, Int.natAbs_natCast]
     have hlt : n.mantissa_.toNat < 2 ^ 64 := n.mantissa_.toNat_lt
     rw [maxRep_val]; omega
-  · rw [if_neg hcusp, Int.natAbs_natCast]
+  · rw [ite_eq_right hcusp, Int.natAbs_natCast]
     exact le_of_not_gt (fun hc => hcusp (UInt64.lt_iff_toNat_lt.mpr hc))
 
 theorem Number.mantissa_natAbs_le_maxRep_proof (n : Number) (_hn : n.isNormalized) :

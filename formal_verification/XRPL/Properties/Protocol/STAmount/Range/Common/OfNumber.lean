@@ -26,10 +26,12 @@ lemma Number.to_rep_eq_unchecked (n : Number) (mode : rounding_mode) :
       omega
   have h1 : (Number.unchecked n.negative_
       (if n.mantissa_ > maxRep then n.mantissa_ / 10 else n.mantissa_) n.exponent).mantissa = n.mantissa := by
-    simp only [Number.mantissa, Number.unchecked, if_neg hle]
+    dsimp +instances only [Number.mantissa, Number.unchecked]
+    rw [ite_eq_right hle]
   have h2 : (Number.unchecked n.negative_
       (if n.mantissa_ > maxRep then n.mantissa_ / 10 else n.mantissa_) n.exponent).exponent = n.exponent := by
-    simp only [Number.exponent, Number.unchecked, if_neg hle]
+    dsimp +instances only [Number.exponent, Number.unchecked]
+    rw [ite_eq_right hle]
   rw [Number.to_rep_eq_spec, Number.to_rep_eq_spec]
   unfold Number.to_repSpec
   simp only [h1, h2]
@@ -48,7 +50,7 @@ lemma Number.to_rep_nonneg_eq (w : Number) (mode : rounding_mode) (hw : w.isNorm
   have h63 : maxRep.toNat = 9223372036854775807 := by decide
   have hm'_nat : (m'.toNat : ℤ) = w.mantissa.toInt := by
     rw [Number.mantissa_toInt w, hneg, hm']
-    simp only [Bool.false_eq_true, if_false, one_mul]
+    simp only [Bool.false_eq_true, ite_false, one_mul]
     split
     · rw [UInt64.toNat_div, uint64_ten_toNat]
     · rfl
@@ -79,8 +81,8 @@ lemma STAmount.ofNumber_ok_iff_integral (mv : UInt64) (mo : Int) (ms msh : UInt6
   have h63 : maxRep.toNat = 9223372036854775807 := by decide
   obtain ⟨hw_norm, hw_neg, -, -, hw_val⟩ := STAmount.ofNumber_working_facts n hn
   unfold STAmount.ofNumber
-  dsimp only [NumericType.isIntegral]
-  rw [if_pos rfl]
+  dsimp +instances only [NumericType.isIntegral]
+  rw [ite_eq_left rfl]
   set w : Number := if decide (n.signum < 0) = true then n.operator_neg else n with hw
   obtain ⟨q, f, up, hq, hf0, hf1, hwq, hup, hok, herr⟩ := Number.to_rep_nonneg_eq w mode hw_norm hw_neg
 
@@ -144,22 +146,22 @@ lemma STAmount.checked_iou16_ok_iff (mant : UInt64) (exp : Int) (neg : Bool) (mo
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
-    rw [STAmount.iou_eq mode h_int]
+    rw [STAmount.iou_eq mode h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   rw [STAmount.checked]
   unfold STAmount.canonicalize
-  rw [if_neg h_int, hiou]
+  rw [ite_eq_right h_int, hiou]
   by_cases hhi : exp > cMaxOffset
-  · rw [if_pos hhi]
+  · rw [ite_eq_left hhi]
     exact iff_of_false (by simp) (by omega)
-  · rw [if_neg hhi]
+  · rw [ite_eq_right hhi]
     refine iff_of_true ?_ (by omega)
     by_cases hlo : exp < cMinOffset
-    · rw [if_pos hlo]
+    · rw [ite_eq_left hlo]
       exact ⟨_, rfl⟩
-    · rw [if_neg hlo]
+    · rw [ite_eq_right hlo]
       exact ⟨_, rfl⟩
 
 /-- An IOU `ofNumber` returns a result exactly when the 16-digit rounding of the Number without its sign does. -/
@@ -174,7 +176,7 @@ lemma STAmount.ofNumber_fractional_ok_iff_iou (n : Number) (mode : rounding_mode
   obtain ⟨h_lo, h_hi⟩ := mantissaBounds_nat_of (hn.mantissaBounds hm0)
   have hemin := Number.exponent_ge_min n hn hm0
   unfold STAmount.ofNumber
-  rw [if_neg (by decide)]
+  rw [ite_eq_right (by decide)]
   set w : Number := if decide (n.signum < 0) = true then n.operator_neg else n with hw
   have hw_lo : 10 ^ 18 ≤ w.mantissa_.toNat := by rw [hw_mant]; exact h_lo
   have hw_hi : w.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact h_hi
@@ -219,7 +221,7 @@ lemma STAmount.ofNumber_ok_iff_fractional (n : Number) (mode : rounding_mode) (h
     simp
   · rcases n.negative_ with _ | _
     · simp
-    · simp only [if_true, neg_one_mul]
+    · simp only [ite_true, neg_one_mul]
       exact (STAmount.roundsInRange_neg_iff .fractional mode hmode _).symm
 
 /-- Proof of `STAmount.ofNumber_ok_iff`. -/

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.LoanBroker.Common.CoverExact
 import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
 
@@ -113,26 +114,26 @@ lemma LoanBroker.roundedCoverClawback_floor (lb : LoanBroker) (v : Vault) (amoun
     | some a =>
       by_cases hza : a.isZero = true
       · have hcm : claw = mx := by
-          simp only [LoanBroker.clawRequest, hza, if_true] at hclaw
+          simp only [LoanBroker.clawRequest, hza, ite_true] at hclaw
           exact (Except.ok.inj hclaw).symm
         have h := hcap hcm
-        simp only [LoanBroker.clawTarget, hza, if_true]
+        simp only [LoanBroker.clawTarget, hza, ite_true]
         exact h
       · obtain ⟨hac, hat, ha0⟩ := hreq a rfl
         have hc : a.Canonical := hac.resolve_right hza
-        simp only [LoanBroker.clawRequest, hza, Bool.false_eq_true, if_false] at hclaw
+        simp only [LoanBroker.clawRequest, hza, Bool.false_eq_true, ite_false] at hclaw
         obtain ⟨mag, hmag, hclaw⟩ := bind_ok_peel _ _ _ hclaw
         have hcm : claw = if mag.operator_gt mx = true then mx else mag := (Except.ok.inj hclaw).symm
         obtain ⟨hmagv, hmagn⟩ := STAmount.CanonicalOrZero.toNumber_exact hac mag hmag
-        simp only [LoanBroker.clawTarget, hza, Bool.false_eq_true, if_false]
+        simp only [LoanBroker.clawTarget, hza, Bool.false_eq_true, ite_false]
         by_cases hgt : mag.operator_gt mx = true
-        · rw [if_pos hgt] at hcm
+        · rw [ite_eq_left hgt] at hcm
           have hlt : mx.toRat < a.toRat := hmagv ▸ (Number.operator_gt_iff mag mx hmagn hmxn).mp hgt
           have h := hcap hcm
           refine ⟨h.1, h.2.1, h.2.2.1, ?_, h.2.2.2.2⟩
           rw [h.2.2.2.1, min_eq_right]
           exact (h.2.2.2.1 ▸ hcm ▸ hlt).le
-        · rw [if_neg hgt] at hcm
+        · rw [ite_eq_right hgt] at hcm
           rw [hcm] at hof ⊢
           have hle : a.toRat ≤ mx.toRat := by
             rw [← hmagv]; exact not_lt.mp (by rw [← Number.operator_gt_iff mag mx hmagn hmxn]; exact hgt)

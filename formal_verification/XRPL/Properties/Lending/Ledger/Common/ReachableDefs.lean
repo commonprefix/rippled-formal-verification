@@ -2,9 +2,8 @@ import XRPL.Properties.Lending.Ledger.Defs
 
 /-! # Lending ledger reachability
 
-`LendingLedger.Reaches start txs l` says the transactions `txs` applied in order take `start` to
-`l`. Every reachability notion is built on it: `Reachable` from a new closed-ended vault, and
-`ReachableBy allowed` when only the transactions `allowed` accepts are used. -/
+`LendingLedger.Reaches start txs l` says `txs` applied in order take `start` to `l`. `Reachable` starts from a new
+closed-ended vault, and `ReachableBy allowed` uses only the transactions `allowed` accepts. -/
 
 namespace XRPL.Model.Lending
 

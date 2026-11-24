@@ -65,7 +65,7 @@ lemma doNormalize_scaleDown_ok_aux (maxMantissa : UInt64) (d : ℕ) :
   | zero =>
     intro m e g hm _
     have hgt : ¬ m > maxMantissa := by rw [gt_iff_lt, UInt64.lt_iff_toNat_lt]; simp at hm; omega
-    exact ⟨m, e, g, by rw [doNormalize_scaleDown, dif_neg hgt], by simp⟩
+    exact ⟨m, e, g, by rw [doNormalize_scaleDown, dite_eq_right hgt], by simp⟩
   | succ d ih =>
     intro m e g hm he
     by_cases hgt : m > maxMantissa
@@ -74,9 +74,9 @@ lemma doNormalize_scaleDown_ok_aux (maxMantissa : UInt64) (d : ℕ) :
         omega
       obtain ⟨m', e', g', hok, hle⟩ := ih (m / 10) (e + 1) (g.push (m % 10)) hdiv (by push_cast at he; omega)
       refine ⟨m', e', g', ?_, by push_cast; omega⟩
-      rw [doNormalize_scaleDown, dif_pos hgt, if_neg (by push_cast at he; omega)]
+      rw [doNormalize_scaleDown, dite_eq_left hgt, ite_eq_right (by push_cast at he; omega)]
       exact hok
-    · exact ⟨m, e, g, by rw [doNormalize_scaleDown, dif_neg hgt], by push_cast; omega⟩
+    · exact ⟨m, e, g, by rw [doNormalize_scaleDown, dite_eq_right hgt], by push_cast; omega⟩
 
 lemma doNormalize_ne_overflow (negative : Bool) (mantissa : UInt64) (exponent : Int)
     (minMantissa maxMantissa : UInt64) (mode : rounding_mode) {err : Error} (hov : isOverflow err = true)
@@ -136,8 +136,8 @@ lemma Number.normalized_ne_overflow (negative : Bool) (mantissa : UInt64) (expon
 /-- Truncating a nonpositive exponent stops at exponent `0` at the latest. -/
 lemma Number.truncateAux_exp_le (m : UInt64) (e : Int) (he : e ≤ 0) : (Number.truncateAux m e).2 ≤ 0 := by
   induction m, e using Number.truncateAux.induct with
-  | case1 m e h ih => rw [Number.truncateAux, if_pos h]; exact ih (by omega)
-  | case2 m e h => rw [Number.truncateAux, if_neg h]; exact he
+  | case1 m e h ih => rw [Number.truncateAux, ite_eq_left h]; exact ih (by omega)
+  | case2 m e h => rw [Number.truncateAux, ite_eq_right h]; exact he
 
 lemma Number.truncate_ne_overflow (n : Number) {err : Error} (hov : isOverflow err = true) :
     n.truncate ≠ .error err := by
@@ -153,14 +153,14 @@ lemma Number.to_rep_exponent_zero_ok (n : Number) (mode : rounding_mode) (hexp :
   unfold Number.to_repSpec
   simp only
   by_cases hz : (n.mantissa == 0) = true
-  · exact ⟨0, by rw [if_pos hz]⟩
-  rw [if_neg hz, if_neg (show ¬ n.exponent < 0 by omega), if_pos (show n.exponent ≥ 0 by omega)]
-  have hgrow : ∀ d, growSpec d n.exponent = .ok d := fun d => by rw [growSpec, if_neg (by omega)]
+  · exact ⟨0, by rw [ite_eq_left hz]⟩
+  rw [ite_eq_right hz, ite_eq_right (show ¬ n.exponent < 0 by omega), ite_eq_left (show n.exponent ≥ 0 by omega)]
+  have hgrow : ∀ d, growSpec d n.exponent = .ok d := fun d => by rw [growSpec, ite_eq_right (by omega)]
   rw [hgrow]
   have hg : (if n.negative_ = true then Guard.new.set_negative else Guard.new).round mode = -2 := by
     split <;> exact clean_guard_round _ rfl rfl mode
   simp only [hg]
-  exact ⟨_, by rw [if_neg (by simp)]⟩
+  exact ⟨_, by rw [ite_eq_right (by simp)]⟩
 
 
 lemma STAmount.checked_integral_ne_overflow (nt : NumericType) (hnt : nt.isIntegral = true) (v : UInt64) (neg : Bool)
@@ -168,16 +168,17 @@ lemma STAmount.checked_integral_ne_overflow (nt : NumericType) (hnt : nt.isInteg
     STAmount.checked nt v 0 neg mode ≠ .error err := by
   rw [STAmount.checked]
   unfold STAmount.canonicalize
-  rw [if_pos (show (STAmount.unchecked nt v 0 neg).integral = true from hnt)]
+  rw [ite_eq_left (show (STAmount.unchecked nt v 0 neg).integral = true from hnt)]
   split
   · exact nofun
   split
   · exact error_ne_of_isOverflow rfl hov
   have hexp : (Number.unchecked neg v 0).exponent = 0 := by
     unfold Number.exponent Number.unchecked
-    rw [if_neg (show ¬ v > maxRep from by rw [gt_iff_lt, UInt64.lt_iff_toNat_lt]; omega)]
+    rw [ite_eq_right (show ¬ v > maxRep from by rw [gt_iff_lt, UInt64.lt_iff_toNat_lt]; omega)]
   obtain ⟨r, hr⟩ := Number.to_rep_exponent_zero_ok _ mode hexp
-  simp only [STAmount.unchecked, IntAmount.ofNumber, hr]
+  dsimp +instances only [STAmount.unchecked, IntAmount.ofNumber]
+  simp only [hr]
   split
   · exact error_ne_of_isOverflow rfl hov
   · exact nofun
@@ -187,8 +188,8 @@ lemma IOUAmount.ofMantissaExp_ne_overflow (m : Int64) (e : Int) (mode : rounding
     IOUAmount.ofMantissaExp m e mode ≠ .error err := by
   unfold IOUAmount.ofMantissaExp IOUAmount.normalize
   by_cases h0 : (m == 0) = true
-  · rw [if_pos h0]; simp
-  rw [if_neg h0]
+  · rw [ite_eq_left h0]; simp
+  rw [ite_eq_right h0]
   have hm0 : m ≠ 0 := by simpa using h0
   obtain ⟨he_lo, he_hi⟩ := he hm0
   obtain ⟨v, hv, hvval, hvn⟩ := Number.from_rep_exact m e mode hm he_lo (by unfold maxExponent at *; omega)
@@ -201,7 +202,7 @@ lemma IOUAmount.ofMantissaExp_ne_overflow (m : Int64) (e : Int) (mode : rounding
     · have : (-(2 : ℤ) ^ 63) ≤ m.toInt := by simpa using h1
       have : (-(10 : ℤ) ^ 19) < m.toInt := by omega
       exact_mod_cast this
-    · have : m.toInt ≤ 2 ^ 63 - 1 := by simpa using h2
+    · have : m.toInt ≤ 2 ^ 63 - 1 := by simpa using! h2
       have : m.toInt < (10 : ℤ) ^ 19 := by omega
       exact_mod_cast this
   have hmge : (1 : ℚ) ≤ |(m.toInt : ℚ)| := by
@@ -231,7 +232,7 @@ lemma IOUAmount.ofMantissaExp_ne_overflow (m : Int64) (e : Int) (mode : rounding
     have hr := normalizeToRange_16_exp_range v mode mant exp hb_lo hb_hi (by omega)
       (by unfold maxExponent at *; omega) hnr
     simp only
-    rw [if_neg (by unfold cMaxOffset; omega)]
+    rw [ite_eq_right (by unfold cMaxOffset; omega)]
     split <;> simp
 
 
@@ -244,7 +245,7 @@ lemma STAmount.checked_fractional_ne_overflow (M : UInt64) (e : Int) (neg : Bool
   have hsM : s.mValue.toNat < 2 ^ 63 := hM
   rw [STAmount.checked, ← hs]
   unfold STAmount.canonicalize
-  rw [if_neg hint, STAmount.iou_eq mode hint]
+  rw [ite_eq_right hint, STAmount.iou_eq mode hint hsM]
   have hsd := STAmount.signedDrops_toInt64_toInt_of_lt s hsM
   have hmin : s.signedDrops.toInt64 ≠ Int64.minValue := by
     intro h
@@ -275,10 +276,10 @@ lemma Number.working_facts (n : Number) (hn : n.isNormalized) :
   by_cases h0 : n.mantissa_ = 0
   · have hz := Number.eq_zero_of_mantissa_zero n hn h0
     subst hz
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact ⟨hn, rfl, by rw [Number.toRat_zero, abs_zero], rfl, fun h => absurd h0 h⟩
   by_cases hneg : n.negative_ = true
-  · simp only [hneg, if_true]
+  · simp only [hneg, ite_true]
     refine ⟨Number.operator_neg_isNormalized n hn, ?_, ?_, Number.operator_neg_mantissa_of_ne n h0, fun _ => ?_⟩
     · rw [Number.operator_neg_negative_of_ne n h0, hneg]; rfl
     · rw [Number.toRat_neg, abs_of_neg]
@@ -286,8 +287,8 @@ lemma Number.working_facts (n : Number) (hn : n.isNormalized) :
         have := Number.toRat_nonneg_of_nonnegative n.operator_neg (by
           rw [Number.operator_neg_negative_of_ne n h0, hneg]; rfl)
         rw [Number.toRat_neg] at this; linarith) (Number.toRat_ne_zero_of_mantissa_ne_zero n h0)
-    · unfold Number.operator_neg; rw [if_neg (by simpa using h0)]
-  · rw [if_neg hneg]
+    · unfold Number.operator_neg; rw [ite_eq_right (by simpa using h0)]
+  · rw [ite_eq_right hneg]
     have hnf : n.negative_ = false := by simpa using hneg
     exact ⟨hn, hnf, (abs_of_nonneg (Number.toRat_nonneg_of_nonnegative n hnf)).symm, rfl, fun _ => rfl⟩
 
@@ -333,13 +334,14 @@ lemma Number.operator_mul_ok_of_size (x y : Number) (mode : rounding_mode) (hx :
   · refine ⟨x, ?_⟩
     have hz := Number.eq_zero_of_mantissa_zero x hx hx0
     unfold Number.operator_mul
-    rw [if_pos (by rw [hz]; rfl)]
+    rw [ite_eq_left (by rw [hz]; rfl)]
     rfl
   by_cases hy0 : y.mantissa_ = 0
   · refine ⟨y, ?_⟩
     have hz := Number.eq_zero_of_mantissa_zero y hy hy0
     unfold Number.operator_mul
-    rw [Number.operator_eq_zero_false_of_mantissa_ne x hx0, if_neg Bool.false_ne_true, if_pos (by rw [hz]; rfl)]
+    rw [Number.operator_eq_zero_false_of_mantissa_ne x hx0, ite_eq_right Bool.false_ne_true,
+      ite_eq_left (by rw [hz]; rfl)]
     rfl
   have h1 := Number.exponent_lt_of_size x hx hx0 hxl
   have h2 := Number.exponent_lt_of_size y hy hy0 hyl
@@ -357,7 +359,7 @@ lemma Number.operator_div_ok_of_size (x y : Number) (mode : rounding_mode) (hx :
   by_cases hx0 : x.mantissa_ = 0
   · refine ⟨x, ?_⟩
     have hz := Number.eq_zero_of_mantissa_zero x hx hx0
-    rw [Number.operator_div_of_divisor_ne x y mode hy0, if_pos (by rw [hz]; rfl)]
+    rw [Number.operator_div_of_divisor_ne x y mode hy0, ite_eq_left (by rw [hz]; rfl)]
     rfl
   have h1 := Number.exponent_lt_of_size x hx hx0 hxl
   have h2 := Number.exponent_ge_of_size y hy hy0 hys
@@ -383,13 +385,13 @@ lemma STAmount.checked_iou16_ne_overflow (mant : UInt64) (exp : Int) (neg : Bool
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
-    rw [STAmount.iou_eq mode h_int]
+    rw [STAmount.iou_eq mode h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo (by unfold maxExponent; omega)
   rw [STAmount.checked]
   unfold STAmount.canonicalize
-  rw [if_neg h_int, hiou, if_neg (by unfold cMaxOffset; omega)]
+  rw [ite_eq_right h_int, hiou, ite_eq_right (by unfold cMaxOffset; omega)]
   split
   · rename_i heq
     split at heq <;> cases heq
@@ -526,7 +528,7 @@ lemma STAmount.canonicalize_fractional_zero_offset (s result : STAmount) (mode :
     result.mOffset = -100 := by
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
-  rw [if_neg hint] at hok
+  rw [ite_eq_right hint] at hok
   cases hone : s.iou mode with
   | error e => rw [hone] at hok; exact absurd hok (by simp)
   | ok i =>
@@ -536,7 +538,7 @@ lemma STAmount.canonicalize_fractional_zero_offset (s result : STAmount) (mode :
     have hres : result.mOffset = i.exponent_ := by rw [← heq]
     have hval : result.mValue = i.mantissa_.magnitude := by rw [← heq]
     rw [hres]
-    rw [STAmount.iou_eq mode hint] at hone
+    replace hone := STAmount.iou_ok_peel hint hone
     have hi0 : i.mantissa_ = 0 := by
       rw [hval] at hz
       have h1 := Int64.toNat_magnitude i.mantissa_
@@ -594,7 +596,7 @@ lemma STAmount.roundToExponent_ne_overflow (value : STAmount) (s : Int) (mode : 
   · unfold STAmount.roundToExponent
     split
     · simp
-    · rw [if_pos (by simp [STAmount.isZero, hz])]; simp
+    · rw [ite_eq_left (by simp [STAmount.isZero, hz])]; simp
 
 
 /-- Clamping an amount at most `9·10^17` in size onto its sum with a value at most `10^17` in size never overflows,
@@ -620,16 +622,16 @@ lemma clampToSumExponent_ne_overflow (A : Number) (delta : STAmount) (b : Int) (
       have hm : delta.mValue ≠ 0 := fun h => by have := hio.mant_lo; rw [h] at this; simp at this
       left
       by_cases hn : delta.negative = true
-      · rw [if_pos hn]
+      · rw [ite_eq_left hn]
         unfold STAmount.operator_neg
-        rw [if_neg (by simpa using hm)]
-        exact ⟨⟨hio.is_fractional, hio.mant_lo, hio.mant_hi, hio.exp_lo, hio.exp_hi⟩, by simpa using hn⟩
-      · rw [if_neg hn]
-        exact ⟨hio, by simpa using hn⟩
+        rw [ite_eq_right (by simpa using hm)]
+        exact ⟨⟨hio.is_fractional, hio.mant_lo, hio.mant_hi, hio.exp_lo, hio.exp_hi⟩, by simpa using! hn⟩
+      · rw [ite_eq_right hn]
+        exact ⟨hio, by simpa using! hn⟩
     · right
       have hm : delta.mValue = 0 := by simpa [STAmount.isZero] using hz
       split
-      · unfold STAmount.operator_neg; rw [if_pos (by simp [hm])]; exact hm
+      · unfold STAmount.operator_neg; rw [ite_eq_left (by simp [hm])]; exact hm
       · exact hm
   obtain ⟨dn, hdn⟩ := hd.toNumber_ok
   obtain ⟨hdv, hdnn⟩ := hd.toNumber_exact dn hdn
@@ -649,9 +651,9 @@ lemma clampToSumExponent_ne_overflow (A : Number) (delta : STAmount) (b : Int) (
   unfold numberExponent
   simp only [bind, Except.bind, pure, Except.pure]
   by_cases hz : sum.operator_eq Number.zero = true
-  · rw [if_pos hz]
+  · rw [ite_eq_left hz]
     exact STAmount.roundToExponent_ne_overflow _ _ _ habs hb hb'
-  rw [if_neg hz]
+  rw [ite_eq_right hz]
   cases hof : STAmount.ofNumber delta.numericType sum .downward with
   | error e =>
     simp only

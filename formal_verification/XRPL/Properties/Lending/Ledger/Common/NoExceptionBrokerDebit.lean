@@ -97,7 +97,7 @@ lemma STAmount.Representable.le_maxAmount {nt : NumericType} {x : ℚ} (h : STAm
   | integral mv mo ms msh =>
     obtain ⟨-, k, hk, -, rfl⟩ := h
     unfold NumericType.maxAmount
-    rw [if_pos (show (NumericType.integral mv mo ms msh).isIntegral = true from rfl)]
+    rw [ite_eq_left (show (NumericType.integral mv mo ms msh).isIntegral = true from rfl)]
     exact_mod_cast hk
   | fractional =>
     obtain ⟨m, e, -, hm, -, he, rfl⟩ := h
@@ -288,7 +288,7 @@ lemma LoanBroker.roundedCoverClawback_total (lb : LoanBroker) (v : Vault) (amoun
       exact ⟨hi, hhi, by rw [hhiv]; exact hiou hint, (fun h => by cases h), fun _ => by rw [hhiv]⟩
     · obtain ⟨w, hw, hwv⟩ := NumericType.maxAmount_number v.numericType hasset
       have hmax : v.numericType.maxAmount = v.numericType.maxValue.toNat := by
-        unfold NumericType.maxAmount; rw [if_pos hint]
+        unfold NumericType.maxAmount; rw [ite_eq_left hint]
       exact ⟨w, hw, by rw [hwv]; exact hcover, (fun _ => by rw [hwv, hmax]), fun h => by cases h⟩
   obtain ⟨L, hL, hLv⟩ := Number.exists_normalized_of_int (-(2 * 10 ^ 16 + 1)) (by norm_num)
   obtain ⟨-, hmcW⟩ := Number.operator_sub_between lb.coverAvailable m mc L W .downward hcn hmn hmc hL hW
@@ -325,9 +325,9 @@ lemma LoanBroker.roundedCoverClawback_total (lb : LoanBroker) (v : Vault) (amoun
   unfold_ter
   simp only [Vault.pool_baseExponent, hm, hmc]
   by_cases hsig : mc.signum ≤ 0
-  · rw [if_pos hsig]
+  · rw [ite_eq_left hsig]
     exact ⟨_, rfl, fun d hd => by cases hd⟩
-  rw [if_neg hsig]
+  rw [ite_eq_right hsig]
   have hmc0 : 0 ≤ mc.toRat := le_of_lt ((Number.signum_pos_iff_toRat hmcn).mp (by omega))
   cases amount with
   | none =>

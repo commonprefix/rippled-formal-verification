@@ -31,7 +31,7 @@ lemma STAmount.ofNumber_integral_maxOffset_nonneg (nt : NumericType) (n : Number
     (hok : STAmount.ofNumber nt n mode = .ok result) (hres : result.mValue ≠ 0) :
     0 ≤ nt.maxOffset := by
   unfold STAmount.ofNumber at hok
-  rw [if_pos hnt] at hok
+  rw [ite_eq_left hnt] at hok
   cases hrep : (if decide (n.signum < 0) = true then n.operator_neg else n).to_rep mode with
   | error e => rw [hrep] at hok; exact absurd hok (by simp)
   | ok intValue =>
@@ -39,9 +39,9 @@ lemma STAmount.ofNumber_integral_maxOffset_nonneg (nt : NumericType) (n : Number
     simp only [] at hok
     obtain ⟨v, -, hok⟩ := bind_ok_peel _ _ _ hok
     rw [STAmount.checked, STAmount.canonicalize,
-      if_pos (show (STAmount.unchecked nt v 0 (decide (n.signum < 0))).integral = true
+      ite_eq_left (show (STAmount.unchecked nt v 0 (decide (n.signum < 0))).integral = true
         from hnt)] at hok
-    simp only [STAmount.unchecked] at hok
+    dsimp +instances only [STAmount.unchecked] at hok
     split at hok
     · exact absurd (by rw [← Except.ok.inj hok]) hres
     · split at hok

@@ -18,8 +18,8 @@ lemma Guard.bringIntoRange_cases_sz (neg : Bool) (m : UInt64) (e : Int) (minM : 
   rcases hp : (if m < minM ∧ m ≠ 0 then (m * 10, e - 1) else (m, e)) with ⟨m', e'⟩
   dsimp only
   by_cases hz : e' < minExponent ∨ m' = 0
-  · rw [if_pos hz]; exact Or.inl rfl
-  · rw [if_neg hz]
+  · rw [ite_eq_left hz]; exact Or.inl rfl
+  · rw [ite_eq_right hz]
     push Not at hz
     exact Or.inr hz.2
 
@@ -52,9 +52,9 @@ lemma doNormalize128_zero_shape_sz (zn : Bool) (M : UInt128) (e : Int) (sticky :
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
   by_cases hM : (M == 0) = true
-  · rw [if_pos hM] at hok
+  · rw [ite_eq_left hM] at hok
     exact (Except.ok.inj hok).symm
-  · rw [if_neg hM] at hok
+  · rw [ite_eq_right hM] at hok
     simp only [] at hok
     rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
     rw [hsu] at hok
@@ -69,9 +69,9 @@ lemma doNormalize128_zero_shape_sz (zn : Bool) (M : UInt128) (e : Int) (sticky :
       rw [hsd] at hok
       simp only [] at hok
       by_cases hund : (e₂ < minExponent || m₂ < toUInt128 largeRange.min) = true
-      · rw [if_pos hund] at hok
+      · rw [ite_eq_left hund] at hok
         exact (Except.ok.inj hok).symm
-      · rw [if_neg hund] at hok
+      · rw [ite_eq_right hund] at hok
         cases hcap : doNormalize_capAtMaxRep (toUInt64 m₂) e₂ g₂ with
         | error err => rw [hcap] at hok; simp at hok
         | ok cp =>
@@ -101,7 +101,7 @@ lemma Number.operator_add_zero_shape_sz (x y result : Number)
   · have h_result : result = x := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_pos hy_guard] at hok
+      rw [ite_eq_left hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     subst h_result
     exact Number.eq_zero_of_mantissa_zero result hx h0
@@ -109,14 +109,14 @@ lemma Number.operator_add_zero_shape_sz (x y result : Number)
   · have h_result : result = y := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_pos hx_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_left hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     subst h_result
     exact Number.eq_zero_of_mantissa_zero result hy h0
   by_cases heq_guard : x.operator_eq y.operator_neg = true
   · replace hok := Number.operator_add_ok_spec hok
     unfold Number.operator_addSpec at hok
-    rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
+    rw [ite_eq_right hy_guard, ite_eq_right hx_guard, ite_eq_left heq_guard] at hok
     exact (Except.ok.inj
       (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
   have hx_mant_ne : x.mantissa_ ≠ 0 := by
@@ -177,7 +177,7 @@ lemma divQuotient128_zero_sz (ym : UInt64) (xe ye : Int) :
     apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_udiv]; simp
   unfold divQuotient128
   dsimp only
-  rw [BitVec.mulChecked_of_lt hfit, ok_bind, hnum, hmod, hdiv, if_neg (by decide)]
+  rw [BitVec.mulChecked_of_lt hfit, ok_bind, hnum, hmod, hdiv, ite_eq_right (by decide)]
   rfl
 
 /-- `doNormalize128` on a zero mantissa is the literal `Number.zero`, returned by the leading
@@ -187,7 +187,7 @@ lemma doNormalize128_zero_num_sz (zn : Bool) (e : Int) (minM maxM : UInt64)
     doNormalize128 zn 0 e minM maxM mode s = .ok Number.zero := by
   rw [doNormalize128_eq_spec]
   unfold doNormalize128Spec
-  rw [if_pos (by decide : ((0 : UInt128) == 0) = true)]
+  rw [ite_eq_left (by decide : ((0 : UInt128) == 0) = true)]
 
 /-- A nonzero `operator_div` result forces a nonzero numerator, since a zero numerator is either returned as
 it is or gives a zero quotient that `doNormalize128` turns into `Number.zero`. -/
@@ -198,13 +198,13 @@ lemma Number.operator_div_numerator_ne_zero_sz (x y result : Number) (mode : rou
   intro hxz
   apply hres
   unfold Number.operator_div at hok
-  rw [if_neg hyne] at hok
+  rw [ite_eq_right hyne] at hok
   by_cases hxe : x.operator_eq Number.zero = true
-  · rw [if_pos hxe] at hok
+  · rw [ite_eq_left hxe] at hok
     have hxr : x = result :=
       Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)
     rw [← hxr]; exact hxz
-  · rw [if_neg hxe] at hok
+  · rw [ite_eq_right hxe] at hok
     rw [hxz, divQuotient128_zero_sz, ok_bind] at hok
     simp only [] at hok
     rw [doNormalize128_zero_num_sz] at hok

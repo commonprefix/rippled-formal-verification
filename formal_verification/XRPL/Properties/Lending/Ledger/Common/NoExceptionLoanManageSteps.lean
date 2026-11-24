@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.AcceptTotal
 import XRPL.Properties.Lending.Ledger.Common.AssetFit
 import XRPL.Properties.Lending.Ledger.Common.BrokerProofs
@@ -7,10 +8,8 @@ import XRPL.Properties.Protocol.STAmount.Range.Success
 
 /-! # Where LoanAccept, LoanDelete and LoanManage can fail the model
 
-Each step of the three operations either computes or is a lawfulness re-check. A sum of balances computes because
-every balance of a lawful vault, broker and loan is far below the largest `Number`. The one step that reads a
-range is the rounding of the new AssetsAvailable to the asset, which needs the sum within the asset's largest
-amount. So an operation fails the model only with `notLawful`, which the re-check proofs exclude. -/
+Every step of the three operations computes on lawful objects while the new AssetsAvailable fits the asset, so an
+operation fails the model only with `notLawful`, which the re-check proofs exclude. -/
 
 namespace XRPL.Model.Lending
 
@@ -419,14 +418,12 @@ lemma maxAmount_number (nt : NumericType)
     rw [hwv]
     show ((10 ^ 17 : ℤ) : ℚ) * 10 ^ (0 : ℤ) = ((100000000000000000 : UInt64).toNat : ℚ)
     norm_num
-    decide
   · obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (2 ^ 63 - 1) 0 (by constructor <;> norm_num)
       ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
     refine ⟨w, hw, ?_⟩
     rw [hwv]
     show ((2 ^ 63 - 1 : ℤ) : ℚ) * 10 ^ (0 : ℤ) = ((9223372036854775807 : UInt64).toNat : ℚ)
     norm_num
-    decide
 
 /-- A value from zero to the asset's largest amount rounds to the asset without an error. -/
 lemma round_ok_of_le_max (nt : NumericType)
@@ -525,7 +522,7 @@ lemma totalStores_of_transfer (v : Vault) (hasset : Vault.HoldsAsset v) (hts : v
       · rw [h]; decide
     have hm : v.numericType.maxAmount ≤ 9223372036854775807 := by
       unfold NumericType.maxAmount
-      rw [if_pos hi]
+      rw [ite_eq_left hi]
       exact_mod_cast hmN
     have haav : aa.toRat = v.assetsAvailable.toRat + c.cash.toRat :=
       Number.add_whole_exact hAAN hcn haa1 hAAd hcd (by linarith) (by linarith)
@@ -734,7 +731,7 @@ lemma defaultCover_facts (loan : Loan) (v : Vault) (hasset : Vault.HoldsAsset v)
     have hst : sumRoundAndSubtract v.assetsAvailable c v.baseExponent loan.broker.numericType .downward =
         .ok st := by
       unfold sumRoundAndSubtract
-      rw [if_pos hint', hof]
+      rw [ite_eq_left hint', hof]
       rfl
     obtain ⟨hic, hty⟩ := STAmount.ofNumber_integral_canonical _ _ _ st hint' hof
     have hsmall : st.mValue.toNat ≤ 2 ^ 63 - 1 := by

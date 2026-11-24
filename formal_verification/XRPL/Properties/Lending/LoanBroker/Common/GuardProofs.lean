@@ -52,7 +52,7 @@ private lemma canUpdate_guard_false (lb : LoanBroker) (pool : α) (dm : Number)
         return .tecPRECISION_LOSS
       return .tesSUCCESS) := by
   simp only [LoanBroker.canUpdate]
-  rw [if_neg (by rw [hguard]; decide)]
+  rw [ite_eq_right (by rw [hguard]; decide)]
   rfl
 
 /-- On a closed-ended pool, `canCreate` is the base-grid check. -/

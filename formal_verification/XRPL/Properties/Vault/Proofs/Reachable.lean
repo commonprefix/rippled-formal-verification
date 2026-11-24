@@ -21,7 +21,7 @@ lemma Vault.Reachable.noLending_proof (v : Vault) (t : UInt32) (hr : Vault.Reach
     have hv := Vault.create_ok_toRawVault hcr
     exact ⟨(congrArg RawVault.assetsDeployed hv).trans rfl, (congrArg RawVault.lossUnrealized hv).trans rfl,
       (congrArg RawVault.yieldUnrealized hv).trans rfl⟩
-  | deposit u _ _ _ _ r _ _ _ _ _ hok _ ih =>
+  | deposit u _ _ _ _ r _ _ _ _ _ hok ih =>
     obtain ⟨_, _, hv⟩ := Vault.deposit_frame u _ _ _ _ r hok
     exact ⟨((congrArg RawVault.assetsDeployed hv).trans rfl).trans ih.1,
       ((congrArg RawVault.lossUnrealized hv).trans rfl).trans ih.2.1,
@@ -31,7 +31,7 @@ lemma Vault.Reachable.noLending_proof (v : Vault) (t : UInt32) (hr : Vault.Reach
     exact ⟨((congrArg RawVault.assetsDeployed hv).trans rfl).trans ih.1,
       ((congrArg RawVault.lossUnrealized hv).trans rfl).trans ih.2.1,
       ((congrArg RawVault.yieldUnrealized hv).trans rfl).trans ih.2.2⟩
-  | clawback u _ _ _ _ _ r _ _ _ _ _ _ _ hok _ ih =>
+  | clawback u _ _ _ _ _ r _ _ _ _ _ _ _ hok ih =>
     obtain ⟨_, _, hv⟩ := Vault.clawback_frame u _ _ _ _ r hok
     exact ⟨((congrArg RawVault.assetsDeployed hv).trans rfl).trans ih.1,
       ((congrArg RawVault.lossUnrealized hv).trans rfl).trans ih.2.1,
@@ -53,7 +53,7 @@ lemma Vault.Reachable.openZone_proof (v : Vault) (t : UInt32) (hr : Vault.Reacha
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) : v.OpenZone := by
   induction hr with
   | create _ _ _ _ _ _ _ _ _ hcr => exact Vault.create_openZone hcr
-  | deposit u _ _ _ _ r _ _ hc hty _ hok _ ih =>
+  | deposit u _ _ _ _ r _ _ hc hty _ hok ih =>
     obtain ⟨_, _, hv⟩ := Vault.deposit_frame u _ _ _ _ r hok
     have hnt : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     exact (Vault.deposit_openZone u _ _ _ _ hc hty (ih (hnt ▸ hmax)) r hok).2
@@ -61,7 +61,7 @@ lemma Vault.Reachable.openZone_proof (v : Vault) (t : UInt32) (hr : Vault.Reacha
     obtain ⟨_, _, hv⟩ := Vault.withdraw_frame u _ _ _ _ r hok
     have hnt : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     exact (Vault.withdraw_openZone u _ _ _ _ (ih (hnt ▸ hmax)) (hnt ▸ hmax) r hok).2
-  | clawback u _ _ _ _ _ r _ _ hc _ hhs _ _ hok _ ih =>
+  | clawback u _ _ _ _ _ r _ _ hc _ hhs _ _ hok ih =>
     obtain ⟨_, _, hv⟩ := Vault.clawback_frame u _ _ _ _ r hok
     have hnt : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     exact (Vault.clawback_openZone u _ _ _ _ hc hhs (hnt ▸ hmax) (ih (hnt ▸ hmax)) r hok).2
@@ -117,12 +117,11 @@ lemma Vault.deposit_vault_updates_exact_proof (v : Vault) (amount : STAmount) (i
     (t t0 : UInt32) (hpos : 0 < amount.toRat) (hr : Vault.Reachable v t0) (hc : amount.Canonical)
     (hty : amount.mNumericType = v.numericType)
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (r : VaultWithAmounts) (hok : (v.deposit amount isDonation t hpos).run = .ok (.ok r))
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1) :
+    (r : VaultWithAmounts) (hok : (v.deposit amount isDonation t hpos).run = .ok (.ok r)) :
     r.vault'.assetsAvailable.toRat = v.assetsAvailable.toRat + r.assets.toRat ∧
       (r.vault'.toExact.sharesTotal : ℚ) = v.toExact.sharesTotal + r.shares.toRat :=
   ⟨(Vault.deposit_openZone v amount isDonation t hpos hc hty (Vault.Reachable.openZone_proof v t0 hr hmax) r hok).1,
-    Vault.deposit_exact_sharesTotal v amount isDonation t hpos hc hty r hok hSsz⟩
+    Vault.deposit_exact_sharesTotal v amount isDonation t hpos hc hty r hok⟩
 
 lemma Vault.withdraw_vault_updates_exact_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool)
     (t t0 : UInt32) (hpos : 0 < amount.amount.toRat) (hr : Vault.Reachable v t0)
@@ -150,13 +149,13 @@ lemma Vault.Reachable.assetsReserved_zero_proof (v : Vault) (t : UInt32) (hr : V
     v.assetsReserved = Number.zero := by
   induction hr with
   | create _ _ _ _ _ _ _ _ _ hcr => exact (congrArg RawVault.assetsReserved (Vault.create_ok_toRawVault hcr)).trans rfl
-  | deposit u _ _ _ _ r _ _ _ _ _ hok _ ih =>
+  | deposit u _ _ _ _ r _ _ _ _ _ hok ih =>
     obtain ⟨_, _, hv⟩ := Vault.deposit_frame u _ _ _ _ r hok
     exact ((congrArg RawVault.assetsReserved hv).trans rfl).trans ih
   | withdraw u _ _ _ _ _ r _ _ _ _ _ _ _ hok _ ih =>
     obtain ⟨_, _, hv⟩ := Vault.withdraw_frame u _ _ _ _ r hok
     exact ((congrArg RawVault.assetsReserved hv).trans rfl).trans ih
-  | clawback u _ _ _ _ _ r _ _ _ _ _ _ _ hok _ ih =>
+  | clawback u _ _ _ _ _ r _ _ _ _ _ _ _ hok ih =>
     obtain ⟨_, _, hv⟩ := Vault.clawback_frame u _ _ _ _ r hok
     exact ((congrArg RawVault.assetsReserved hv).trans rfl).trans ih
   | burnShares u _ _ _ _ _ u' _ _ _ _ hok ih =>
@@ -187,13 +186,13 @@ lemma Vault.Reachable.assetsMaximum_exact_proof (v : Vault) (t : UInt32) (hr : V
         split at hm <;> simp_all
     rw [hnt]
     exact Number.isRounded_eq_false_of_isOnExponentGrid _ _ _ (Vault.canCreate_assetsMaximum _ _ _ _ _ hcan m hm')
-  | deposit u _ _ _ _ r _ _ _ _ _ hok _ ih =>
+  | deposit u _ _ _ _ r _ _ _ _ _ hok ih =>
     obtain ⟨_, _, hv⟩ := Vault.deposit_frame u _ _ _ _ r hok
     rw [(congrArg RawVault.assetsMaximum hv).trans rfl, (congrArg RawVault.numericType hv).trans rfl]; exact ih
   | withdraw u _ _ _ _ _ r _ _ _ _ _ _ _ hok _ ih =>
     obtain ⟨_, _, hv⟩ := Vault.withdraw_frame u _ _ _ _ r hok
     rw [(congrArg RawVault.assetsMaximum hv).trans rfl, (congrArg RawVault.numericType hv).trans rfl]; exact ih
-  | clawback u _ _ _ _ _ r _ _ _ _ _ _ _ hok _ ih =>
+  | clawback u _ _ _ _ _ r _ _ _ _ _ _ _ hok ih =>
     obtain ⟨_, _, hv⟩ := Vault.clawback_frame u _ _ _ _ r hok
     rw [(congrArg RawVault.assetsMaximum hv).trans rfl, (congrArg RawVault.numericType hv).trans rfl]; exact ih
   | burnShares u _ _ _ _ _ u' _ _ _ _ hok ih =>

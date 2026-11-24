@@ -5,19 +5,9 @@ import XRPL.Properties.Vault.Common.DepositDefs
 
 /-! # Witnesses for dilution
 
-Each run's result is computed by the model and checked by `native_decide`. Every vault comes from a
-reachable history: a create, a deposit, then a donation.
+A deposit, a withdrawal and a clawback on reachable vaults that each lower the per-share value. -/
 
-* Deposit on an IOU: `1999999999999999` assets and `10¹⁵` shares, deposit `2`: one share, worth
-  `1.999999999999999`, is charged `1`, so per-share value falls by all but `10⁻¹⁵` of a step spread over
-  `10¹⁵ + 1` shares.
-* Withdrawal and clawback: 3 assets and 2 shares, redeem (claw back) one share, worth
-  `1.5`, for `2`: per-share value falls by exactly half a unit. A zero clawback amount claws a
-  one-share holding the same way.
-* Deposit, integral: 5 assets and 2 shares, deposit `3`: one share, worth `2.5`, charged `2`, so per-share value
-  falls from `2.5` to `7/3`. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.DilWit
 
@@ -82,11 +72,10 @@ lemma Vault.deposit_no_dilution_grid_witness :
       Vault.Reachable v t0 ∧ amountDeposit.Canonical ∧ amountDeposit.mNumericType = v.numericType ∧
       (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
-      (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 ∧ v.numericType.isIntegral = false ∧
+      v.numericType.isIntegral = false ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   ⟨vL, xL, 0, 0, xL_pos, depRun vL xL xL_pos, vL_reach, STAmount.canonical_of_canonicalB _ (by native_decide),
-    by native_decide, fun h => absurd h (by native_decide), by native_decide, by native_decide, by native_decide,
-    by native_decide⟩
+    by native_decide, fun h => absurd h (by native_decide), by native_decide, by native_decide, by native_decide⟩
 
 /-- Withdrawal half unit: per-share value falls, by half a unit of the payout. -/
 lemma Vault.withdraw_no_dilution_half_ulp_witness :
@@ -149,9 +138,9 @@ lemma Vault.deposit_no_dilution_integral_witness :
       (r : VaultWithAmounts),
       Vault.Reachable v t0 ∧ amountDeposit.Canonical ∧ amountDeposit.mNumericType = v.numericType ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
-      (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 ∧ v.numericType.isIntegral = true ∧
+      v.numericType.isIntegral = true ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   ⟨vB, xB, 0, 0, xB_pos, depRun vB xB xB_pos, vB_reach, STAmount.canonical_of_canonicalB _ (by native_decide),
-    by native_decide, by native_decide, by native_decide, by native_decide, by native_decide⟩
+    by native_decide, by native_decide, by native_decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

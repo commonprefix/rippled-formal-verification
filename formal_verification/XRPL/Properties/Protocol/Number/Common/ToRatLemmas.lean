@@ -12,7 +12,7 @@ multiplication. -/
 
 /-- `Number.zero.toRat = 0`, immediate from the `mantissa = 0` guard. -/
 lemma Number.toRat_zero : Number.zero.toRat = 0 := by
-  unfold Number.toRat; rw [if_pos (show Number.zero.mantissa_ = 0 from rfl)]
+  unfold Number.toRat; rw [ite_eq_left (show Number.zero.mantissa_ = 0 from rfl)]
 
 /-- Extract mantissa bounds from `isNormalized` when mantissa is nonzero. -/
 lemma Number.isNormalized.mantissaBounds {n : Number}
@@ -49,8 +49,8 @@ lemma abs_toRat_eq (n : Number) :
     |n.toRat| = (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_ := by
   unfold Number.toRat
   rcases eq_or_ne n.mantissa_ 0 with hm | hm
-  · rw [if_pos hm]; simp [show n.mantissa_.toNat = 0 by rw [hm]; rfl]
-  rw [if_neg hm]
+  · rw [ite_eq_left hm]; simp [show n.mantissa_.toNat = 0 by rw [hm]; rfl]
+  rw [ite_eq_right hm]
   split_ifs with hneg hexp hexp
   · rw [Rat.mkRat_one]
     have h_to : n.exponent_ = (n.exponent_.toNat : ℤ) := (Int.toNat_of_nonneg hexp).symm
@@ -97,7 +97,7 @@ lemma Number.toRat_nonpos_of_negative (n : Number) (hneg : n.negative_ = true) :
   unfold Number.toRat
   rcases eq_or_ne n.mantissa_ 0 with hm | hm
   · simp [hm]
-  rw [if_neg hm, hneg]; simp only [if_true]
+  rw [ite_eq_right hm, hneg]; simp only [ite_true]
   split_ifs with hexp
   · rw [Rat.mkRat_one]; push_cast
     have : (0 : ℚ) ≤ (n.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n.exponent_.toNat := by positivity
@@ -118,7 +118,7 @@ lemma Number.toRat_nonneg_of_nonnegative (n : Number) (hneg : n.negative_ = fals
   unfold Number.toRat
   rcases eq_or_ne n.mantissa_ 0 with hm | hm
   · simp [hm]
-  rw [if_neg hm, hneg]; simp only [Bool.false_eq_true, if_false]
+  rw [ite_eq_right hm, hneg]; simp only [Bool.false_eq_true, ite_false]
   split_ifs
   · rw [Rat.mkRat_one]; push_cast; positivity
   · rw [Rat.mkRat_eq_div]; push_cast; positivity
@@ -128,17 +128,17 @@ lemma Number.toRat_of_nonneg (n : Number) (hneg : n.negative_ = false) :
     n.toRat = (n.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n.exponent_ := by
   unfold Number.toRat
   rcases eq_or_ne n.mantissa_ 0 with hm | hm
-  · rw [if_pos hm]; simp [show n.mantissa_.toNat = 0 by rw [hm]; rfl]
-  rw [if_neg hm]
+  · rw [ite_eq_left hm]; simp [show n.mantissa_.toNat = 0 by rw [hm]; rfl]
+  rw [ite_eq_right hm]
   simp only [hneg]
   by_cases hexp : n.exponent_ ≥ 0
-  · rw [if_pos hexp, Rat.mkRat_one]
+  · rw [ite_eq_left hexp, Rat.mkRat_one]
     have h_to : n.exponent_ = (n.exponent_.toNat : ℤ) := (Int.toNat_of_nonneg hexp).symm
     rw [h_to, zpow_natCast]
     push_cast
     rw [Int.toNat_natCast]
     ring
-  · rw [if_neg hexp]
+  · rw [ite_eq_right hexp]
     have hneg_exp : n.exponent_ < 0 := not_le.mp hexp
     have h_neg_pos : 0 ≤ -n.exponent_ := by omega
     rw [Rat.mkRat_eq_div]
@@ -198,7 +198,7 @@ lemma Number.toRat_eq_zero_iff {n : Number} :
     exact UInt64.ext this
   · intro h
     unfold Number.toRat
-    rw [if_pos h]
+    rw [ite_eq_left h]
 
 /-- A normalized `Number` is worth zero exactly when it is the canonical zero. -/
 lemma Number.toRat_eq_zero_iff_eq_zero {n : Number} (hn : n.isNormalized) :
@@ -263,7 +263,7 @@ lemma Number.operator_neg_mantissa_of_ne (n : Number) (hne : n.mantissa_ ≠ 0) 
   unfold Number.operator_neg
   have hm_bool : (n.mantissa_ == 0) = false := by
     rw [beq_eq_false_iff_ne]; exact hne
-  rw [if_neg (by rw [hm_bool]; decide)]
+  rw [ite_eq_right (by rw [hm_bool]; decide)]
 
 /-- For a non-zero mantissa, `operator_neg` flips the sign bit. -/
 lemma Number.operator_neg_negative_of_ne (n : Number) (hne : n.mantissa_ ≠ 0) :
@@ -271,7 +271,7 @@ lemma Number.operator_neg_negative_of_ne (n : Number) (hne : n.mantissa_ ≠ 0) 
   unfold Number.operator_neg
   have hm_bool : (n.mantissa_ == 0) = false := by
     rw [beq_eq_false_iff_ne]; exact hne
-  rw [if_neg (by rw [hm_bool]; decide)]
+  rw [ite_eq_right (by rw [hm_bool]; decide)]
 
 /-- `operator_neg` preserves `isNormalized`. A nonzero mantissa keeps every field but the sign, and a zero mantissa
 gives `Number.zero`. -/
@@ -279,8 +279,8 @@ lemma Number.operator_neg_isNormalized (n : Number) (h : n.isNormalized) :
     n.operator_neg.isNormalized := by
   unfold Number.operator_neg
   by_cases hm : n.mantissa_ == 0
-  · rw [if_pos hm]; left; rfl
-  · rw [if_neg hm]
+  · rw [ite_eq_left hm]; left; rfl
+  · rw [ite_eq_right hm]
     rcases h with h_zero | ⟨h1, h2, h3, h4, h5⟩
     · exfalso; apply hm
       have : n.mantissa_ = 0 := by rw [h_zero]; rfl
@@ -293,12 +293,12 @@ sign bit is flipped. For zero mantissa it returns `Number.zero` which has `toRat
 lemma Number.toRat_neg (n : Number) : n.operator_neg.toRat = -n.toRat := by
   unfold Number.operator_neg
   by_cases hm : n.mantissa_ == 0
-  · rw [if_pos hm]
+  · rw [ite_eq_left hm]
     have hm_eq : n.mantissa_ = 0 := by
       rw [beq_iff_eq] at hm; exact hm
     have hn_zero : n.toRat = 0 := Number.toRat_eq_zero_iff.mpr hm_eq
     rw [Number.toRat_zero, hn_zero, neg_zero]
-  · rw [if_neg hm]
+  · rw [ite_eq_right hm]
     set n' : Number := { n with negative_ := !n.negative_ } with hn'_def
     have hn'_mant : n'.mantissa_ = n.mantissa_ := rfl
     have hn'_exp : n'.exponent_ = n.exponent_ := rfl
@@ -324,7 +324,7 @@ lemma neg_neg_of_mant_ne {y : Number} (hy_mant_ne : y.mantissa_ ≠ 0) :
   have hbool : (ym == 0) = false := by
     rw [beq_eq_false_iff_ne]; exact hy_mant_ne'
   unfold Number.operator_neg
-  simp only [hbool, Bool.false_eq_true, if_false]
+  simp only [hbool, Bool.false_eq_true, ite_false]
   cases yn <;> rfl
 
 /-- Subtraction as addition of the negation, on `toRat`. -/

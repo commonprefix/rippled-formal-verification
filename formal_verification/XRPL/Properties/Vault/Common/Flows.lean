@@ -2,9 +2,8 @@ import XRPL.Properties.Vault.Common.ReachableDefs
 
 /-! # Sums over a sequence of vault transactions
 
-`Vault.Flows w t u t' deposited withdrawn recovered created redeemed destroyed` says that `u` at time `t'` results from
-`w` at time `t` by vault transactions, each with the facts C++ guarantees (the steps of `Vault.Reachable`), and adds up
-what they move: the assets deposited, withdrawn and clawed back, and the shares created, redeemed and destroyed. -/
+`Vault.Flows` says that `u` at time `t'` results from `w` at time `t` by vault transactions, and adds up the assets
+deposited, withdrawn and clawed back, and the shares created, redeemed and destroyed. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -19,7 +18,6 @@ inductive Vault.Flows (w : Vault) (t : UInt32) :
       Vault.Flows w t u t₁ D W C SC SR SD → t₁ ≤ t' →
       amount.Canonical → amount.mNumericType = u.numericType →
       (hpos : 0 < amount.toRat) → (u.deposit amount isDonation t' hpos).run = .ok (.ok r) →
-      (u.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 → -- the MPT maximum
       Vault.Flows w t r.vault' t' (D + r.assets.toRat) W C (SC + r.shares.toRat) SR SD
   | withdraw (u : Vault) (t₁ t' : UInt32) (D W C SC SR SD : ℚ) (amount : WithdrawAmount)
       (holderShares : STAmount) (waive : Bool) (r : VaultWithAmounts) :
@@ -35,7 +33,6 @@ inductive Vault.Flows (w : Vault) (t : UInt32) :
       assets.CanonicalOrZero → assets.mNumericType = u.numericType → holderShares.ShareBalance →
       (waive = true ↔ u.IsSoleShareholder holderShares) →
       (hnn : 0 ≤ assets.toRat) → (u.clawback assets holderShares waive hnn).run = .ok (.ok r) →
-      r.shares.toRat ≤ holderShares.toRat →
       Vault.Flows w t r.vault' t' D W (C + r.assets.toRat) SC SR (SD + r.shares.toRat)
   | burnShares (u : Vault) (t₁ t' : UInt32) (D W C SC SR SD : ℚ)
       (amount holderShares sharesTotalAmount : STAmount) (u' : Vault) :
@@ -56,12 +53,12 @@ lemma Vault.Flows.reachable {w : Vault} {t : UInt32} (hr : Vault.Reachable w t) 
     {D W C SC SR SD : ℚ} (h : Vault.Flows w t u t' D W C SC SR SD) : Vault.Reachable u t' := by
   induction h with
   | refl => exact hr
-  | deposit u t₁ t' _ _ _ _ _ _ amount isDonation r _ hle hc hty hpos hok hmint ih =>
-    exact .deposit u t₁ t' amount isDonation r ih hle hc hty hpos hok hmint
+  | deposit u t₁ t' _ _ _ _ _ _ amount isDonation r _ hle hc hty hpos hok ih =>
+    exact .deposit u t₁ t' amount isDonation r ih hle hc hty hpos hok
   | withdraw u t₁ t' _ _ _ _ _ _ amount holderShares waive r _ hle hc hty hhs hsole hpos hok hheld ih =>
     exact .withdraw u t₁ t' amount holderShares waive r ih hle hc hty hhs hsole hpos hok hheld
-  | clawback u t₁ t' _ _ _ _ _ _ assets holderShares waive r _ hle hc hty hhs hsole hnn hok hheld ih =>
-    exact .clawback u t₁ t' assets holderShares waive r ih hle hc hty hhs hsole hnn hok hheld
+  | clawback u t₁ t' _ _ _ _ _ _ assets holderShares waive r _ hle hc hty hhs hsole hnn hok ih =>
+    exact .clawback u t₁ t' assets holderShares waive r ih hle hc hty hhs hsole hnn hok
   | burnShares u t₁ t' _ _ _ _ _ _ amount holderShares sharesTotalAmount u' _ hle hhs hcan hok ih =>
     exact .burnShares u t₁ t' amount holderShares sharesTotalAmount u' ih hle hhs hcan hok
   | update u t₁ t' _ _ _ _ _ _ assetsMaximum blockDeposit u' _ hle hcan hok ih =>

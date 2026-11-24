@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.SetExits
 import XRPL.Properties.Lending.LoanBroker.Defs
 import XRPL.Properties.Lending.LoanBroker.LoanBrokerValid
@@ -70,7 +71,7 @@ lemma Loan.canCreate_exact (broker : LoanBroker) (v : Vault) (p : Number) (fees 
   · cases h; exact absurd ‹_› (by decide)
   · split at h
     · cases h
-    · rw [if_neg (by rw [show TER.tesSUCCESS.isTesSuccess = true from rfl]; decide)] at h
+    · rw [ite_eq_right (by rw [show TER.tesSUCCESS.isTesSuccess = true from rfl]; decide)] at h
       cases c with
       | error e => cases h
       | ok pt =>
@@ -135,12 +136,12 @@ lemma Loan.create_ok_fits (broker : LoanBroker) (v : Vault) (principal : Number)
   constructor
   · by_contra hc
     have hbad : broker.loanCount.addChecked 1 = .error .wrap := by
-      unfold UInt32.addChecked; rw [if_neg (by simpa using hc)]
+      unfold UInt32.addChecked; rw [ite_eq_right (by simpa using hc)]
     simp only [hbad] at hok
     walk_ok
   · by_contra hc
     have hbad : schedule.startDate.addChecked schedule.paymentInterval = .error .wrap := by
-      unfold UInt32.addChecked; rw [if_neg (by simpa using hc)]
+      unfold UInt32.addChecked; rw [ite_eq_right (by simpa using hc)]
     simp only [hbad] at hok
     walk_ok
 

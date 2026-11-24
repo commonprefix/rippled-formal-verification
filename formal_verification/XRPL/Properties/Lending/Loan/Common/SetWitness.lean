@@ -7,7 +7,7 @@ import XRPL.Properties.Lending.Loan.Defs
 Concrete creates on a closed-ended IOU vault, checked by `native_decide`, including one-payment creates for the
 value bounds. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

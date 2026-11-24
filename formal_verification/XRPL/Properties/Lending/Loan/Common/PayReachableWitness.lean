@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Loan.Common.PayDefs
 Runs from a new IOU vault at Scale 1, checked by `native_decide`. A loan of `603946999675283.3` paid 32 years late
 takes AssetsAvailable and a broker's cover past `10^16` base units. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

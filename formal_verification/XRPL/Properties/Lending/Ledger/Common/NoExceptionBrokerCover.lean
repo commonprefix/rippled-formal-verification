@@ -4,9 +4,8 @@ import XRPL.Properties.Vault.Proofs.Support.NoOverflow
 
 /-! # The cover transactions never end in an exception within the asset's range
 
-A LoanBrokerCoverDeposit builds CoverAvailable plus the amount as an amount of the asset before it checks the Open
-limit, so it needs the sum within the asset's maximum. A withdrawal and a clawback build amounts no larger than
-CoverAvailable and the amount asked for. -/
+A cover deposit needs CoverAvailable plus the amount within the asset's maximum (FV_M3_10). A withdrawal and a
+clawback build amounts no larger than CoverAvailable and the amount asked for. -/
 
 namespace XRPL.Model.Protocol
 
@@ -63,8 +62,8 @@ lemma postSumExponent_frac_ok_of_cap (A c : Number) (b : Int) (hA : A.isNormaliz
   have hne : ∃ e, numberExponent s b .fractional = .ok e ∧ e ≤ 79 := by
     unfold numberExponent
     by_cases hz : s.operator_eq Number.zero = true
-    · rw [if_pos hz]; exact ⟨b, rfl, by omega⟩
-    · rw [if_neg hz]
+    · rw [ite_eq_left hz]; exact ⟨b, rfl, by omega⟩
+    · rw [ite_eq_right hz]
       obtain ⟨st, hst, -⟩ := STAmount.ofNumber_fractional_ok_fczr s .downward hsn
         (lt_of_le_of_lt hsabs (by unfold iouProofCap; norm_num))
       have hoff := STAmount.ofNumber_fractional_offset_le_cap s .downward st hsn hsabs hst
@@ -84,7 +83,7 @@ lemma postSumExponent_integral_ok_of_cap (A c : Number) (b : Int) (nt : NumericT
     (hsum : A.toRat + c.toRat ≤ nt.maxValue.toNat) : ∃ e, postSumExponent A c b nt = .ok e := by
   obtain ⟨s, hs, hsn⟩ := Number.operator_add_total_of_abs A c .to_nearest hA hc hAl hcl
   obtain ⟨w, hw, hwv⟩ := NumericType.maxAmount_number nt hasset
-  have hmax : nt.maxAmount = nt.maxValue.toNat := by unfold NumericType.maxAmount; rw [if_pos hint]
+  have hmax : nt.maxAmount = nt.maxValue.toNat := by unfold NumericType.maxAmount; rw [ite_eq_left hint]
   obtain ⟨hs1, hs2⟩ := Number.operator_add_between A c s Number.zero w .to_nearest hA hc hs
     Number.zero_isNormalized hw (by rw [Number.toRat_zero]) (by rw [hwv, hmax]; positivity)
     (by rw [Number.toRat_zero]; exact h0) (by rw [hwv, hmax]; exact hsum)
@@ -93,8 +92,8 @@ lemma postSumExponent_integral_ok_of_cap (A c : Number) (b : Int) (nt : NumericT
   rw [hs, ok_bind]
   unfold numberExponent
   by_cases hz : s.operator_eq Number.zero = true
-  · rw [if_pos hz]; exact ⟨b, rfl⟩
-  · rw [if_neg hz]
+  · rw [ite_eq_left hz]; exact ⟨b, rfl⟩
+  · rw [ite_eq_right hz]
     obtain ⟨st, hst⟩ := STAmount.ofNumber_ok_of_asset_cap nt s .downward hasset hsn hs1
       (fun _ => by rw [← hmax, ← hwv]; exact hs2) (fun h => by rw [hint] at h; cases h)
     rw [hst]
@@ -184,7 +183,7 @@ lemma sumRoundAndSubtract_frac_downward_ok_of_cap (A c : Number) (b : Int) (hA :
     (by rw [abs_lt]; constructor <;> linarith)
   refine ⟨st, ?_⟩
   unfold sumRoundAndSubtract
-  rw [if_neg (by decide)]
+  rw [ite_eq_right (by decide)]
   show (pure PUnit.unit >>= fun _ => (do
       let exponent ← postSumExponent A c b NumericType.fractional
       let sum ← A.operator_add c rounding_mode.downward
@@ -265,7 +264,7 @@ lemma LoanBroker.roundedCoverAmount_total (lb : LoanBroker) (v : Vault) (amount 
         ⟨hbase.1, hbase.2.1⟩ (by rw [haNv]; exact hiou hint)
     · refine sumRoundAndSubtract_integral_ok_of_cap _ _ _ _ _ hasset hint haNn (by rw [haNv]; exact hnn) ?_
       have hmax : v.numericType.maxAmount = v.numericType.maxValue.toNat := by
-        unfold NumericType.maxAmount; rw [if_pos hint]
+        unfold NumericType.maxAmount; rw [ite_eq_left hint]
       rw [haNv, ← hmax]
       linarith
   simp only [LoanBroker.roundedCoverAmount]
@@ -296,7 +295,7 @@ lemma LoanBroker.checkCoverOpenLimit_total (lb : LoanBroker) (v : Vault) (r : ST
         (by rw [hrNv, abs_of_nonneg (by linarith)]; linarith [hiou hint])
       exact ⟨e, he⟩
     · have hmax : v.numericType.maxAmount = v.numericType.maxValue.toNat := by
-        unfold NumericType.maxAmount; rw [if_pos hint]
+        unfold NumericType.maxAmount; rw [ite_eq_left hint]
       exact postSumExponent_integral_ok_of_cap _ _ _ _ hasset hint hcn hrNn hcl hrl (by rw [hrNv]; linarith)
         (by rw [hrNv, ← hmax]; exact hrange)
   obtain ⟨c', hc', -⟩ := Number.operator_add_total_of_abs lb.coverAvailable rN .towards_zero hcn hrNn hcl hrl

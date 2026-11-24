@@ -14,21 +14,21 @@ lemma Number.normalize_to_nearest_witness :
   all_goals try min_fit
   unfold doNormalizeSpec
   rw [show (((twoPow63Add7 : UInt64) : UInt64) == 0) = false from rfl]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [show doNormalize_scaleUpSpec largeRange.min (twoPow63Add7 : UInt64) 0
         = ((twoPow63Add7 : UInt64), (0 : Int)) by
-        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
+        unfold doNormalize_scaleUpSpec; rw [ite_eq_right (by decide)]]
   rw [show doNormalize_scaleDown largeRange.max (twoPow63Add7 : UInt64) (0 : Int) Guard.new
         = .ok ((twoPow63Add7 : UInt64), (0 : Int), Guard.new) by
-        unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
+        unfold doNormalize_scaleDown; rw [dite_eq_right (by decide)]]
   simp only []
   rw [show ((0 : Int) < minExponent || (twoPow63Add7 : UInt64) < largeRange.min) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   have h_divu : divu10 (twoPow63Add7 : UInt64) = (mantissaFloorSucc, 5) := by decide
   rw [show doNormalize_capAtMaxRep (twoPow63Add7 : UInt64) (0 : Int) Guard.new
         = .ok ((mantissaFloorSucc : UInt64), (1 : Int), Guard.new.push 5) from by
       unfold doNormalize_capAtMaxRep
-      rw [if_pos (by decide), if_neg (by decide), h_divu]
+      rw [ite_eq_left (by decide), ite_eq_right (by decide), h_divu]
       norm_num]
   simp only []
   have h_rup : (Guard.new.push 5).doRoundUp false (mantissaFloorSucc : UInt64) (1 : Int)

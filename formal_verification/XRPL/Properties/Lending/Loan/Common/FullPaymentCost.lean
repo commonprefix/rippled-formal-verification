@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FullPaymentSize
 
 /-! # What an early payoff costs against the remaining schedule

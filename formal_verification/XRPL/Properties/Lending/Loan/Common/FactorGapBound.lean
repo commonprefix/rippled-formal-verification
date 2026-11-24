@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FactorGap
 import XRPL.Properties.Lending.Loan.Common.PowerError
 
@@ -29,9 +30,9 @@ private lemma Number.tiny : ∃ w : Number, w.isNormalized ∧ w.toRat = 1 / 10 
 /-- The steps of the payment factor of a positive rate over at least one payment. -/
 private lemma computePaymentFactor_steps (rate : Number) (k : UInt32) (f : Number) (hrate : rate.isNormalized)
     (hr0 : 0 < rate.toRat) (hk : k ≠ 0)
-    (h : computePaymentFactor rate (Number.ofInt64 k.toInt64) k = .ok f) :
-    ∃ pm R num : Number, computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64) k = .ok pm ∧
-      (Number.ofInt64 1).operator_add pm .to_nearest = .ok R ∧ rate.operator_mul R .to_nearest = .ok num ∧
+    (h : computePaymentFactor rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok f) :
+    ∃ pm R num : Number, computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok pm ∧
+      (Number.ofInt64 1 .to_nearest).operator_add pm .to_nearest = .ok R ∧ rate.operator_mul R .to_nearest = .ok num ∧
       num.operator_div pm .to_nearest = .ok f := by
   unfold computePaymentFactor at h
   dsimp only at h
@@ -51,12 +52,13 @@ private lemma computePaymentFactor_steps (rate : Number) (k : UInt32) (f : Numbe
 to `10^-9` or more, else the binomial series, and then `k·rate` is below `10^-9`. -/
 private lemma computePowerMinusOneHybrid_cases (rate : Number) (k : UInt32) (pm : Number)
     (hrate : rate.isNormalized) (hr0 : 0 < rate.toRat) (hk : k ≠ 0)
-    (h : computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64) k = .ok pm) :
-    (∃ b p : Number, (Number.ofInt64 1).operator_add rate .to_nearest = .ok b ∧ b.power k.toNat = .ok p ∧
-        p.operator_sub (Number.ofInt64 1) .to_nearest = .ok pm ∧
+    (h : computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok pm) :
+    (∃ b p : Number, (Number.ofInt64 1 .to_nearest).operator_add rate .to_nearest = .ok b ∧
+        b.power k.toNat .to_nearest = .ok p ∧
+        p.operator_sub (Number.ofInt64 1 .to_nearest) .to_nearest = .ok pm ∧
         1 / 10 ^ 9 ≤ (k.toNat : ℚ) * rate.toRat * (1 + ε)) ∨
       ((k.toNat : ℚ) * rate.toRat < 1 / 10 ^ 9 ∧
-        computePowerMinusOne rate (Number.ofInt64 k.toInt64) k = .ok pm) := by
+        computePowerMinusOne rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok pm) := by
   have hN := Number.ofInt64_isNormalized k.toInt64
   have hNv := Number.ofInt64_count k
   unfold computePowerMinusOneHybrid at h
@@ -95,7 +97,7 @@ private lemma computePowerMinusOneHybrid_cases (rate : Number) (k : UInt32) (pm 
 
 /-- The rounded base `1 + rate` is at least one and within one rounding of `1 + rate`. -/
 private lemma base_bounds (rate b : Number) (hrate : rate.isNormalized) (hr0 : 0 ≤ rate.toRat)
-    (hb : (Number.ofInt64 1).operator_add rate .to_nearest = .ok b) :
+    (hb : (Number.ofInt64 1 .to_nearest).operator_add rate .to_nearest = .ok b) :
     b.isNormalized ∧ 1 ≤ b.toRat ∧ (1 + rate.toRat) * (1 - ε) ≤ b.toRat ∧ b.toRat ≤ (1 + rate.toRat) * (1 + ε) := by
   have hone := Number.ofInt64_isNormalized 1
   have hbN := Number.operator_add_isNormalized_to_nearest_sz _ _ b hone hrate hb
@@ -110,7 +112,7 @@ private lemma base_bounds (rate b : Number) (hrate : rate.isNormalized) (hr0 : 0
 /-- The closed form is within its roundings of `b^k − 1`: `k − 1` product errors for the power and one rounding
 for the subtraction. -/
 private lemma closed_bounds (b p pm : Number) (k : ℕ) (hbN : b.isNormalized) (hb1 : 1 ≤ b.toRat) (hk : 1 ≤ k)
-    (hp : b.power k = .ok p) (hs : p.operator_sub (Number.ofInt64 1) .to_nearest = .ok pm) :
+    (hp : b.power k .to_nearest = .ok p) (hs : p.operator_sub (Number.ofInt64 1 .to_nearest) .to_nearest = .ok pm) :
     pm.toRat ≤ (b.toRat ^ k * (1 + μ) ^ (k - 1) - 1) * (1 + ε) ∧
       (pm.toRat ≠ 0 → (b.toRat ^ k * (1 - μ) ^ (k - 1) - 1) * (1 - ε) ≤ pm.toRat) := by
   have hone := Number.ofInt64_isNormalized 1
@@ -169,7 +171,7 @@ private lemma powerMinusOneLoop_ge (rate : Number) (hrate : rate.isNormalized) (
 /-- The binomial series is at least `k·rate`, less one rounding. -/
 private lemma computePowerMinusOne_ge (rate : Number) (k : UInt32) (pm : Number) (hrate : rate.isNormalized)
     (hr0 : 0 < rate.toRat) (hk : k ≠ 0)
-    (h : computePowerMinusOne rate (Number.ofInt64 k.toInt64) k = .ok pm) :
+    (h : computePowerMinusOne rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok pm) :
     (k.toNat : ℚ) * rate.toRat * (1 - ε) ≤ pm.toRat := by
   have hN := Number.ofInt64_isNormalized k.toInt64
   have hNv := Number.ofInt64_count k
@@ -199,7 +201,7 @@ private lemma computePowerMinusOne_ge (rate : Number) (k : UInt32) (pm : Number)
 /-- The binomial series is at most `k·rate` over `1 − 10^-9`, plus its roundings. -/
 private lemma computePowerMinusOne_le (rate : Number) (k : UInt32) (pm : Number) (hrate : rate.isNormalized)
     (hr0 : 0 ≤ rate.toRat) (hsm : (k.toNat : ℚ) * rate.toRat < 1 / 10 ^ 9)
-    (h : computePowerMinusOne rate (Number.ofInt64 k.toInt64) k = .ok pm) :
+    (h : computePowerMinusOne rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok pm) :
     pm.toRat ≤ (k.toNat * rate.toRat * (1 + ε) + k.toNat * rate.toRat * (1 + ε) / (10 ^ 9 - 1)) *
       (1 + ε) ^ (k.toNat - 1) := by
   have he := Number.nearestError_pos
@@ -517,7 +519,8 @@ private lemma small_binomial_upper (r pm' : ℚ) (n : ℕ) (hn : n ≤ 1000) (hr
 
 /-- The payment factor is within three roundings of `rate·(1 + pm)/pm`, stated times `pm`. -/
 private lemma factor_bounds (rate pm R num f : Number) (hrate : rate.isNormalized) (hlow : 1 / 10 ^ 12 ≤ rate.toRat)
-    (hpmN : pm.isNormalized) (hpm0 : 0 ≤ pm.toRat) (hR : (Number.ofInt64 1).operator_add pm .to_nearest = .ok R)
+    (hpmN : pm.isNormalized) (hpm0 : 0 ≤ pm.toRat)
+    (hR : (Number.ofInt64 1 .to_nearest).operator_add pm .to_nearest = .ok R)
     (hnum : rate.operator_mul R .to_nearest = .ok num) (hf : num.operator_div pm .to_nearest = .ok f) :
     0 < pm.toRat ∧ f.toRat * pm.toRat ≤ rate.toRat * (1 + pm.toRat) * (1 + ε) ^ 3 ∧
       rate.toRat * (1 + pm.toRat) * (1 - ε) ^ 3 ≤ f.toRat * pm.toRat := by

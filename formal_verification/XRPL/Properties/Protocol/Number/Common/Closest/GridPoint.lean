@@ -46,7 +46,7 @@ theorem Number.lower_value_self (x : Number) (h_norm : x.isNormalized)
       obtain ⟨n, hn⟩ := Number.upper_some_of_pos_witnesses (-x.toRat) hnq
         m h_m_norm h_m_pos (le_of_eq h_m_eq) m h_m_norm (ge_of_eq h_m_eq)
       unfold Number.upper at hn
-      rw [if_neg (ne_of_gt hnq), if_neg (not_lt.mpr (le_of_lt hnq))] at hn
+      rw [ite_eq_right (ne_of_gt hnq), ite_eq_right (not_lt.mpr (le_of_lt hnq))] at hn
       rw [Number.lower_neg_eq x.toRat h_neg, hn]
       exact ⟨_, rfl⟩
     · obtain ⟨n, hn⟩ := Number.lower_some_of_pos_witnesses x.toRat h_pos
@@ -76,7 +76,7 @@ theorem Number.upper_value_self (x : Number) (h_norm : x.isNormalized)
       obtain ⟨n, hn⟩ := Number.lower_some_of_pos_witnesses (-x.toRat) hnq
         m h_m_norm h_m_pos (le_of_eq h_m_eq) m h_m_norm (ge_of_eq h_m_eq)
       unfold Number.lower at hn
-      rw [if_neg (ne_of_gt hnq), if_neg (not_lt.mpr (le_of_lt hnq))] at hn
+      rw [ite_eq_right (ne_of_gt hnq), ite_eq_right (not_lt.mpr (le_of_lt hnq))] at hn
       rw [Number.upper_neg_eq x.toRat h_neg, hn]
       exact ⟨_, rfl⟩
     · obtain ⟨n, hn⟩ := Number.upper_some_of_pos_witnesses x.toRat h_pos

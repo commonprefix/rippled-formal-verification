@@ -2,13 +2,12 @@ import XRPL.Properties.Vault.Proofs.Support.NoOverflow
 import XRPL.Properties.Vault.Proofs.NoInternalErrors
 import XRPL.Properties.Protocol.Common.Wrap
 import XRPL.Properties.Vault.Proofs.DepositAccuracy
+import XRPL.Properties.Vault.Proofs.Support.ShareSupply
 
 /-! # No overflow within the Open limit
 
-A deposit, a withdrawal and a clawback return `tecPATH_DRY` only when a step of their pricing overflows. On a
-reachable vault every share is worth at least a base unit and the cash is at most `9·10^15` base units, so an amount
-within the Open limit prices at most `9·10^15` shares, and every intermediate value stays far below the `int64` and
-`Number` limits. -/
+On a reachable vault an amount within the Open limit prices at most `9·10^15` shares, so no pricing step overflows
+and a deposit, a withdrawal or a clawback never returns `tecPATH_DRY`. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -407,7 +406,6 @@ private lemma Vault.Reachable.checkDebitNotDust_ne_path_dry (v : Vault) (t0 : UI
   walk_ok
   all_goals first
     | exact hcash _ ‹_› ‹_›
-    | exact hrest _ ‹_› ‹_›
     | simp_all
 
 /-- The shares a deposit within the Open limit issues on a reachable vault: a canonical count at most `10^17`, worth
@@ -461,7 +459,7 @@ private lemma Vault.Reachable.deposit_shares_facts (v : Vault) (t0 : UInt32) (hr
     have hApos : 0 < v.assetsAvailable.toRat := lt_of_le_of_ne hA0 (Ne.symm hA)
     have hSpos : 0 < v.sharesTotal.toRat := lt_of_le_of_ne hS0 (Ne.symm hS)
     unfold RawVault.idealSharesDepositAt at hsq
-    rw [if_neg hA, hST] at hsq
+    rw [ite_eq_right hA, hST] at hsq
     rw [div_le_iff₀ hSpos]
     have h1 : v.assetsAvailable.toRat * sh.toRat ≤
         v.assetsAvailable.toRat * (v.sharesTotal.toRat * ra.toRat / v.assetsAvailable.toRat * (1 + sharesOverε)) :=
@@ -530,12 +528,11 @@ private lemma Vault.Reachable.computeDeposit_ne_path_dry (v : Vault) (t0 : UInt3
   simp only [computeDeposit] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact Vault.Reachable.assetsToSharesDeposit_ne_overflow v t0 hr ra hc hpos hl ‹isOverflow _ = true› ‹_›
     | exact STAmount.isFractionalNonPositive_ne_overflow _ ‹isOverflow _ = true› ‹_›
     | exact STAmount.operator_lt_ne_overflow _ _ ‹isOverflow _ = true› ‹_›
     | (rw [hat'] at *; contradiction)
-    | skip
   · -- the price of the issued shares
     obtain ⟨hshc, hsht, hs0, hsl, hq⟩ := Vault.Reachable.deposit_shares_facts v t0 hr ra _ hc hpos hl
       ‹assetsToSharesDeposit v ra = .ok _› (by simpa using ‹¬ STAmount.isZero _ = true›)
@@ -566,9 +563,11 @@ lemma Vault.Reachable.deposit_no_path_dry_proof (v : Vault) (t0 : UInt32) (hr : 
     | (rcases Vault.adjustAssetsAndShares_codes _ _ _ _ ‹_› with h | h <;> exact absurd h (by decide))
     | exact absurd (Vault.roundedDepositAmount_rejected_code_proof v amountDeposit _ ‹_›) (by decide)
   · -- the share cap: at most 9·10^15 shares are outstanding and the deposit mints at most 10^17
-    obtain ⟨ra, amounts, hra, hcomp, hcap⟩ : ∃ ra amounts, (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra) ∧
+    obtain ⟨ra, amounts, sharesTotalAmount, hra, hcomp, hst, hover⟩ : ∃ ra amounts sharesTotalAmount,
+        (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra) ∧
         (computeDeposit v ra isDonation).run = .ok (.ok amounts) ∧
-        v.sharesTotal.toRat + amounts.shares.toRat > (maxRep.toNat : ℚ) := ⟨_, _, ‹_›, ‹_›, ‹_›⟩
+        STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
+        isMPTOverflow amounts.shares.mValue sharesTotalAmount.mValue = true := ⟨_, _, _, ‹_›, ‹_›, ‹_›, ‹_›⟩
     obtain ⟨hrcz, -, hr0⟩ := v.roundedDepositAmount_form amountDeposit ra hc hty hra
     obtain ⟨A, -, hcl, hrz⟩ := roundedDepositAmount_rounded v amountDeposit ra hra
     have hrm : ra.mValue ≠ 0 := by simpa [STAmount.isZero] using hrz
@@ -584,8 +583,8 @@ lemma Vault.Reachable.deposit_no_path_dry_proof (v : Vault) (t0 : UInt32) (hr : 
         exact (Vault.Reachable.deposit_shares_facts v t0 hr ra _ hrc hrp (le_trans hle hl) ha2s hz).2.2.2.1
       · obtain ⟨_, hsh0, _⟩ := computeDeposit_donation_reduces v ra amounts hcomp
         rw [hsh0, STAmount.zero_toRat]; norm_num
-    rw [show maxRep.toNat = 2 ^ 63 - 1 from rfl] at hcap
-    push_cast at hcap
+    obtain ⟨hic, -, hsh0⟩ := computeDeposit_shares_form v ra isDonation amounts hrc hrp hcomp
+    have hcap := (Vault.shareSupply_overflow_iff v amounts.shares sharesTotalAmount hic.offset_zero hsh0 hst).mp hover
     linarith
   · -- the rounded amount is a positive canonical amount at most the request
     obtain ⟨ra, hra, hcomp⟩ : ∃ ra, (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra) ∧

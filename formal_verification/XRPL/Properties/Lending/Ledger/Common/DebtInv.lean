@@ -64,7 +64,7 @@ lemma LendingLedger.brokerPrincipal_le (l : LendingLedger) (j : Nat) :
   cases o with
   | none => exact le_refl _
   | some e =>
-    simp only [LoanEntry.principalOn, LoanEntry.principalIf, if_true]
+    simp only [LoanEntry.principalOn, LoanEntry.principalIf, ite_true]
     split
     · exact le_refl _
     · exact (e.loan.exact.principalOutstanding_nonneg : 0 ≤ e.loan.principalOutstanding.toRat)
@@ -175,13 +175,13 @@ lemma LendingLedger.DebtInv.commitLoan {l : LendingLedger} (hinv : l.DebtInv) {u
         | none => rfl
         | some e =>
           simp only [LoanEntry.principalOn, hold e ho]
-          rw [if_neg (Ne.symm hj)]
+          rw [ite_eq_right (Ne.symm hj)]
       have h2 : LoanEntry.principalOn j u.loan = 0 := by
         cases hn : u.loan with
         | none => rfl
         | some e =>
           simp only [LoanEntry.principalOn, hnew e hn]
-          rw [if_neg (Ne.symm hj)]
+          rw [ite_eq_right (Ne.symm hj)]
       rw [h1, h2] at hc
       rw [hinv.debt j b' hb']
       linarith
@@ -208,12 +208,12 @@ lemma LendingLedger.DebtInv.ofLoan {l : LendingLedger} (hinv : l.DebtInv) {i : N
   · show loan'.broker.debtTotal.toRat + LoanEntry.principalOn e.brokerIndex (l.loan? i) =
       broker.debtTotal.toRat + LoanEntry.principalOn e.brokerIndex (some { e with loan := loan' })
     rw [he]
-    simp only [LoanEntry.principalOn, if_true]
+    simp only [LoanEntry.principalOn, ite_true]
     rw [← hePO]; exact hdebt
   · show v'.assetsDeployed.toRat + LoanEntry.principalIf (fun _ => true) (l.loan? i) =
       l.vault.assetsDeployed.toRat + LoanEntry.principalIf (fun _ => true) (some { e with loan := loan' })
     rw [he]
-    simp only [LoanEntry.principalIf, if_true]
+    simp only [LoanEntry.principalIf, ite_true]
     rw [← hePO]; exact hAD
 
 /-- A loan transaction keeps the invariant. -/
@@ -257,11 +257,11 @@ lemma LendingLedger.DebtInv.loan_step {l : LendingLedger} (hinv : l.DebtInv) {tx
       ?_, ?_⟩
     · have := l.principalOn_le_sum e.brokerIndex i
       rw [he] at this
-      simp only [LoanEntry.principalOn, if_true] at this
+      simp only [LoanEntry.principalOn, ite_true] at this
       rw [hinv.debt _ br hbr]; exact this
     · have := l.principalIf_le_sum (fun _ => true) i
       rw [he] at this
-      simp only [LoanEntry.principalIf, if_true] at this
+      simp only [LoanEntry.principalIf, ite_true] at this
       rw [hinv.deployed]; exact this
   cases tx with
   | loanSet i principal rates fees pi pt gp sd twoStep ao =>
@@ -301,14 +301,14 @@ lemma LendingLedger.DebtInv.loan_step {l : LendingLedger} (hinv : l.DebtInv) {tx
     · show r.loan'.broker.debtTotal.toRat + LoanEntry.principalOn i (l.loan? l.loans.length) =
         broker.debtTotal.toRat + LoanEntry.principalOn i (some { brokerIndex := i, loan := r.loan' })
       rw [hnone]
-      simp only [LoanEntry.principalOn, if_true, add_zero]
+      simp only [LoanEntry.principalOn, ite_true, add_zero]
       rw [Number.OnGrid.add_exact hDTg hpg hDT0 hpos.le (by linarith [l.vault.exact.assetsAvailable_nonneg])
         hsb hdt, hPOr]
     · show r.pool'.assetsDeployed.toRat + LoanEntry.principalIf (fun _ => true) (l.loan? l.loans.length) =
         l.vault.assetsDeployed.toRat +
           LoanEntry.principalIf (fun _ => true) (some { brokerIndex := i, loan := r.loan' })
       rw [hnone]
-      simp only [LoanEntry.principalIf, if_true, add_zero]
+      simp only [LoanEntry.principalIf, ite_true, add_zero]
       rw [Number.OnGrid.add_exact hADg hpg hAD0 hpos.le (by linarith [l.vault.exact.assetsAvailable_nonneg])
         hsb hadd, hPOr]
   | loanAccept i =>
@@ -392,12 +392,12 @@ lemma LendingLedger.DebtInv.loan_step {l : LendingLedger} (hinv : l.DebtInv) {tx
     obtain ⟨hDTg, hDT0, -⟩ := hDT _ broker hb
     have hc' := l.brokerPrincipal_commitLoan u e.brokerIndex
     rw [hi, hlo, he] at hc'
-    simp only [LoanEntry.principalOn, if_true, add_zero] at hc'
+    simp only [LoanEntry.principalOn, ite_true, add_zero] at hc'
     have hlast : broker.loanCount - 1 == 0 → (l.commitLoan u).brokerPrincipal e.brokerIndex = 0 := by
       intro h0
       apply LendingLedger.brokerPrincipal_eq_zero
       have hb' : (l.commitLoan u).broker? e.brokerIndex = some u.broker := by
-        rw [LendingLedger.broker?_commitLoan l u broker (by rw [hbi]; exact hb), if_pos hbi.symm]
+        rw [LendingLedger.broker?_commitLoan l u broker (by rw [hbi]; exact hb), ite_eq_left hbi.symm]
       have := hcount.counted _ _ hb'
       rw [hbr, Loan.delete_loanCount loan _ r hr, hlb] at this
       rw [← this, show broker.loanCount - 1 = 0 from beq_iff_eq.mp h0]; rfl
@@ -407,7 +407,7 @@ lemma LendingLedger.DebtInv.loan_step {l : LendingLedger} (hinv : l.DebtInv) {tx
       (fun e' he' => by rw [hi, he] at he'; cases he'; exact hbi.symm) (fun e' he' => by rw [hlo] at he'; cases he')
       ?_ ?_
     · rw [hbr, hbi, hi, hlo, he]
-      simp only [LoanEntry.principalOn, if_true, add_zero]
+      simp only [LoanEntry.principalOn, ite_true, add_zero]
       cases hp : loan.isPending
       · obtain ⟨-, hd⟩ := hact hp
         rw [hd]
@@ -431,7 +431,7 @@ lemma LendingLedger.DebtInv.loan_step {l : LendingLedger} (hinv : l.DebtInv) {tx
         · rw [Number.OnGrid.sub_exact hDTg hPg hP0 hPDT (hDTlt _ broker hb) hsb hd, hePO]
           ring
     · rw [hv, hi, hlo, he]
-      simp only [LoanEntry.principalIf, if_true, add_zero]
+      simp only [LoanEntry.principalIf, ite_true, add_zero]
       cases hp : loan.isPending
       · rw [(hact hp).1]
         have hpr := Loan.canDelete_active_paid loan hc hp
@@ -453,19 +453,19 @@ private lemma LendingLedger.DebtInv.broker_debt {l : LendingLedger} (hinv : l.De
   rw [hsum]
   rw [LendingLedger.broker?_commitBroker] at hb'
   by_cases hj : j = (if u.index < l.brokers.length then u.index else l.brokers.length)
-  · rw [if_pos hj] at hb'
+  · rw [ite_eq_left hj] at hb'
     rcases LendingLedger.applyBroker_cases l tx u hu with ⟨hi, b, hb, h0, -⟩ | ⟨b, b2, hb, hb2, hd, -⟩ |
       ⟨b, hb, hb2, -⟩
     · -- a new broker has no debt and no loans
       rw [hb] at hb'; cases hb'
-      rw [hi, if_neg (lt_irrefl _)] at hj
+      rw [hi, ite_eq_right (lt_irrefl _)] at hj
       rw [h0, Number.toRat_zero, hj,
         l.brokerPrincipal_eq_zero _ (hinv.count.orphans _ (hnone _ le_rfl))]
     · rw [hb2] at hb'; cases hb'
-      rw [if_pos (LendingLedger.broker?_lt hb)] at hj
+      rw [ite_eq_left (LendingLedger.broker?_lt hb)] at hj
       rw [hd, hj]; exact hinv.debt _ b hb
     · rw [hb2] at hb'; cases hb'
-  · rw [if_neg hj] at hb'; exact hinv.debt j b' hb'
+  · rw [ite_eq_right hj] at hb'; exact hinv.debt j b' hb'
 
 /-- Every transaction keeps the invariant. -/
 lemma LendingLedger.DebtInv.step {l l' : LendingLedger} (hinv : l.DebtInv) {tx : LendingTx}
@@ -567,8 +567,8 @@ lemma LendingLedger.assets_lent_proof (l : LendingLedger) (hr : l.Reachable) :
       have := (List.countP_pos_iff (p := fun o : Option LoanEntry => o.any (·.brokerIndex == e.brokerIndex))).mpr
         ⟨some e, ho, by simp only [Option.any_some, beq_self_eq_true]⟩
       omega
-    simp only [LoanEntry.principalOn, LoanEntry.principalIf, if_true]
-    rw [Finset.sum_ite_eq, if_pos (Finset.mem_range.mpr hlt)]
+    simp only [LoanEntry.principalOn, LoanEntry.principalIf, ite_true]
+    rw [Finset.sum_ite_eq, ite_eq_left (Finset.mem_range.mpr hlt)]
 
 /-- Proof body of `Lending.Reachable.loss_reserved_deployed`. -/
 lemma LendingLedger.loss_reserved_deployed_proof (l : LendingLedger) (hr : l.Reachable) :
@@ -585,12 +585,12 @@ lemma LendingLedger.loss_reserved_deployed_proof (l : LendingLedger) (hr : l.Rea
     obtain ⟨i, hi⟩ := List.mem_iff_getElem?.mp ho
     have he : l.loan? i = some e := by unfold LendingLedger.loan?; rw [hi]; rfl
     have hp0 : 0 ≤ e.loan.principalOutstanding.toRat := e.loan.exact.principalOutstanding_nonneg
-    simp only [LoanEntry.principalIf, if_true]
+    simp only [LoanEntry.principalIf, ite_true]
     -- a pending loan is never impaired, so a loan counts at most once
     by_cases hp : e.loan.isPending = true
     · have hi := hinv.loss.active i e he hp
-      simp only [hi, hp, Bool.false_eq_true, if_false, if_true, zero_add, le_refl]
-    · rw [if_neg hp, add_zero]
+      simp only [hi, hp, Bool.false_eq_true, ite_false, ite_true, zero_add, le_refl]
+    · rw [ite_eq_right hp, add_zero]
       split <;> linarith
 
 end XRPL.Model.Lending

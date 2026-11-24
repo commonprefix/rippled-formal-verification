@@ -101,7 +101,7 @@ lemma Loan.create_periodicPayment_principal_monotone_proof (broker : LoanBroker)
   · -- a zero rate: the principal over the count
     have ht := Number.pos_of_roundsToRepresentable _ _
       (Number.operator_div_rounded_to_nearest _ _ _ hp₁ hN hd₁) hpos₁
-    have hNpos : 0 < (Number.ofInt64 schedule.paymentTotal.toInt64).toRat := by
+    have hNpos : 0 < (Number.ofInt64 schedule.paymentTotal.toInt64 .to_nearest).toRat := by
       by_contra hc
       push Not at hc
       exact absurd ht (not_lt.mpr (div_nonpos_of_nonneg_of_nonpos hpos.le hc))

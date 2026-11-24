@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.BrokerAccountingDefs
 import XRPL.Properties.Lending.Ledger.Common.DebtInv
 import XRPL.Properties.Lending.Ledger.Common.LoanCountInv
@@ -11,10 +12,8 @@ import XRPL.Properties.Lending.Loan.Common.SetLedger
 
 /-! # SharesTotal and one broker over a sequence of transactions
 
-SharesTotal moves by the shares deposits issue and withdrawals, clawbacks and burns destroy. A broker's DebtTotal is
-the principal of its loans, and its LoanCount the number of its loans, so both move by what the loan transactions on
-the broker lend, pay, default and delete. CoverAvailable moves by the cover deposits, withdrawals, clawbacks, the fees
-paid into it and the cover defaults take, exactly while the cover is not coarsened. -/
+SharesTotal, a broker's DebtTotal and its LoanCount move by exactly what the transactions issue, lend, pay, default
+and delete. CoverAvailable moves by exactly its flows while the cover is not coarsened. -/
 
 namespace XRPL.Model.Lending
 
@@ -206,7 +205,7 @@ private lemma LendingLedger.broker_debt_accounting {start l : LendingLedger} {tx
   have hsum := LendingLedger.Reaches.runSum_eq (F := fun l₀ => l₀.brokerPrincipal j)
     (d := fun l₀ tx => l₀.brokerLentOf j tx - l₀.brokerPrincipalPaidOf j tx - l₀.brokerDefaultedOf j tx -
       l₀.brokerDeletedPendingOf j tx) (P := fun _ _ _ => True)
-    (fun l₁ tx l₂ hr₁ hok _ => by beta_reduce; rw [LendingLedger.brokerPrincipal_step hr₁ hok j]; ring) hr hrun
+    (fun l₁ tx l₂ hr₁ hok _ => by rw [LendingLedger.brokerPrincipal_step hr₁ hok j]; ring) hr hrun
     (fun _ _ _ _ _ _ _ => trivial)
   beta_reduce at hsum
   rw [(hrun.reachable hr).debtInv.debt j b' hb', hr.debtInv.debt j b hb, hsum]
@@ -276,7 +275,7 @@ private lemma LendingLedger.broker_count_accounting {start l : LendingLedger} {t
     (b'.loanCount.toNat : ℚ) = b.loanCount.toNat + start.newLoans j txs - start.deletedLoans j txs := by
   have hsum := LendingLedger.Reaches.runSum_eq (F := fun l₀ => (l₀.loansOf j : ℚ))
     (d := fun l₀ tx => l₀.newLoansOf j tx - l₀.deletedLoansOf j tx) (P := fun _ _ _ => True)
-    (fun l₁ tx l₂ _ hok _ => by beta_reduce; rw [LendingLedger.loansOf_step hok j]; ring) hr hrun
+    (fun l₁ tx l₂ _ hok _ => by rw [LendingLedger.loansOf_step hok j]; ring) hr hrun
     (fun _ _ _ _ _ _ _ => trivial)
   beta_reduce at hsum
   rw [(hrun.reachable hr).loanCountInv.counted j b' hb', hr.loanCountInv.counted j b hb, hsum,
@@ -301,19 +300,19 @@ private lemma STAmount.ofNumber_int64_zero_sign (n : Number) (hn : n.isNormalize
   have hsig : decide (n.signum < 0) = false := by
     unfold Number.signum
     rw [hnegf]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     by_cases hm : (n.mantissa_ != 0) = true
-    · rw [if_pos hm]; decide
-    · rw [if_neg hm]; decide
+    · rw [ite_eq_left hm]; decide
+    · rw [ite_eq_right hm]; decide
   unfold STAmount.ofNumber at hok
   rw [hsig] at hok
-  simp only [Bool.false_eq_true, if_false, show NumericType.int64.isIntegral = true from rfl, if_true] at hok
+  simp only [Bool.false_eq_true, ite_false, show NumericType.int64.isIntegral = true from rfl, ite_true] at hok
   split at hok
   · cases hok
   obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
   unfold STAmount.checked STAmount.canonicalize at hok
-  rw [if_pos (show (STAmount.unchecked .int64 _ 0 false).integral = true from rfl)] at hok
+  rw [ite_eq_left (show (STAmount.unchecked .int64 _ 0 false).integral = true from rfl)] at hok
   split at hok
   · cases hok; rfl
   split at hok
@@ -342,10 +341,9 @@ private lemma LendingLedger.holderShares_balance (l : LendingLedger) (hr : l.Rea
     · exact STAmount.mIsNegative_false_of_nonneg hs h0' hm
   exact ⟨⟨hty, hic.canonical (by rw [hty]; decide), hneg⟩, hic, h0'⟩
 
-/-- One successful transaction moves SharesTotal by the shares it issues less the shares it destroys, when a
-deposit keeps SharesTotal within the share MPT maximum. -/
+/-- One successful transaction moves SharesTotal by the shares it issues less the shares it destroys. -/
 private lemma LendingLedger.sharesTotal_step {l l' : LendingLedger} {tx : LendingTx} (hr : l.Reachable)
-    (hok : (l.apply tx).run = .ok (.ok l')) (hfit : l.vault.sharesTotal.toRat + l.sharesCreatedOf tx ≤ 2 ^ 63 - 1) :
+    (hok : (l.apply tx).run = .ok (.ok l')) :
     l'.vault.sharesTotal.toRat = l.vault.sharesTotal.toRat + l.sharesCreatedOf tx - l.sharesRemovedOf tx := by
   by_cases hv : tx.isVault = true
   · have hpre := (TER.isTesSuccess_iff _).mp (LendingLedger.apply_checked hok).1
@@ -363,8 +361,8 @@ private lemma LendingLedger.sharesTotal_step {l l' : LendingLedger} {tx : Lendin
         unfold_ter at hu
         walk_ok
         have hdep : (l.vault.deposit amount isDonation l.now hpos).run = .ok (.ok _) := ‹_›
-        simp only [LendingLedger.sharesCreatedOf, LendingLedger.sharesRemovedOf, dif_pos hpos, hdep] at hfit ⊢
-        have hST := Vault.deposit_exact_sharesTotal _ _ _ _ hpos hc hty _ hdep (by rw [hcast]; exact hfit)
+        simp only [LendingLedger.sharesCreatedOf, LendingLedger.sharesRemovedOf, dite_eq_left hpos, hdep]
+        have hST := Vault.deposit_exact_sharesTotal _ _ _ _ hpos hc hty _ hdep
         rw [RawVault.WF.toExact_sharesTotal _ (VaultWithAmounts.vault' _).wf, hcast] at hST
         rw [hST]; ring
       · cases hu
@@ -377,7 +375,7 @@ private lemma LendingLedger.sharesTotal_step {l l' : LendingLedger} {tx : Lendin
         walk_ok
         have hwh : (l.vault.withdraw amount _ l.now hpos (some _)).run = .ok (.ok _) := ‹_›
         have hST := Vault.withdraw_sharesTotal _ _ _ _ hpos hc hty _ (Vault.withdraw_holder_ok _ _ _ _ _ _ _ hwh).1
-        simp only [LendingLedger.sharesCreatedOf, LendingLedger.sharesRemovedOf, dif_pos hpos, hwh]
+        simp only [LendingLedger.sharesCreatedOf, LendingLedger.sharesRemovedOf, dite_eq_left hpos, hwh]
         rw [hST]; ring
       · cases hu
     | vaultClawback h assets =>
@@ -392,7 +390,7 @@ private lemma LendingLedger.sharesTotal_step {l l' : LendingLedger} {tx : Lendin
         obtain ⟨hhs, -, -⟩ := l.holderShares_balance hr h _ hof
         have hST := Vault.clawback_exact_sharesTotal _ _ _ _ hnn hc hhs hr.holdsAsset.maxValue_le _ hcl
         rw [RawVault.WF.toExact_sharesTotal _ (VaultWithAmounts.vault' _).wf, hcast] at hST
-        simp only [LendingLedger.sharesCreatedOf, LendingLedger.sharesRemovedOf, dif_pos hnn, hof, hcl]
+        simp only [LendingLedger.sharesCreatedOf, LendingLedger.sharesRemovedOf, dite_eq_left hnn, hof, hcl]
         rw [hST]; ring
       · cases hu
     | vaultBurnShares h amount =>
@@ -444,19 +442,17 @@ private lemma LendingLedger.sharesTotal_step {l l' : LendingLedger} {tx : Lendin
     cases hc
     rfl
 
-/-- Over any sequence of transactions from a reachable ledger, where every deposit keeps SharesTotal within the
-share MPT maximum -> SharesTotal' = SharesTotal + Σ sharesCreated − Σ sharesRedeemed − Σ sharesDestroyed. -/
+/-- Over any sequence from a reachable ledger SharesTotal moves by the shares created less those redeemed and
+destroyed. -/
 lemma LendingLedger.shares_accounting_proof {start l : LendingLedger} {txs : List LendingTx} (hr : start.Reachable)
     (hrun : LendingLedger.Reaches start txs l) :
-    start.SharesFitAlong txs →
-      l.vault.sharesTotal.toRat = start.vault.sharesTotal.toRat + start.sharesCreated txs - start.sharesRedeemed txs -
-        start.sharesDestroyed txs := by
-  intro hfit
+    l.vault.sharesTotal.toRat = start.vault.sharesTotal.toRat + start.sharesCreated txs - start.sharesRedeemed txs -
+      start.sharesDestroyed txs := by
   have hsum := LendingLedger.Reaches.runSum_eq (F := fun l₀ => l₀.vault.sharesTotal.toRat)
     (d := fun l₀ tx => l₀.sharesCreatedOf tx - l₀.sharesRemovedOf tx)
-    (P := fun l₀ tx _ => l₀.vault.sharesTotal.toRat + l₀.sharesCreatedOf tx ≤ 2 ^ 63 - 1)
-    (fun l₁ tx l₂ hr₁ hok hP => by beta_reduce; rw [LendingLedger.sharesTotal_step hr₁ hok hP]; ring) hr hrun
-    (fun pre l₁ tx _ hp hr' _ => hfit pre l₁ tx hp hr')
+    (P := fun _ _ _ => True)
+    (fun l₁ tx l₂ hr₁ hok _ => by rw [LendingLedger.sharesTotal_step hr₁ hok]; ring) hr hrun
+    (fun _ _ _ _ _ _ _ => trivial)
   beta_reduce at hsum
   have hsplit : start.runSum LendingLedger.sharesRemovedOf txs =
       start.sharesRedeemed txs + start.sharesDestroyed txs := by
@@ -748,15 +744,15 @@ private lemma LendingLedger.apply_broker_none {l l' : LendingLedger} {tx : Lendi
   · obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_broker hb hok
     rw [LendingLedger.broker?_commitBroker]
     rcases LendingLedger.applyBroker_cases l tx u hu with ⟨hi, -⟩ | ⟨b, -, hbu, -⟩ | ⟨-, -, hnone, -⟩
-    · rw [hi, if_neg (lt_irrefl _), if_neg (by omega)]
+    · rw [hi, ite_eq_right (lt_irrefl _), ite_eq_right (by omega)]
       exact hn
-    · rw [if_pos (LendingLedger.broker?_lt hbu), if_neg (fun hji => by rw [← hji, hn] at hbu; cases hbu)]
+    · rw [ite_eq_left (LendingLedger.broker?_lt hbu), ite_eq_right (fun hji => by rw [← hji, hn] at hbu; cases hbu)]
       exact hn
     · split_ifs <;> first | exact hnone | exact hn
   by_cases hl : tx.isLoan = true
   · obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_loan hl hok
     obtain ⟨b, hbu⟩ := l.applyLoan_broker tx u hu
-    rw [LendingLedger.broker?_commitLoan l u b hbu, if_neg (fun hji => by rw [← hji, hn] at hbu; cases hbu)]
+    rw [LendingLedger.broker?_commitLoan l u b hbu, ite_eq_right (fun hji => by rw [← hji, hn] at hbu; cases hbu)]
     exact hn
   unfold LendingLedger.broker?
   rw [LendingLedger.apply_brokers hb hl hok]
@@ -812,14 +808,14 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
     have hslot : ∀ (i : Nat) (x : LoanBroker), l.broker? i = some x → u.index = i →
         (if j = i then u.broker else l.broker? j) = some b' := by
       intro i x hx hi
-      rw [hi, if_pos (LendingLedger.broker?_lt hx)] at hb'
+      rw [hi, ite_eq_left (LendingLedger.broker?_lt hx)] at hb'
       exact hb'
     cases tx with
     | loanBrokerCreate ctx =>
       simp only [LendingLedger.applyBroker] at hu
       unfold_ter at hu
       walk_ok
-      rw [if_neg (lt_irrefl _), if_neg (by omega), hb] at hb'
+      rw [ite_eq_right (lt_irrefl _), ite_eq_right (by omega), hb] at hb'
       cases hb'
       simp [LendingLedger.coverDepositsOf, LendingLedger.coverWithdrawalsOf, LendingLedger.coverClawbacksOf]
     | loanBrokerUpdate i dm =>
@@ -833,14 +829,14 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
       have h' := hslot i _ hbi rfl
       by_cases hij : j = i
       · subst hij
-        rw [if_pos rfl] at h'
+        rw [ite_eq_left rfl] at h'
         rw [hb] at hbi
         cases h'
         cases hbi
         show (_ : LoanBroker).coverAvailable.toRat = _
         rw [hcz]; simp [LendingLedger.coverDepositsOf, LendingLedger.coverWithdrawalsOf,
           LendingLedger.coverClawbacksOf]
-      · rw [if_neg hij, hb] at h'
+      · rw [ite_eq_right hij, hb] at h'
         cases h'
         simp [LendingLedger.coverDepositsOf, LendingLedger.coverWithdrawalsOf, LendingLedger.coverClawbacksOf]
     | loanBrokerCoverDeposit i a =>
@@ -851,13 +847,13 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
       have h' := hslot i _ hbi rfl
       by_cases hij : j = i
       · subst hij
-        rw [if_pos rfl] at h'
+        rw [ite_eq_left rfl] at h'
         rw [hb] at hbi
         cases hbi
         obtain ⟨res, hdep, rfl⟩ : ∃ res, (b.coverDeposit l.vault a).run = .ok (.ok res) ∧ res.loanBroker' = b' :=
           ⟨_, ‹_›, Option.some.inj h'⟩
         have hflow : l.coverDepositsOf j (.loanBrokerCoverDeposit j a) = res.amount'.toRat := by
-          simp only [LendingLedger.coverDepositsOf, if_true, hb, hdep]
+          simp only [LendingLedger.coverDepositsOf, ite_true, hb, hdep]
         rw [hflow] at hin ⊢
         have hpa : (isCanonicalAmount a l.vault.numericType && isPositiveAmount a) = true := by
           by_contra hne
@@ -867,7 +863,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
         rw [LoanBroker.coverDeposit_cover b l.vault a _ hc
           (fun hi => l.vault.baseExponent_bounds.2.2 (by rw [← hbnt]; exact hi)) hac hapos hdep (by linarith)]
         simp [LendingLedger.coverWithdrawalsOf, LendingLedger.coverClawbacksOf]
-      · rw [if_neg hij, hb] at h'
+      · rw [ite_eq_right hij, hb] at h'
         cases h'
         simp [LendingLedger.coverDepositsOf, LendingLedger.coverWithdrawalsOf, LendingLedger.coverClawbacksOf,
           Ne.symm hij]
@@ -879,7 +875,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
       have h' := hslot i _ hbi rfl
       by_cases hij : j = i
       · subst hij
-        rw [if_pos rfl] at h'
+        rw [ite_eq_left rfl] at h'
         rw [hb] at hbi
         cases hbi
         obtain ⟨res, hwd, rfl⟩ : ∃ res, (b.coverWithdraw l.vault a).run = .ok (.ok res) ∧ res.loanBroker' = b' :=
@@ -888,7 +884,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
           ⟨_, ‹_›, ‹_›⟩
         rw [hcan t ht] at hct
         have hflow : l.coverWithdrawalsOf j (.loanBrokerCoverWithdraw j a) = res.amount'.toRat := by
-          simp only [LendingLedger.coverWithdrawalsOf, if_true, hb, hwd]
+          simp only [LendingLedger.coverWithdrawalsOf, ite_true, hb, hwd]
         rw [hflow]
         have hpa : (isCanonicalAmount a l.vault.numericType && isPositiveAmount a) = true := by
           by_contra hne
@@ -899,7 +895,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
         rw [h0] at hin
         rw [LoanBroker.coverWithdraw_cover b l.vault a _ hc hac hapos hct hwd (by linarith)]
         simp [LendingLedger.coverDepositsOf, LendingLedger.coverClawbacksOf]
-      · rw [if_neg hij, hb] at h'
+      · rw [ite_eq_right hij, hb] at h'
         cases h'
         simp [LendingLedger.coverDepositsOf, LendingLedger.coverWithdrawalsOf, LendingLedger.coverClawbacksOf,
           Ne.symm hij]
@@ -911,20 +907,20 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
       have h' := hslot i _ hbi rfl
       by_cases hij : j = i
       · subst hij
-        rw [if_pos rfl] at h'
+        rw [ite_eq_left rfl] at h'
         rw [hb] at hbi
         cases hbi
         obtain ⟨res, hcl, rfl⟩ : ∃ res, (b.coverClawback l.vault a).run = .ok (.ok res) ∧ res.loanBroker' = b' :=
           ⟨_, ‹_›, Option.some.inj h'⟩
         have hflow : l.coverClawbacksOf j (.loanBrokerCoverClawback j a) = res.amount'.toRat := by
-          simp only [LendingLedger.coverClawbacksOf, if_true, hb, hcl]
+          simp only [LendingLedger.coverClawbacksOf, ite_true, hb, hcl]
         rw [hflow]
         have h0 : l.coverDepositsOf j (.loanBrokerCoverClawback j a) = 0 := rfl
         rw [h0] at hin
         rw [LoanBroker.coverClawback_cover b l.vault a _ hc (by rw [hbnt]; exact hr.holdsAsset.maxValue_le) hcl
           (by linarith)]
         simp [LendingLedger.coverDepositsOf, LendingLedger.coverWithdrawalsOf]
-      · rw [if_neg hij, hb] at h'
+      · rw [ite_eq_right hij, hb] at h'
         cases h'
         simp [LendingLedger.coverDepositsOf, LendingLedger.coverWithdrawalsOf, LendingLedger.coverClawbacksOf,
           Ne.symm hij]
@@ -935,9 +931,9 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
       have hbi : l.broker? i = some _ := ‹_›
       have h' := hslot i _ hbi rfl
       by_cases hij : j = i
-      · rw [if_pos hij] at h'
+      · rw [ite_eq_left hij] at h'
         cases h'
-      · rw [if_neg hij, hb] at h'
+      · rw [ite_eq_right hij, hb] at h'
         cases h'
         simp [LendingLedger.coverDepositsOf, LendingLedger.coverWithdrawalsOf, LendingLedger.coverClawbacksOf]
     | _ => simp only [LendingTx.isBroker, Bool.false_eq_true] at hbk
@@ -963,7 +959,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
     intro k x hbr hon hoff
     by_cases hjk : j = k
     · rw [hon hjk]; ring
-    · rw [hbr j, if_neg hjk, hb] at hb'
+    · rw [hbr j, ite_eq_right hjk, hb] at hb'
       cases hb'
       simp [LendingLedger.feesToCoverOf, LendingLedger.brokerDefaultCoveredOf, hoff hjk]
   have hloanOn : ∀ {i : Nat} {e : LoanEntry}, l.loan? i = some e → j ≠ e.brokerIndex →
@@ -973,7 +969,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
     obtain ⟨broker, r, hbi, -, -, -, hcr, -, -, -, -, hbr⟩ := LendingLedger.loanSet_ok hok
     refine hslot i _ hbr (fun hji => ?_) (fun hji => by simpa [LendingLedger.onBroker] using Ne.symm hji)
     subst hji
-    rw [hbr j, if_pos rfl] at hb'
+    rw [hbr j, ite_eq_left rfl] at hb'
     have hbb : broker = b := Option.some.inj (hbi.symm.trans hb)
     subst hbb
     cases hb'
@@ -988,7 +984,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
     obtain rfl := Option.some.inj (he₀.symm.trans he)
     refine hslot _ _ hbr (fun hji => ?_) (fun hji => by rw [(l.onBroker_loan j he₀).1]; exact hloanOn he₀ hji)
     subst hji
-    rw [hbr _, if_pos rfl] at hb'
+    rw [hbr _, ite_eq_left rfl] at hb'
     rw [hbk'] at hb
     cases hb
     cases hb'
@@ -1000,7 +996,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
     obtain rfl := Option.some.inj (he₀.symm.trans he)
     refine hslot _ _ hbr (fun hji => ?_) (fun hji => by rw [(l.onBroker_loan j he₀).2.1]; exact hloanOn he₀ hji)
     subst hji
-    rw [hbr _, if_pos rfl] at hb'
+    rw [hbr _, ite_eq_left rfl] at hb'
     rw [hbk'] at hb
     cases hb
     cases hb'
@@ -1015,7 +1011,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
     | impair =>
       refine hslot _ _ hbr (fun hji => ?_) (fun hji => by rw [hon]; exact hloanOn he₀ hji)
       subst hji
-      rw [hbr _, if_pos rfl] at hb'
+      rw [hbr _, ite_eq_left rfl] at hb'
       rw [hbk'] at hb
       cases hb
       cases hb'
@@ -1024,7 +1020,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
     | unimpair =>
       refine hslot _ _ hbr (fun hji => ?_) (fun hji => by rw [hon]; exact hloanOn he₀ hji)
       subst hji
-      rw [hbr _, if_pos rfl] at hb'
+      rw [hbr _, ite_eq_left rfl] at hb'
       rw [hbk'] at hb
       cases hb
       cases hb'
@@ -1036,7 +1032,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
       obtain rfl := Option.some.inj (he₀.symm.trans he₂)
       refine hslot _ _ hbrd (fun hji => ?_) (fun hji => by rw [hon]; exact hloanOn he₀ hji)
       subst hji
-      rw [hbrd _, if_pos rfl] at hb'
+      rw [hbrd _, ite_eq_left rfl] at hb'
       rw [hbk'] at hb
       cases hb
       cases hb'
@@ -1054,7 +1050,7 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
     have hon := (l.onBroker_loan j he₀).2.2.2 pt amount
     refine hslot _ _ hbr (fun hji => ?_) (fun hji => by rw [hon]; exact hloanOn he₀ hji)
     subst hji
-    rw [hbr _, if_pos rfl] at hb'
+    rw [hbr _, ite_eq_left rfl] at hb'
     rw [hbk'] at hb
     cases hb
     cases hb'

@@ -4,9 +4,8 @@ import XRPL.Properties.Vault.Proofs.Support.NoOverflow
 
 /-! # The pricing of a deposit fails only as C++ catches it
 
-A VaultDeposit prices its shares inside a block that turns every overflow error into `tecPATH_DRY`. The lemmas here
-show that the pricing fails with nothing else. For XRP the price of the shares is at most the deposited amount, so
-it is an XRP amount. -/
+A VaultDeposit prices its shares inside a block that turns every overflow error into `tecPATH_DRY`, and the pricing
+fails with nothing else. On XRP the price is at most the deposited amount, so it is an XRP amount. -/
 
 namespace XRPL.Model.SingleAssetVault.VaultDepositNoException
 
@@ -50,7 +49,7 @@ lemma empty_charge_computes (v : Vault) (hasset : Vault.HoldsAsset v) (ra shares
   have hmq : (shares.mValue.toNat : ℚ) ≤ 9223372036854775807 := by
     exact_mod_cast (show shares.mValue.toNat ≤ 9223372036854775807 from hin)
   refine (STAmount.checked_ok_iff v.numericType _ _ false .to_nearest hasset hm).mpr ?_
-  rw [STAmount.unchecked_toRat, if_neg (by decide), one_mul]
+  rw [STAmount.unchecked_toRat, ite_eq_right (by decide), one_mul]
   show STAmount.RoundsInRange v.numericType .to_nearest
     ((shares.mValue.toNat : ℚ) * 10 ^ (shares.mOffset - (v.scale.toNat : ℤ)))
   rw [hic.offset_zero, zero_sub]
@@ -110,7 +109,7 @@ lemma charge_number_le (v : Vault) (ra shares : STAmount) (hrc : ra.Canonical) (
     have h1 := Int.floor_le q
     have h2 := (abs_le.mp hqb).2
     unfold RawVault.idealSharesDepositAt at h2
-    rw [if_neg (ne_of_gt hApos), hST] at h2
+    rw [ite_eq_right (ne_of_gt hApos), hST] at h2
     rw [hqv]
     linarith
   have key : A.toRat * sn.toRat / v.sharesTotal.toRat ≤ ra.toRat * (1 + sharesOverε) := by
@@ -129,12 +128,11 @@ lemma sharesToAssetsDeposit_error (v : Vault) (hasset : Vault.HoldsAsset v) (ra 
     (h : sharesToAssetsDeposit v shares = .error e) : isOverflow e = true ∨ e = .wrap := by
   simp only [sharesToAssetsDeposit, bind, Except.bind, pure, Except.pure] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact number_add_error v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm ‹_›
     | exact toNumber_error ‹_›
     | exact number_mul_error ‹_›
     | exact number_div_error ‹_›
-    | skip
   · -- an empty vault: the price always converts
     obtain ⟨c, hc⟩ := empty_charge_computes v hasset ra shares hrc hrp hrle _ ‹_› ‹_› hs hsz
     have hbad : STAmount.checked v.numericType shares.mantissa (shares.exponent - v.scale.toNat) false .to_nearest
@@ -169,7 +167,7 @@ lemma sharesToAssetsDeposit_error (v : Vault) (hasset : Vault.HoldsAsset v) (ra 
 lemma operator_gt_ne_error (lhs rhs : STAmount) (h : lhs.mNumericType = rhs.mNumericType) {e : Error} :
     lhs.operator_gt rhs ≠ .error e := by
   unfold STAmount.operator_gt STAmount.operator_lt
-  rw [if_neg (by simp [STAmount.areComparable, h])]
+  rw [ite_eq_right (by simp [STAmount.areComparable, h])]
   exact nofun
 
 /-- The check for an IOU amount at most zero always computes. -/
@@ -178,7 +176,7 @@ lemma isFractionalNonPositive_ne_error (a : STAmount) {e : Error} : a.isFraction
   split
   · exact nofun
   · unfold STAmount.operator_le STAmount.operator_lt
-    rw [if_neg (by simp [STAmount.areComparable, STAmount.zero_mNumericType, STAmount.numericType])]
+    rw [ite_eq_right (by simp [STAmount.areComparable, STAmount.zero_mNumericType, STAmount.numericType])]
     exact nofun
 
 /-- The deposit computation fails only with a wrap. It turns the overflow errors of its pricing into `tecPATH_DRY`,

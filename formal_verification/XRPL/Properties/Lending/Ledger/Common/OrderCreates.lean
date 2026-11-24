@@ -57,7 +57,7 @@ lemma LendingLedger.creates_comm_of_fits (hr : l.Reachable)
   obtain ⟨c₁, rBA, hc₁, -, -, -, hcBA, rfl⟩ := loanSet_step _ _ _ _ _ _ _ _ _ _ _ _ hBA
   rw [LendingLedger.broker?_commitLoan l _ bA hbA j] at hc₂
   rw [LendingLedger.broker?_commitLoan l _ bB hbB i] at hc₁
-  dsimp only [LoanEffect.ofCreate] at hc₂ hc₁
+  dsimp +instances only [LoanEffect.ofCreate] at hc₂ hc₁
   have hntA := hscale.brokers i bA hbA
   have hntB := hscale.brokers j bB hbB
   by_cases hij : i = j
@@ -66,7 +66,7 @@ lemma LendingLedger.creates_comm_of_fits (hr : l.Reachable)
     rw [hbA] at hbB
     cases hbB
     obtain ⟨hdA, hdB⟩ := hdebt rfl
-    rw [if_pos rfl] at hc₂ hc₁
+    rw [ite_eq_left rfl] at hc₂ hc₁
     cases hc₂
     cases hc₁
     obtain ⟨hv, hb⟩ := Loan.creates_comm_same_proof l.vault bA pa pb ra rb fa fb _ _ aoa aob tsa tsb rA rAB rB rBA
@@ -76,8 +76,8 @@ lemma LendingLedger.creates_comm_of_fits (hr : l.Reachable)
       ((l.brokers.set i (some rB.loan'.broker)).set i (some rBA.loan'.broker))
     rw [List.set_set, List.set_set, hb]
   · -- two brokers: each LoanSet reads its own broker as stored
-    rw [if_neg (Ne.symm hij)] at hc₂
-    rw [if_neg hij] at hc₁
+    rw [ite_eq_right (Ne.symm hij)] at hc₂
+    rw [ite_eq_right hij] at hc₁
     rw [hbB] at hc₂
     rw [hbA] at hc₁
     cases hc₂

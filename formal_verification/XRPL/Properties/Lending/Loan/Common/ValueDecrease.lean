@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.InterestDue
 import XRPL.Properties.Lending.Loan.Common.PayProofs
 import XRPL.Properties.Lending.Loan.Common.PayReachable
@@ -32,11 +33,11 @@ private lemma sumRoundAndSubtract_zero (A : Number) (e : Int) (nt : NumericType)
   refine le_antisymm hle ?_
   unfold sumRoundAndSubtract at h
   by_cases hint : nt.isIntegral = true
-  · rw [if_pos hint] at h
+  · rw [ite_eq_left hint] at h
     obtain ⟨x, hx, h⟩ := bind_ok_peel _ _ _ h
     obtain rfl : x = st := Except.ok.inj h
     exact STAmount.ofNumber_nonneg nt _ _ x Number.zero_isNormalized rfl hx
-  rw [if_neg hint] at h
+  rw [ite_eq_right hint] at h
   have hfr : nt = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using hint)
   subst hfr
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
@@ -123,7 +124,7 @@ private lemma validatePostPayment_changed (v : Vault) (r0 r : LoanWithAmounts Va
   · exact Or.inr hpr
   · left
     by_contra hne
-    exact hpr (by simpa using hc (by simpa using hne))
+    exact hpr (by simpa using hc (by simpa using! hne))
 
 /-- A settlement that passes changed AssetsAvailable, or paid the loan off. -/
 private lemma UnsettledPayment.settle_changed (p : UnsettledPayment Vault) (r : LoanWithAmounts Vault)

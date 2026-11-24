@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.OpenZoneSteps
 import XRPL.Properties.Lending.Loan.Common.PaidAmounts
 
@@ -268,13 +269,13 @@ private lemma add_downward_ge_any (x y r w : Number) (hx : x.isNormalized) (hy :
       mul_le_mul_of_nonneg_left (zpow_le_zpow_right₀ (by norm_num) hwe) (by positivity)
     by_cases hy_guard : y.operator_eq Number.zero = true
     · have hrx : r = x := by
-        unfold Number.operator_add at hok; rw [if_pos hy_guard] at hok; exact (Except.ok.inj hok).symm
+        unfold Number.operator_add at hok; rw [ite_eq_left hy_guard] at hok; exact (Except.ok.inj hok).symm
       rw [Number.toRat_eq_zero_of_mantissa_zero y (Number.mantissa_eq_zero_of_operator_eq_zero hy_guard), ← hrx,
         Number.toRat_eq_zero_of_mantissa_zero r hr0] at hwt
       linarith
     by_cases hx_guard : x.operator_eq Number.zero = true
     · have hry : r = y := by
-        unfold Number.operator_add at hok; rw [if_neg hy_guard, if_pos hx_guard] at hok
+        unfold Number.operator_add at hok; rw [ite_eq_right hy_guard, ite_eq_left hx_guard] at hok
         exact (Except.ok.inj hok).symm
       rw [Number.toRat_eq_zero_of_mantissa_zero x (Number.mantissa_eq_zero_of_operator_eq_zero hx_guard), ← hry,
         Number.toRat_eq_zero_of_mantissa_zero r hr0] at hwt
@@ -352,7 +353,7 @@ private lemma vault_credit_cross (A c : Number) (b : Int) (st : STAmount) (cr aa
     ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
   have hWv' : Wn.toRat = 10 ^ 16 * 10 ^ b := by rw [hWv]; push_cast; ring
   unfold sumRoundAndSubtract at h
-  rw [if_neg (by decide)] at h
+  rw [ite_eq_right (by decide)] at h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨E, hE, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨sum, hsum, h⟩ := bind_ok_peel _ _ _ h
@@ -395,7 +396,7 @@ private lemma vault_credit_cross (A c : Number) (b : Int) (st : STAmount) (cr aa
   simp only at hsum'
   have hretf := STAmount.ofNumber_fractional_fczr sum _ ret hret
   have hret_int : ret.integral = false := by unfold STAmount.integral; rw [hretf.1]; rfl
-  rw [if_neg (by rw [hret_int]; decide)] at hsum'
+  rw [ite_eq_right (by rw [hret_int]; decide)] at hsum'
   cases hrd : STAmount.roundToExponent ret E .downward with
   | error e => rw [hrd] at hsum'; cases hsum'
   | ok rd =>
@@ -439,7 +440,7 @@ private lemma vault_credit_cross (A c : Number) (b : Int) (st : STAmount) (cr aa
   have hsum'v := STAmount.FracCanonZero.toNumber_val hrdf .downward sum' hsum'
   have hsum'n := STAmount.roundToNumericType_isNormalized _ _ _ _ _ (show STAmount.roundToNumericType .fractional
     sum .downward (some E) = .ok sum' by unfold STAmount.roundToNumericType; rw [hret]; simp only
-                                         rw [if_neg (by rw [hret_int]; decide), hrd]; exact hsum')
+                                         rw [ite_eq_right (by rw [hret_int]; decide), hrd]; exact hsum')
   have hsum'W : 10 ^ 16 * 10 ^ b ≤ sum'.toRat := by rw [hsum'v]; exact hrdW
 
   obtain ⟨kA, hkA⟩ := hAg
@@ -735,7 +736,7 @@ private lemma LendingLedger.pay_total_ge (l l' : LendingLedger) (i : Nat) (pt : 
   · -- an XRP or MPT vault: the credit is the sum floored to a whole unit, and lands at least on the principal
     have hb0 : l.vault.baseExponent = 0 := hbint hint
     unfold sumRoundAndSubtract at hcred
-    rw [if_pos hint] at hcred
+    rw [ite_eq_left hint] at hcred
     obtain ⟨x, hx, hcred⟩ := bind_ok_peel _ _ _ hcred
     obtain rfl : x = credit := Except.ok.inj hcred
     have htneg := Number.negative_false_of_nonneg tot htotn htot0

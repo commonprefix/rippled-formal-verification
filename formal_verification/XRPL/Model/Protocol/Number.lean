@@ -1,7 +1,7 @@
 import Mathlib.Tactic
 import XRPL.Model.Protocol.FixedWidth
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Protocol
 
@@ -118,11 +118,9 @@ def Guard.doDropDigitWithTargetU64 (g : Guard) (mantissa : UInt64) (exponent tar
     : UInt64 × Int × Guard :=
   if exponent < target then
     if mantissa == 0 && g.unrecoverable then (mantissa, target, g)
-    else (g.doDropDigit mantissa exponent).1.doDropDigitWithTargetU64
-           (g.doDropDigit mantissa exponent).2.1 (g.doDropDigit mantissa exponent).2.2 target
+    else (g.push (mantissa % 10)).doDropDigitWithTargetU64 (mantissa / 10) (exponent + 1) target
   else (mantissa, exponent, g)
 termination_by (target - exponent).toNat
-decreasing_by simp [Guard.doDropDigit]; omega
 
 -- `rep` version of `doDropDigitWithTargetU64`, with the drop written out since `doDropDigit`
 -- takes a `UInt64`. `to_rep` uses only the value and guard, so the exponent is not returned.
@@ -289,9 +287,9 @@ def Number.from_rep (mantissa : Int64) (exponent : Int)
     (minMant maxMant : UInt64) (mode : rounding_mode) : Except Error Number :=
   Number.normalized (mantissa < 0) mantissa.magnitude exponent minMant maxMant mode
 
--- Number(int64_t) ctor
-def Number.ofInt64 (m : Int64) : Number :=
-  (Number.from_rep m 0 largeRange.min largeRange.max .to_nearest).toOption.getD Number.zero
+-- Number(int64_t) ctor, normalized in the caller's rounding mode
+def Number.ofInt64 (m : Int64) (mode : rounding_mode) : Number :=
+  (Number.from_rep m 0 largeRange.min largeRange.max mode).toOption.getD Number.zero
 
 -- Divide the mantissa by 10 (dropping the low digit) until the exponent reaches 0,
 -- i.e. discard the fractional part toward zero.
@@ -459,24 +457,41 @@ def Number.operator_div (x y : Number)
     let (zm128, ze, dropped) ← divQuotient128 x.mantissa_ y.mantissa_ x.exponent_ y.exponent_
     doNormalize128 zn zm128 ze largeRange.min largeRange.max mode dropped
 
--- Number::power, exponentiation by squaring (to_nearest multiply)
-def Number.power (base : Number) (exponent : Nat) : Except Error Number :=
+-- Number::power, exponentiation by squaring, multiplying in the caller's rounding mode
+def Number.power (base : Number) (exponent : Nat) (mode : rounding_mode) : Except Error Number :=
   match exponent with
-  | 0 => .ok (Number.ofInt64 1)
+  | 0 => .ok (Number.ofInt64 1 mode)
   | 1 => .ok base
   | k + 2 => do
-    let half ← Number.power base ((k + 2) / 2)
-    let squared ← half.operator_mul half .to_nearest
-    if (k + 2) % 2 == 1 then squared.operator_mul base .to_nearest else .ok squared
+    let half ← Number.power base ((k + 2) / 2) mode
+    let squared ← half.operator_mul half mode
+    if (k + 2) % 2 == 1 then squared.operator_mul base mode else .ok squared
   termination_by exponent
   decreasing_by omega
 
--- C++ normalizes the raw sum, which overflows at the top exponent before any digit drop
-def checkSumAtTop (zm128 : UInt128) (e : Int) : Except Error Unit :=
-  if e < maxExponent then .ok ()
-  else if zm128 > toUInt128 largeRange.max then .error .normalize1
-  else if zm128 > toUInt128 maxRepUp then .error .normalize1_5
-  else .ok ()
+-- Step 1: drop the trailing zeros of the operand with the lower exponent.
+def adjustShrinkZeros (g : Guard) (shrinkM : UInt64) (shrinkE expandE : Int) : UInt64 × Int × Guard :=
+  if shrinkE < expandE ∧ shrinkM % 10 = 0 then
+    adjustShrinkZeros (g.push (shrinkM % 10)) (shrinkM / 10) (shrinkE + 1) expandE
+  else (shrinkM, shrinkE, g)
+termination_by (expandE - shrinkE).toNat
+
+-- Step 2: grow the mantissa of the operand with the higher exponent, up to `upperLimit`.
+def adjustExpand (upperLimit expandM : UInt128) (expandE shrinkE : Int) : Except Error (UInt128 × Int) :=
+  if shrinkE < expandE ∧ minExponent < expandE ∧ expandM < upperLimit then do
+    let expandM ← expandM.mulChecked 10
+    adjustExpand upperLimit expandM (expandE - 1) shrinkE
+  else .ok (expandM, expandE)
+termination_by (expandE - shrinkE).toNat
+decreasing_by omega
+
+-- Step 3 drops the digits left below it into the guard.
+def adjust (upperLimit expandM : UInt128) (expandE : Int) (shrinkM : UInt64) (shrinkE : Int) (g : Guard)
+    : Except Error (UInt128 × Int × UInt64 × Guard) := do
+  let (shrinkM, shrinkE, g) := adjustShrinkZeros g shrinkM shrinkE expandE
+  let (expandM, expandE) ← adjustExpand upperLimit expandM expandE shrinkE
+  let (shrinkM, _, g) := g.doDropDigitWithTargetU64 shrinkM shrinkE expandE
+  return (expandM, expandE, shrinkM, g)
 
 def Number.operator_add (x y : Number)
     (mode : rounding_mode) : Except Error Number := do
@@ -490,44 +505,30 @@ def Number.operator_add (x y : Number)
     let yn := y.negative_
     let ym := y.mantissa_
     let ye := y.exponent_
-    let rec alignDown (m : UInt64) (e : Int) (g : Guard)
-        (target : Int) : UInt64 × Int × Guard :=
-      g.doDropDigitWithTargetU64 m e target
-    let (xm, xe, ym, _ye, g) :=
-      if xe < ye then
+    let upperLimit : UInt128 := toUInt128 largeRange.min * 1000
+    let (xm, ym, xe, g) ←
+      (if xe < ye then do
         let g := if xn then Guard.new.set_negative else Guard.new
-        let (xm', xe', g') := alignDown xm xe g ye
-        (xm', xe', ym, ye, g')
-      else if xe > ye then
+        let (ym', e, xm', g') ← adjust upperLimit (toUInt128 ym) ye xm xe g
+        pure (toUInt128 xm', ym', e, g')
+      else if xe > ye then do
         let g := if yn then Guard.new.set_negative else Guard.new
-        let (ym', _ye', g') := alignDown ym ye g xe
-        (xm, xe, ym', xe, g')
+        let (xm', e, ym', g') ← adjust upperLimit (toUInt128 xm) xe ym ye g
+        pure (xm', toUInt128 ym', e, g')
       else
-        let g := if xn then Guard.new.set_negative else Guard.new
-        (xm, xe, ym, ye, g)
+        let g := if (xm < ym && xn) || (ym < xm && yn) then Guard.new.set_negative else Guard.new
+        pure (toUInt128 xm, toUInt128 ym, xe, g))
     if xn == yn then
-      let zm128 ← (toUInt128 xm).addChecked (toUInt128 ym)
-      checkSumAtTop zm128 xe
-      let (zm, xe, g) ←
-        (if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then do
-          let (g', zm128', xe') ← g.doDropDigit128 zm128 xe
-          let zm ← toUInt64Checked zm128'
-          pure (zm, xe', g')
-        else do
-          let zm ← toUInt64Checked zm128
-          pure (zm, xe, g))
-      match g.doRoundUp xn zm xe largeRange.min largeRange.max mode .overflow with
-      | .error err => .error err
-      | .ok res => .ok res.toNumber
+      let zm128 ← xm.addChecked ym
+      doNormalize128 xn zm128 xe largeRange.min largeRange.max mode (!g.empty)
     else
-      let (zm128, zn, ze) ←
+      let (zm128, zn) ←
         (if xm > ym then do
-          let zm128 ← (toUInt128 xm).subChecked (toUInt128 ym)
-          pure (zm128, xn, xe)
+          let zm128 ← xm.subChecked ym
+          pure (zm128, xn)
         else do
-          let zm128 ← (toUInt128 ym).subChecked (toUInt128 xm)
-          pure (zm128, yn, xe))
-      let upperLimit : UInt128 := toUInt128 largeRange.min * 1000
+          let zm128 ← ym.subChecked xm
+          pure (zm128, yn))
       let rec recover (m : UInt128) (e : Int) (g : Guard)
           (fuel : Nat) : Except Error (UInt128 × Int × Guard) :=
         match fuel with
@@ -539,7 +540,7 @@ def Number.operator_add (x y : Number)
             let m' ← m10.subChecked (toUInt128 d)
             recover m' (e - 1) g' fuel
           else .ok (m, e, g)
-      let (zm128, ze, g) ← recover zm128 ze g 40
+      let (zm128, ze, g) ← recover zm128 xe g 40
       -- doRoundDown (Enabled330): borrow 1 unless the guard is exactly empty.
       let stickyTail := !g.empty
       let zm128 ← (if g.empty then pure zm128 else zm128.subChecked 1)

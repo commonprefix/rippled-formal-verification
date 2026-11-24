@@ -79,12 +79,12 @@ theorem doNormalize_scaleDown128_valueInv
     generalizing φ x p with
   | case1 m e g hgt hge =>
     rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .error .normalize1 from by
-      rw [doNormalize_scaleDown128Spec.eq_def, dif_pos hgt, if_pos hge]] at hok
+      rw [doNormalize_scaleDown128Spec.eq_def, dite_eq_left hgt, ite_eq_left hge]] at hok
     exact absurd hok (by intro h; cases h)
   | case2 m e g hgt hnge ih =>
     rw [show doNormalize_scaleDown128Spec maxMantissa m e g
         = doNormalize_scaleDown128Spec maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
-        from by rw [doNormalize_scaleDown128Spec.eq_def, dif_pos hgt, if_neg hnge]] at hok
+        from by rw [doNormalize_scaleDown128Spec.eq_def, dite_eq_left hgt, ite_eq_right hnge]] at hok
     have h10 : ((10 : UInt128)).toNat = 10 := by decide
     have h_div : (m / 10 : UInt128).toNat = m.toNat / 10 := by rw [BitVec.toNat_udiv, h10]
     have h_mod : (m % 10 : UInt128).toNat = m.toNat % 10 := by rw [BitVec.toNat_umod, h10]
@@ -179,7 +179,7 @@ theorem doNormalize_scaleDown128_valueInv
     ring
   | case3 m e g hgt =>
     rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .ok (m, e, g) from by
-      rw [doNormalize_scaleDown128Spec.eq_def, dif_neg hgt]] at hok
+      rw [doNormalize_scaleDown128Spec.eq_def, dite_eq_right hgt]] at hok
     obtain rfl := (Except.ok.inj hok).symm
     exact ⟨φ, x, p, hx_nn, hx_lt, hval, hxbit, hall, hdvd, hsize, hcouple, by ring⟩
 
@@ -208,11 +208,11 @@ theorem doNormalize_capAtMaxRep_valueInv
       ((m.toNat : ℚ) + φ) * 10 ^ e = ((out.1.toNat : ℚ) + φ') * 10 ^ out.2.1 := by
   unfold doNormalize_capAtMaxRep at hok
   by_cases h_gt : m > maxRepUp
-  · rw [if_pos h_gt] at hok
+  · rw [ite_eq_left h_gt] at hok
     by_cases h_ge : e ≥ maxExponent
-    · rw [if_pos h_ge] at hok
+    · rw [ite_eq_left h_ge] at hok
       exact absurd hok (by intro h; cases h)
-    · rw [if_neg h_ge] at hok
+    · rw [ite_eq_right h_ge] at hok
       unfold divu10 at hok
       simp only [] at hok
       obtain rfl := (Except.ok.inj hok).symm
@@ -295,7 +295,7 @@ theorem doNormalize_capAtMaxRep_valueInv
         rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; simp]
       field_simp
       ring
-  · rw [if_neg h_gt] at hok
+  · rw [ite_eq_right h_gt] at hok
     obtain rfl := (Except.ok.inj hok).symm
     exact ⟨φ, x, p, hx_nn, hx_lt, hval, hxbit, hall, hdvd, hsize, hcouple, by ring⟩
 
@@ -373,7 +373,7 @@ lemma div_round_eq_one (g : Guard) (f x : ℚ)
     (hxbit : g.xbit_ = true ↔ 0 < x) (hall : allNibblesAtMost9 g.digits_)
     (h1 : g.round .to_nearest = 1) : f > 1 / 2 := by
   have hne : ¬ g.empty := by
-    intro he; unfold Guard.round at h1; rw [if_pos he] at h1; exact absurd h1 (by decide)
+    intro he; unfold Guard.round at h1; rw [ite_eq_left he] at h1; exact absurd h1 (by decide)
   rw [round_to_nearest_def hne] at h1
   have key := valueInv_key g f x hval
   have h16 : (0 : ℚ) < 10 ^ 16 := by positivity
@@ -383,10 +383,10 @@ lemma div_round_eq_one (g : Guard) (f x : ℚ)
     have hpos : ((decimalValue g.digits_ : ℚ) - 5 * 10 ^ 15) / 10 ^ 16 > 0 :=
       div_pos (by linarith) h16
     linarith [key, hx_nn]
-  · rw [if_neg hgt] at h1
+  · rw [ite_eq_right hgt] at h1
     by_cases hlt : g.digits_ < 0x5000_0000_0000_0000
-    · rw [if_pos hlt] at h1; exact absurd h1 (by decide)
-    · rw [if_neg hlt] at h1
+    · rw [ite_eq_left hlt] at h1; exact absurd h1 (by decide)
+    · rw [ite_eq_right hlt] at h1
       have hdec : decimalValue g.digits_ = 5 * 10 ^ 15 :=
         (hex_eq_iff_dec_eq g.digits_ hall).mp ⟨hgt, hlt⟩
       have hq : ((decimalValue g.digits_ : ℚ) - 5 * 10 ^ 15) / 10 ^ 16 = 0 := by
@@ -395,7 +395,7 @@ lemma div_round_eq_one (g : Guard) (f x : ℚ)
       by_cases hxb : g.xbit_ = true
       · have hxp : 0 < x := hxbit.mp hxb
         linarith only [key, hq, hxp]
-      · rw [if_neg hxb] at h1
+      · rw [ite_eq_right hxb] at h1
         exact absurd h1 (by decide)
 
 /-- Div round = 0 ⟹ f = ½. Same as `represents_round_eq_zero`, for the true value fraction. -/
@@ -404,22 +404,22 @@ lemma div_round_eq_zero (g : Guard) (f x : ℚ)
     (hxbit : g.xbit_ = true ↔ 0 < x) (hall : allNibblesAtMost9 g.digits_)
     (h0 : g.round .to_nearest = 0) : f = 1 / 2 := by
   have hne : ¬ g.empty := by
-    intro he; unfold Guard.round at h0; rw [if_pos he] at h0; exact absurd h0 (by decide)
+    intro he; unfold Guard.round at h0; rw [ite_eq_left he] at h0; exact absurd h0 (by decide)
   rw [round_to_nearest_def hne] at h0
   have key := valueInv_key g f x hval
   by_cases hgt : g.digits_ > 0x5000_0000_0000_0000
-  · rw [if_pos hgt] at h0; exact absurd h0 (by decide)
-  · rw [if_neg hgt] at h0
+  · rw [ite_eq_left hgt] at h0; exact absurd h0 (by decide)
+  · rw [ite_eq_right hgt] at h0
     by_cases hlt : g.digits_ < 0x5000_0000_0000_0000
-    · rw [if_pos hlt] at h0; exact absurd h0 (by decide)
-    · rw [if_neg hlt] at h0
+    · rw [ite_eq_left hlt] at h0; exact absurd h0 (by decide)
+    · rw [ite_eq_right hlt] at h0
       have hdec : decimalValue g.digits_ = 5 * 10 ^ 15 :=
         (hex_eq_iff_dec_eq g.digits_ hall).mp ⟨hgt, hlt⟩
       have hq : ((decimalValue g.digits_ : ℚ) - 5 * 10 ^ 15) / 10 ^ 16 = 0 := by
         have : (decimalValue g.digits_ : ℚ) = 5 * 10 ^ 15 := by exact_mod_cast hdec
         rw [this]; ring
       by_cases hxb : g.xbit_ = true
-      · rw [if_pos hxb] at h0; exact absurd h0 (by decide)
+      · rw [ite_eq_left hxb] at h0; exact absurd h0 (by decide)
       · have hx0 : x = 0 := by
           by_contra hxne
           exact absurd (hxbit.mpr (lt_of_le_of_ne hx_nn (Ne.symm hxne))) hxb
@@ -440,7 +440,7 @@ lemma div_f_gt_half (g : Guard) (f x : ℚ) (p : ℕ)
       unfold Guard.empty Guard.unrecoverable
       simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true, not_and]
       intro hz; exact absurd (hz ▸ hgt) (by decide)
-    rw [round_to_nearest_def hne, if_pos hgt]
+    rw [round_to_nearest_def hne, ite_eq_left hgt]
   · by_cases hlt : g.digits_ < 0x5000_0000_0000_0000
     · -- below the tie: f ≤ 1/2, contradiction
       exfalso
@@ -458,7 +458,7 @@ lemma div_f_gt_half (g : Guard) (f x : ℚ) (p : ℕ)
       have hxb : g.xbit_ = true := hxbit.mpr hxp
       have hne : ¬ g.empty := by
         unfold Guard.empty Guard.unrecoverable; rw [hxb]; simp
-      rw [round_to_nearest_def hne, if_neg hgt, if_neg hlt, if_pos hxb]
+      rw [round_to_nearest_def hne, ite_eq_right hgt, ite_eq_right hlt, ite_eq_left hxb]
 
 /-- In the div pipeline, `f = 1/2` forces the `to_nearest` round decision to `0`, since the captured digits are
 exactly the half-mark and the tail is zero. Same as the tie case of `round_correct`. -/
@@ -504,7 +504,7 @@ lemma div_f_eq_half (g : Guard) (f x : ℚ) (p : ℕ)
           rw [Bool.and_eq_true, beq_iff_eq] at h'; exact h'.1
         have : decimalValue g.digits_ = 0 := by rw [hdz, decimalValue_zero]
         rw [this] at hdec; norm_num at hdec
-      rw [round_to_nearest_def hne, if_neg hgt, if_neg hlt, if_neg hxb]
+      rw [round_to_nearest_def hne, ite_eq_right hgt, ite_eq_right hlt, ite_eq_right hxb]
 
 /-- With no captured digit (`p = 0`), the coupling `x · 10^20 ≤ zm` with `zm < 10^19` gives `f = x < 1/10`, so
 `f < 1/2`. This supplies the `hp0` hypothesis of `div_f_gt_half`. -/

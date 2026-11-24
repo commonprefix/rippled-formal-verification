@@ -74,8 +74,6 @@ lemma LoanBroker.roundedCoverAmount_run (lb : LoanBroker) (pool : α) (amount : 
   rw [hnum]
   simp only
   rw [hr]
-  dsimp only
-  split <;> rfl
 
 /-- A deposit's rounding that succeeds returns a positive credit. -/
 lemma LoanBroker.roundedCoverAmount_ok (lb : LoanBroker) (pool : α) (amount r : STAmount)

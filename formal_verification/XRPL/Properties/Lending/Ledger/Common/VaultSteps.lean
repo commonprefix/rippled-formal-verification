@@ -114,12 +114,12 @@ lemma isCanonicalAmount_canonical (s : STAmount) (nt : NumericType)
   refine ⟨⟨fun hi => ?_, fun hf => ?_⟩, hty⟩
   · unfold STAmount.integral at hi
     rw [hty] at hi
-    rw [if_pos hi] at h
+    rw [ite_eq_left hi] at h
     simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
     exact ⟨⟨by rw [hty]; exact hi, h.1, by rw [hty]; exact h.2⟩, by rw [hty]; exact hmax hi⟩
   · unfold STAmount.integral at hf
     rw [hty] at hf
-    rw [if_neg (by simp [hf])] at h
+    rw [ite_eq_right (by simp [hf])] at h
     simp only [Bool.or_eq_true, beq_iff_eq, Bool.and_eq_true, decide_eq_true_eq] at h
     rcases h with h0 | ⟨⟨⟨hlo, hhi⟩, helo⟩, hehi⟩
     · exact absurd h0 hnz

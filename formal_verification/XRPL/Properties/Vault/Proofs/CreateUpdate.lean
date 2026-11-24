@@ -11,14 +11,14 @@ open XRPL.Model.Protocol
 /-- A raw state that is not well-formed and valid fails the re-validation with `notLawful`. -/
 lemma RawVault.to_lawful_not_lawful {rv : RawVault} (h : ¬ (rv.WF ∧ rv.Valid)) :
     rv.to_lawful = .error .notLawful := by
-  unfold RawVault.to_lawful; rw [dif_neg h]
+  unfold RawVault.to_lawful; rw [dite_eq_right h]
 
 /-- Proof body of the expired exit of `Vault.canCreate_exits`. -/
 lemma Vault.canCreate_expired_proof (scale : Option UInt8) (assetsMaximum : Option Number) (s : VaultSchedule)
     (t : UInt32) (nt : NumericType) (hexp : (t ≥ s.subscriptionDate || t ≥ s.redemptionDate) = true) :
     Vault.canCreate scale assetsMaximum (some s) t nt = .ok .tecEXPIRED := by
   simp only [Vault.canCreate, bind, Except.bind, pure, Except.pure]
-  rw [if_pos hexp]
+  rw [ite_eq_left hexp]
 
 /-- On a schedule whose dates are both ahead, `canCreate` is the maximum's grid check. -/
 private lemma canCreate_live (scale : Option UInt8) (assetsMaximum : Option Number)
@@ -30,7 +30,7 @@ private lemma canCreate_live (scale : Option UInt8) (assetsMaximum : Option Numb
   | some s =>
     have h := hlive s rfl
     simp only [Vault.canCreate, bind, Except.bind, pure, Except.pure]
-    rw [if_neg (by simp only [h]; decide)]
+    rw [ite_eq_right (by simp only [h]; decide)]
 
 /-- Proof body of the precision-loss exit of `Vault.canCreate_exits`. -/
 lemma Vault.canCreate_precision_loss_proof (scale : Option UInt8) (m : Number) (schedule : Option VaultSchedule)
@@ -87,7 +87,7 @@ lemma Vault.create_success_proof (scale : Option UInt8) (assetsMaximum : Option 
     | none => simp at hm
     | some m' =>
       by_cases hne : m'.operator_ne Number.zero = true
-      · simp only [Option.filter, hne, Option.mem_def, Option.some.injEq, if_true] at hm
+      · simp only [Option.filter, hne, Option.mem_def, Option.some.injEq, ite_true] at hm
         subst hm
         exact hmax _ rfl hne
       · simp [Option.filter, hne] at hm
@@ -120,8 +120,8 @@ lemma Vault.create_success_proof (scale : Option UInt8) (assetsMaximum : Option 
       scale_le := by
         show (if nt.isIntegral = true then 0 else scale.getD vaultDefaultIOUScale) ≤ vaultMaximumIOUScale
         cases hi : nt.isIntegral
-        · rw [if_neg (by simp)]; exact hscale hi
-        · rw [if_pos rfl]; decide }
+        · rw [ite_eq_right (by simp)]; exact hscale hi
+        · rw [ite_eq_left rfl]; decide }
     { assetsAvailable_nonneg := (by decide : Number.zero.operator_le Number.zero = true)
       assetsDeployed_nonneg := (by decide : Number.zero.operator_le Number.zero = true)
       assetsReserved_nonneg := (by decide : Number.zero.operator_le Number.zero = true)
@@ -142,7 +142,7 @@ lemma Vault.create_success_proof (scale : Option UInt8) (assetsMaximum : Option 
       earlyExitFeeRate_le := fun r hr => by
         cases hs : schedule.isSome
         · simp [hs] at hr
-        · simp only [hs, if_true] at hr
+        · simp only [hs, ite_true] at hr
           obtain ⟨s, hs'⟩ := Option.isSome_iff_exists.mp hs
           exact hfee s hs' r hr
       assetsAvailable_representable := STAmount.isRounded_zero nt
@@ -241,7 +241,7 @@ lemma Vault.update_success_proof (v : Vault) (assetsMaximum : Option Number) (bl
     | none => exact ⟨v.wf.assetsMaximum_norm m hm, v.valid.assetsMaximum_pos m hm⟩
     | some m' =>
       cases heq : m'.operator_eq Number.zero
-      · simp only [heq, Bool.false_eq_true, if_false, Option.mem_def, Option.some.injEq] at hm
+      · simp only [heq, Bool.false_eq_true, ite_false, Option.mem_def, Option.some.injEq] at hm
         subst hm
         exact hmax _ rfl heq
       · simp [heq] at hm
@@ -273,7 +273,7 @@ lemma Vault.canVaultUpdate_assetsMaximum_not_rounded_proof (v : Vault) (m : Numb
 lemma Vault.update_none_proof (v : Vault) : v.update none none = .ok v := by
   rw [Vault.update_eq]
   unfold RawVault.to_lawful
-  rw [dif_pos ⟨v.wf, v.valid⟩]
+  rw [dite_eq_left ⟨v.wf, v.valid⟩]
   rfl
 
 /-- Proof body of the maximum line of `Vault.update_not_lawful`. -/

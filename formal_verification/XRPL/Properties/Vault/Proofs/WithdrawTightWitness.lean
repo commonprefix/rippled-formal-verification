@@ -3,16 +3,9 @@ import XRPL.Properties.Vault.Common.WithdrawDefs
 
 /-! # Witnesses for `withdraw_sharesRedeemed` and `withdraw_payout`
 
-Each run's result is computed by the model and checked by `native_decide`. Every vault comes from a
-reachable history: a create, a deposit, then a donation.
+Withdrawals on reachable vaults that burn a whole share fewer than the ideal, and more shares than the ideal. -/
 
-* Truncation: `4577096644444257` assets and shares, withdraw `5005`: ideal `5005` shares, burned
-  `5004`, a whole share short.
-* Sharp share overshoot: a scale-1 vault of `100000000500000` assets and `100001000500005` shares,
-  withdraw `10000000098999.01`: the ideal sits just below a whole share and both `.to_nearest` stages
-  round up onto it, so the withdrawal burns more shares than the ideal. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.WdTightWit
 

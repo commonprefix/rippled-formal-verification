@@ -2,17 +2,10 @@ import XRPL.Properties.Vault.Proofs.Support.ReachableHistory
 
 /-! # Witnesses for internal errors on a reachable vault
 
-Each run's result is computed by the model and checked by `native_decide`. Every vault comes from a
-reachable history: a create, then deposits.
+A deposit that returns `tecINTERNAL` (FV_M2_22), and an amount past the Open limit that returns `tecPATH_DRY` in a
+deposit, a withdrawal and a clawback (FV_M2_23). -/
 
-* Deposit `tecINTERNAL`: an MPT vault of 2 assets and 2 shares, deposit `5000000000000000003`. The 19-digit product
-  `2 · 5000000000000000003` rounds up to `10000000000000000010`, so the deposit prices `5000000000000000005` shares,
-  worth `5000000000000000005`, two units above the amount.
-* `tecPATH_DRY`: a scale-10 IOU vault of 10 assets and `10^11` shares, after two deposits of 5. An amount of `10^9`,
-  past the Open limit of `9·10^5`, prices `10^19` shares, past the `int64` maximum, in a deposit, a withdrawal and a
-  clawback from a holder of half the shares. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.NoInternalWit
 

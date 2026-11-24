@@ -70,7 +70,7 @@ lemma doNormalize128_to_nearest_stages
     simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
@@ -130,16 +130,16 @@ lemma doNormalize128_to_nearest_stages
   have hrep₀ : represents g₀ ftilde₀ := by
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst, if_pos hst]
+    · rw [ite_eq_left hst, ite_eq_left hst]
       exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]
+    · rw [ite_eq_right hst, ite_eq_right hst]
       exact g0_represents_zero zn
   have hft₀_nn : (0 : ℚ) ≤ ftilde₀ := by rw [hft₀_def]; split_ifs <;> positivity
   have hft₀_lt : ftilde₀ < 1 := by rw [hft₀_def]; split_ifs <;> norm_num
   have hft₀_zero : ftilde₀ = 0 → δ₁ = 0 := by
     intro h
     by_cases hst : sticky = true
-    · rw [hft₀_def, if_pos hst] at h; norm_num at h
+    · rw [hft₀_def, ite_eq_left hst] at h; norm_num at h
     · exact hδ₁_zero (by simpa using hst)
   cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
@@ -163,12 +163,12 @@ lemma doNormalize128_to_nearest_stages
       linarith [abs_eq_zero.mp hz]
     rw [hψ₂] at h2sval
     by_cases hund : (sd.2.1 < minExponent || sd.1 < toUInt128 largeRange.min) = true
-    · rw [if_pos hund] at hok
+    · rw [ite_eq_left hund] at hok
       exfalso; apply hres
       have := Except.ok.inj hok
       rw [← this]
       rfl
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨-, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by

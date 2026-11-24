@@ -13,7 +13,7 @@ macro "underflow_absurd" h_ne:ident h_under:ident h_ok:ident : tactic =>
   `(tactic|
     (exfalso;
      apply $h_ne;
-     simp only [if_pos $h_under] at $h_ok:ident;
+     simp only [ite_eq_left $h_under] at $h_ok:ident;
      have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := (by norm_num [maxExponent]);
-     simp only [hzexp, if_false] at $h_ok:ident;
+     simp only [hzexp, ite_false] at $h_ok:ident;
      exact (Except.ok.inj $h_ok).symm ▸ rfl))

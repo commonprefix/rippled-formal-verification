@@ -1,4 +1,3 @@
-import XRPL.Properties.Protocol.Number.Add.Common.Decompose
 import XRPL.Properties.Protocol.Number.Common.ProofTactics
 import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize
 import XRPL.Properties.Protocol.Number.Add.Common.NoWrap
@@ -6,17 +5,7 @@ import XRPL.Properties.Protocol.Number.Add.Common.NoWrap
 
 namespace XRPL.Model.Protocol
 
-set_option maxRecDepth 1024 in
-/-- `alignDown` trace from `(10^18, 0)` to exponent `20`: produces mantissa `0`
-and a guard whose `digits_ = 2^56` (one packed `1`-nibble at slot 14). -/
-lemma alignDown_upward_addwitness :
-    Number.operator_add.alignDown (1000000000000000000 : UInt64) (0 : Int) Guard.new (20 : Int)
-      = ((0 : UInt64), (20 : Int),
-         { digits_ := 72057594037927936, xbit_ := false, sbit_ := false }) := by
-  repeat (first | rw [alignDown_step (by decide)] | rw [alignDown_noop (by decide)])
-  rfl
-
-/-- `operator_add` trace for the upward witness inputs. -/
+/-- `operator_add` on the witness inputs, evaluated. -/
 lemma Number.operator_add_upward_witness :
     Number.operator_add
         ⟨false, 1000000000000000000, 0⟩
@@ -26,37 +15,7 @@ lemma Number.operator_add_upward_witness :
   rw [Number.operator_add_eq_spec]
   case hx => decide
   case hy => decide
-  unfold Number.operator_addSpec
-  conv_lhs =>
-    rw [show (⟨false, 1000000000000000000, 0⟩ : Number).operator_eq Number.zero = false from by decide,
-        show (⟨false, 1000000000000000000, 20⟩ : Number).operator_eq Number.zero = false from by decide,
-        show (⟨false, 1000000000000000000, 0⟩ : Number).operator_eq
-            (⟨false, 1000000000000000000, 20⟩ : Number).operator_neg = false from by decide,
-        if_neg (by decide : ¬ false = true),
-        if_neg (by decide : ¬ false = true),
-        if_neg (by decide : ¬ false = true)]
-  dsimp only
-  rw [if_pos (by decide : (0 : Int) < 20)]
-  rw [show (if (false : Bool) = true then Guard.new.set_negative else Guard.new) = Guard.new from if_neg (by decide)]
-  rw [alignDown_upward_addwitness]
-  dsimp only
-  rw [show ((false : Bool) == false) = true from rfl]
-  rw [if_pos rfl]
-  rw [show toUInt128 (0 : UInt64) + toUInt128 (1000000000000000000 : UInt64)
-        = (1000000000000000000 : UInt128) from by decide]
-  rw [if_neg (by decide : ¬ ((decide ((1000000000000000000 : UInt128) > toUInt128 largeRange.max) ||
-           decide ((1000000000000000000 : UInt128) > toUInt128 maxRepUp)) = true))]
-  rw [show toUInt64 (1000000000000000000 : UInt128) = (1000000000000000000 : UInt64) from by decide]
-  rw [show ({ digits_ := 72057594037927936, xbit_ := false, sbit_ := false } : Guard).doRoundUp
-        false (1000000000000000000 : UInt64) (20 : Int) largeRange.min largeRange.max .upward
-        .overflow =
-        .ok { negative_ := false, mantissa_ := 1000000000000000001, exponent_ := 20 } from by
-    rw [Guard.doRoundUp_eq_spec]
-    all_goals try min_fit
-    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit
-    rfl]
-  simp only [RoundResult.toNumber]
-  rfl
+  decide +kernel
 
 theorem Number.operator_add_upward_attained :
     ∃ (x y result : Number),

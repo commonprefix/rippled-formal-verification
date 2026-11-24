@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FactorBound
 import XRPL.Properties.Lending.Loan.Common.RoundToNearest
 
@@ -23,8 +24,8 @@ lemma loanPeriodicRate_le (ir : TenthBips32) (interval : UInt32) (rate : Number)
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
   have heq : loanPeriodicRate ir interval =
-      (((Number.ofInt64 interval.toInt64).operator_mul ir.toNumber .to_nearest) >>=
-        (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
+      (((Number.ofInt64 interval.toInt64 .to_nearest).operator_mul (ir.toNumber .to_nearest) .to_nearest) >>=
+        (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest)) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
@@ -36,7 +37,7 @@ lemma loanPeriodicRate_le (ir : TenthBips32) (interval : UInt32) (rate : Number)
   obtain ⟨hY, hYv⟩ := TenthBips32.toNumber_facts (31536000 : UInt32)
   have hU' : (kTenthBipsPerUnity.toNat : ℚ) = 100000 := rfl
   have hY' : ((31536000 : UInt32).toNat : ℚ) = 31536000 := rfl
-  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) := rfl
+  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) .to_nearest := rfl
   rw [hy] at h
   rw [hU'] at hUv
   rw [hY'] at hYv
@@ -63,7 +64,7 @@ lemma loanPeriodicRate_le (ir : TenthBips32) (interval : UInt32) (rate : Number)
 
 /-- A power of a base at least one, to an exponent of at least one, is at least the base. -/
 private lemma Number.power_ge_base (base : Number) (hb : base.isNormalized) (h1 : 1 ≤ base.toRat) :
-    ∀ (k : Nat) (r : Number), 1 ≤ k → base.power k = .ok r → base.toRat ≤ r.toRat := by
+    ∀ (k : Nat) (r : Number), 1 ≤ k → base.power k .to_nearest = .ok r → base.toRat ≤ r.toRat := by
   intro k
   induction k using Nat.strong_induction_on with
   | _ k ih =>
@@ -126,7 +127,7 @@ private lemma powerMinusOneLoop_ge (rate : Number) (hrate : rate.isNormalized) (
 The closed form rounds `1 + rate` and its powers, the series starts at `n·rate`. -/
 private lemma computePowerMinusOneHybrid_ge (rate : Number) (pr : UInt32) (pm : Number) (hrate : rate.isNormalized)
     (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hpm : pm.toRat ≠ 0)
-    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toInt64) pr = .ok pm) :
+    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toInt64 .to_nearest) pr = .ok pm) :
     rate.toRat / 3 ≤ pm.toRat := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
@@ -185,7 +186,7 @@ private lemma computePowerMinusOneHybrid_ge (rate : Number) (pr : UInt32) (pm : 
 a third of the rate, so `rate·(1 + m)/m` is at most `rate + 3`, plus three roundings. -/
 private lemma computePaymentFactor_le (rate : Number) (pr : UInt32) (f : Number) (hrate : rate.isNormalized)
     (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hhigh : rate.toRat ≤ 200)
-    (h : computePaymentFactor rate (Number.ofInt64 pr.toInt64) pr = .ok f) : f.toRat ≤ 210 := by
+    (h : computePaymentFactor rate (Number.ofInt64 pr.toInt64 .to_nearest) pr = .ok f) : f.toRat ≤ 210 := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
   have hr0 : 0 < rate.toRat := lt_of_lt_of_le (by norm_num) hlow
@@ -313,7 +314,7 @@ lemma loanPrincipalFromPeriodicPayment_ge (pp rate : Number) (pr : UInt32) (tpo 
     exact_mod_cast Nat.one_le_iff_ne_zero.mpr this
   have hppm : pp.mantissa_ ≠ 0 := fun h0 => by
     rw [Number.toRat_eq_zero_iff.mpr h0] at hppL; norm_num at hppL
-  have hNm : (Number.ofInt64 pr.toInt64).mantissa_ ≠ 0 := fun h0 => by
+  have hNm : (Number.ofInt64 pr.toInt64 .to_nearest).mantissa_ ≠ 0 := fun h0 => by
     rw [← Number.toRat_eq_zero_iff, hNv] at h0; linarith
   have hu := Number.underflow_lt
   unfold loanPrincipalFromPeriodicPayment at h
@@ -387,7 +388,7 @@ lemma STAmount.roundToNumericType_upward_ge_of_large (nt : NumericType) (x T : N
           simp only at hok'
           have hfc := STAmount.ofNumber_fractional_fczr x .upward st hof
           have hsti : st.integral = false := by unfold STAmount.integral; rw [hfc.1]; rfl
-          rw [if_neg (by rw [hsti]; decide)] at hok'
+          rw [ite_eq_right (by rw [hsti]; decide)] at hok'
           cases hr : STAmount.roundToExponent st s .upward with
           | error e => rw [hr] at hok'; exact absurd hok' (by simp)
           | ok r =>

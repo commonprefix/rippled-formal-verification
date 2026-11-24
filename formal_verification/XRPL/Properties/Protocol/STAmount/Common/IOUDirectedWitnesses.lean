@@ -16,32 +16,7 @@ lemma add_lift_trace_g (mode : rounding_mode) :
   rw [Number.operator_add_eq_spec]
   case hx => decide
   case hy => decide
-  unfold Number.operator_addSpec
-  have hy_ne : (⟨false, 5000000000000002000, -3⟩ : Number).operator_eq Number.zero = false := by decide
-  have hx_ne : (⟨false, 5000000000000003000, -3⟩ : Number).operator_eq Number.zero = false := by decide
-  have hxy : (⟨false, 5000000000000003000, -3⟩ : Number).operator_eq
-      (⟨false, 5000000000000002000, -3⟩ : Number).operator_neg = false := by decide
-  simp only [hy_ne, hx_ne, hxy, Bool.false_eq_true, if_false]
-  rw [if_neg (by decide : ¬ ((-3 : Int) < -3)), if_neg (by decide : ¬ ((-3 : Int) > -3))]
-  rw [show ((false : Bool) == (false : Bool)) = true from rfl]
-  simp only [if_true]
-  rw [show toUInt128 (5000000000000003000 : UInt64) + toUInt128 (5000000000000002000 : UInt64)
-      = (10000000000000005000 : UInt128) from by decide]
-  rw [show checkSumAtTop (10000000000000005000 : UInt128) (-3) = .ok () from by decide, ok_bind]
-  rw [show (decide ((10000000000000005000 : UInt128) > toUInt128 largeRange.max) ||
-           decide ((10000000000000005000 : UInt128) > toUInt128 maxRepUp)) = true from by decide]
-  simp only [if_true]
-  rw [show Guard.new.doDropDigit128Spec (10000000000000005000 : UInt128) (-3)
-      = ({ digits_ := 0, xbit_ := false, sbit_ := false }, (1000000000000000500 : UInt128), (-2 : Int))
-      from by unfold Guard.doDropDigit128Spec Guard.new Guard.push; rfl]
-  simp only
-  rw [show toUInt64 (1000000000000000500 : UInt128) = (1000000000000000500 : UInt64) from by decide]
-  rw [show ({ digits_ := 0, xbit_ := false, sbit_ := false } : Guard).doRoundUp
-      false (1000000000000000500 : UInt64) (-2 : Int) largeRange.min largeRange.max mode
-      .overflow =
-      .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 }
-      from by rw_doRoundUp_spec; unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl]
-  simp only [RoundResult.toNumber]
+  cases mode <;> decide +kernel
 
 lemma ofnum_dir (mode : rounding_mode) (m16 : UInt64)
     (hm16 : m16 = (if mode = .upward then 1000000000000001 else 1000000000000000))
@@ -59,7 +34,7 @@ lemma ofnum_dir (mode : rounding_mode) (m16 : UInt64)
   rw [show (⟨false, 1000000000000000500, -2⟩ : Number).normalizeToRange cMinValue cMaxValue mode
         = .ok (k.toInt64, 1) by rw [hnorm]; norm_num]
   simp only []
-  rw [if_neg (by decide : ¬ ((1 : Int) > cMaxOffset)), if_neg (by decide : ¬ ((1 : Int) < cMinOffset))]
+  rw [ite_eq_right (by decide : ¬ ((1 : Int) > cMaxOffset)), ite_eq_right (by decide : ¬ ((1 : Int) < cMinOffset))]
 
 lemma operator_add_dir_eq (mode : rounding_mode) (sumI : IOUAmount)
     (hofn : IOUAmount.ofNumber ⟨false, 1000000000000000500, -2⟩ mode = .ok sumI) :
@@ -86,20 +61,20 @@ lemma operator_add_dir_eq (mode : rounding_mode) (sumI : IOUAmount)
       ⟨(⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
         (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ mode = .ok sumI := by
     unfold IOUAmount.operator_add
-    rw [if_neg (by decide : ¬ (((⟨(⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
+    rw [ite_eq_right (by decide : ¬ (((⟨(⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
           (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true)),
-        if_neg (by decide : ¬ (((⟨(⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
+        ite_eq_right (by decide : ¬ (((⟨(⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
           (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true))]
     rw [htn1]; simp only []
     rw [htn2]; simp only []
     rw [add_lift_trace_g mode]; simp only []
     exact hofn
   unfold STAmount.operator_add
-  rw [if_neg (by decide : ¬ ((!STAmount.areComparable ⟨.fractional, 5000000000000003, 0, false⟩
+  rw [ite_eq_right (by decide : ¬ ((!STAmount.areComparable ⟨.fractional, 5000000000000003, 0, false⟩
         ⟨.fractional, 5000000000000002, 0, false⟩) = true)),
-      if_neg (by decide : ¬ (((⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mValue == 0) = true)),
-      if_neg (by decide : ¬ (((⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mValue == 0) = true)),
-      if_neg (by decide : ¬ (((⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).integral) = true))]
+      ite_eq_right (by decide : ¬ (((⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mValue == 0) = true)),
+      ite_eq_right (by decide : ¬ (((⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mValue == 0) = true)),
+      ite_eq_right (by decide : ¬ (((⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).integral) = true))]
   rw [hiou1]; simp only []
   rw [hiou2]; simp only []
   rw [hadd_inner]

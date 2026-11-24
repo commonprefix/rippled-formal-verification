@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaymentCount
 
 /-! # A reachable loan's schedule computes
@@ -183,9 +184,8 @@ private lemma Loan.tryOverpayment_computes (l : Loan) (opc : PaymentComponents) 
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   have hrate := ‹l.periodicRate = Except.ok _›
   have hprops := ‹computeLoanPropertiesFromPeriodicRate _ _ _ _ _ _ = Except.ok _›
@@ -206,9 +206,8 @@ private lemma UnsettledPayment.applyOverpayment_computes (payment p' : Unsettled
   unfold UnsettledPayment.applyOverpayment at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact hn
-    | skip
   rename_i re hre _ _ _ _ loan' hl
   obtain ⟨he, -, -⟩ := RawLoan.to_lawful_ok hl
   obtain ⟨hth, hpp⟩ := Loan.tryOverpayment_computes _ _ _ hre

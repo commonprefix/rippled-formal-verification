@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaymentCount
 import XRPL.Properties.Lending.Loan.Common.RegularPayoff
 import XRPL.Properties.Lending.Loan.Common.PaySums
@@ -24,7 +25,7 @@ private lemma Loan.scheduledComponents_last {l : Loan} {pc : PaymentComponents} 
   obtain ⟨_, -, hpc⟩ := bind_ok_peel _ _ _ hpc
   obtain ⟨_, -, hpc⟩ := bind_ok_peel _ _ _ hpc
   dsimp only at hpc
-  rw [if_pos (by simp [h1])] at hpc
+  rw [ite_eq_left (by simp [h1])] at hpc
   obtain rfl := (Except.ok.inj hpc).symm
   rfl
 

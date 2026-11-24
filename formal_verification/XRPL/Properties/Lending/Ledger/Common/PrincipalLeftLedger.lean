@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.LoanStarts
 import XRPL.Properties.Lending.Ledger.Common.PhaseProofs
 import XRPL.Properties.Lending.Ledger.Common.YieldSum
@@ -6,10 +7,8 @@ import XRPL.Properties.Lending.Loan.Common.FactorGapLoan
 
 /-! # A loan on a reachable ledger keeps principal while payments are left
 
-A loan of a reachable ledger starts after SubscriptionDate and ends before RedemptionDate, so its term is at most the
-vault's 30-year investment period. Its payment factor then drops by at least four roundings for each extra payment
-left when the interest rate is at most 80%, the interval at least two hours, or the term at most 25 years, and always
-at a zero rate. -/
+A reachable loan's term is at most 30 years. Its payment factor drops by four roundings per extra payment left when
+the rate is at most 80%, the interval at least two hours or the term at most 25 years, and always at a zero rate. -/
 
 namespace XRPL.Model.Lending
 
@@ -57,9 +56,9 @@ lemma FactorGap.of_zero_rate (rate : Number) (hrate : rate.isNormalized) (h0 : r
   -- `f ≤ (1 + ε)/k` and `f' ≥ (1 − ε)/(k − 1)`, the latter not lost to underflow
   have hle := (Number.div_near _ _ _ hone hN hf).le (by rw [Number.ofInt64_one_toRat, hNv]; positivity)
   rw [Number.ofInt64_one_toRat, hNv] at hle
-  have hm1 : (Number.ofInt64 1).mantissa_ ≠ 0 := fun h' => by
+  have hm1 : (Number.ofInt64 1 .to_nearest).mantissa_ ≠ 0 := fun h' => by
     have := Number.toRat_eq_zero_iff.mpr h'; rw [Number.ofInt64_one_toRat] at this; norm_num at this
-  have hmN' : (Number.ofInt64 (k - 1).toInt64).mantissa_ ≠ 0 := fun h' => by
+  have hmN' : (Number.ofInt64 (k - 1).toInt64 .to_nearest).mantissa_ ≠ 0 := fun h' => by
     have := Number.toRat_eq_zero_iff.mpr h'; rw [hNv', hkq] at this; linarith
   have hkm1 : (1 : ℚ) ≤ k.toNat - 1 := by linarith
   have hf'ne : f'.toRat ≠ 0 := by

@@ -23,13 +23,13 @@ lemma STAmount.ofNumber_working_facts (n : Number) (hn : n.isNormalized) :
       intro h0
       rw [Number.eq_zero_of_mantissa_zero n hn h0] at hb
       exact absurd hb (by decide)
-    rw [if_pos hb, if_pos hb]
+    rw [ite_eq_left hb, ite_eq_left hb]
     refine ⟨Number.operator_neg_isNormalized n hn, ?_, Number.operator_neg_mantissa_of_ne n hm, ?_, ?_⟩
     · rw [Number.operator_neg_negative_of_ne n hm, hb]; rfl
     · unfold Number.operator_neg
-      rw [if_neg (by simpa using hm)]
+      rw [ite_eq_right (by simpa using hm)]
     · rw [Number.toRat_neg]; ring
-  · rw [if_neg hb, if_neg hb, one_mul]
+  · rw [ite_eq_right hb, ite_eq_right hb, one_mul]
     exact ⟨hn, by simpa using hb, rfl, rfl, rfl⟩
 
 /-- An XRP or MPT `ofNumber` result is the `to_rep` integer of the Number without its sign, with the sign put
@@ -44,7 +44,7 @@ lemma STAmount.ofNumber_integral_signed (nt : NumericType) (n : Number) (mode : 
       result.mOffset = 0 := by
   obtain ⟨hw_norm, hw_neg, -, -, hw_val⟩ := STAmount.ofNumber_working_facts n hn
   unfold STAmount.ofNumber at hok
-  rw [if_pos hnt] at hok
+  rw [ite_eq_left hnt] at hok
   set w : Number := if decide (n.signum < 0) = true then n.operator_neg else n with hw
   cases hrep : w.to_rep mode with
   | error e => rw [hrep] at hok; exact absurd hok (by simp)
@@ -83,7 +83,7 @@ lemma STAmount.ofNumber_iou_signed (n : Number) (mode : rounding_mode) (result :
   have hemin := Number.exponent_ge_min n hn hn0
   have hexp4 := STAmount.ofNumber_iou_success_exp_range n mode result hb.1 hb.2 hemin hok hresult
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide)] at hok
+  rw [ite_eq_right (by decide)] at hok
   set w : Number := if decide (n.signum < 0) = true then n.operator_neg else n with hw
   have hw_lo : 10 ^ 18 ≤ w.mantissa_.toNat := by rw [hw_mant]; exact hb.1
   have hw_hi : w.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hb.2
@@ -170,7 +170,7 @@ lemma normalizeToRange_16_ceil_pos_bounds (w : Number) (mant : Int64) (exp : Int
   have hr1 : ((w.mantissa_.toNat % 1000 : ℕ) : ℚ) < 1000 := by
     exact_mod_cast Nat.mod_lt w.mantissa_.toNat (by norm_num)
   by_cases hrem : w.mantissa_.toNat % 1000 = 0
-  · rw [if_neg (by simpa using hrem), Nat.add_zero]
+  · rw [ite_eq_right (by simpa using hrem), Nat.add_zero]
     rw [hrem, Nat.cast_zero, add_zero] at hdm
     rw [hdm]
     generalize ((w.mantissa_.toNat / 1000 : ℕ) : ℚ) = q
@@ -178,7 +178,7 @@ lemma normalizeToRange_16_ceil_pos_bounds (w : Number) (mant : Int64) (exp : Int
     generalize (10 : ℚ) ^ exp = u at hle ⊢
     norm_num at hle ⊢
     constructor <;> nlinarith
-  · rw [if_pos hrem]
+  · rw [ite_eq_left hrem]
     have hr0 : (0 : ℚ) < ((w.mantissa_.toNat % 1000 : ℕ) : ℚ) := by
       exact_mod_cast Nat.pos_of_ne_zero hrem
     rw [hdm]
@@ -221,7 +221,7 @@ lemma STAmount.ofNumber_rounds_downward_proof (nt : NumericType) (n : Number) (r
   | integral mv mo ms msh =>
     obtain ⟨w, iv, hw, hwneg, hrep, -, hnv, hrv, hoff⟩ :=
       STAmount.ofNumber_integral_signed _ n .downward result rfl hn hok
-    rw [hneg, if_neg Bool.false_ne_true, one_mul] at hnv hrv
+    rw [hneg, ite_eq_right Bool.false_ne_true, one_mul] at hnv hrv
     obtain ⟨h1, h2⟩ := Number.to_rep_downward_floor w iv hw hwneg hrep
     rw [hoff, zpow_zero, hnv, hrv]
     exact ⟨h1, by linarith⟩
@@ -230,7 +230,7 @@ lemma STAmount.ofNumber_rounds_downward_proof (nt : NumericType) (n : Number) (r
     have hn0 := STAmount.ofNumber_fractional_source_ne_zero n .downward result hn hok hresult
     obtain ⟨w, mant, exp, hwneg, hlo, hhi, helo, hehi, hnorm, -, hnv, hrv, hoff⟩ :=
       STAmount.ofNumber_iou_signed n .downward result hn hn0 hok hresult
-    rw [hneg, if_neg Bool.false_ne_true, one_mul] at hnv hrv
+    rw [hneg, ite_eq_right Bool.false_ne_true, one_mul] at hnv hrv
     rw [hoff, hnv, hrv]
     exact normalizeToRange_16_floor_pos_bounds w mant exp .downward (Or.inl rfl) hwneg hlo hhi helo hehi hnorm
 
@@ -244,7 +244,7 @@ lemma STAmount.ofNumber_rounds_upward_proof (nt : NumericType) (n : Number) (res
   | integral mv mo ms msh =>
     obtain ⟨w, iv, hw, hwneg, hrep, -, hnv, hrv, hoff⟩ :=
       STAmount.ofNumber_integral_signed _ n .upward result rfl hn hok
-    rw [hneg, if_neg Bool.false_ne_true, one_mul] at hnv hrv
+    rw [hneg, ite_eq_right Bool.false_ne_true, one_mul] at hnv hrv
     obtain ⟨h1, h2⟩ := Number.to_rep_upward_ceil w iv hw hwneg hrep
     rw [hoff, zpow_zero, hnv, hrv]
     exact ⟨h1, by linarith⟩
@@ -253,7 +253,7 @@ lemma STAmount.ofNumber_rounds_upward_proof (nt : NumericType) (n : Number) (res
     have hn0 := STAmount.ofNumber_fractional_source_ne_zero n .upward result hn hok hresult
     obtain ⟨w, mant, exp, hwneg, hlo, hhi, helo, hehi, hnorm, -, hnv, hrv, hoff⟩ :=
       STAmount.ofNumber_iou_signed n .upward result hn hn0 hok hresult
-    rw [hneg, if_neg Bool.false_ne_true, one_mul] at hnv hrv
+    rw [hneg, ite_eq_right Bool.false_ne_true, one_mul] at hnv hrv
     rw [hoff, hnv, hrv]
     exact normalizeToRange_16_ceil_pos_bounds w mant exp hwneg hlo hhi helo hehi hnorm
 

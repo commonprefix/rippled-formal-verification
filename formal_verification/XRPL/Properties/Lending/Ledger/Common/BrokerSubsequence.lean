@@ -1,13 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.BrokerSubsequenceTwin
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequence
 
 /-! # One broker's transactions alone
 
-Broker `k` in a sequence of transactions from a reachable ledger, and the same broker in the subsequence of its own
-and its loans' transactions, renumbered to `k'`: on both it is not created yet, deleted, or stored as two copies that
-differ at most in CoverAvailable, and each of its loans has a twin under its number in the subsequence. The covers
-are equal too while neither run is coarsened. Once the openings succeed, every other transaction the subsequence
-keeps succeeds as well, when loan and broker transactions replay on twins. -/
+A broker and its loans end the same in a sequence and in the subsequence of their own transactions, up to
+CoverAvailable on a coarsened run. Every kept transaction that succeeds in the sequence succeeds in the subsequence. -/
 
 namespace XRPL.Model.Lending
 
@@ -65,7 +63,7 @@ private lemma subLoanIndex_scope {base : Nat} {created : List Nat} {L : LendingL
   right
   by_contra hm
   have hlt := LendingLedger.loan?_lt he'
-  rw [subLoanIndex, if_neg hi, List.idxOf_eq_length hm] at hlt
+  rw [subLoanIndex, ite_eq_right hi, List.idxOf_eq_length hm] at hlt
   omega
 
 /-- Loans of the start ledger and new loans get different numbers in the subsequence. -/
@@ -74,16 +72,16 @@ private lemma subLoanIndex_inj {base : Nat} {created : List Nat} (hge : ∀ x �
     (h : subLoanIndex base created i = subLoanIndex base created j) : i = j := by
   unfold subLoanIndex at h
   rcases hi with hi | hi <;> rcases hj with hj | hj
-  · rwa [if_pos hi, if_pos hj] at h
+  · rwa [ite_eq_left hi, ite_eq_left hj] at h
   · have := hge j hj
-    rw [if_pos hi, if_neg (by omega)] at h
+    rw [ite_eq_left hi, ite_eq_right (by omega)] at h
     omega
   · have := hge i hi
-    rw [if_neg (by omega), if_pos hj] at h
+    rw [ite_eq_right (by omega), ite_eq_left hj] at h
     omega
   · have h1 := hge i hi
     have h2 := hge j hj
-    rw [if_neg (by omega), if_neg (by omega)] at h
+    rw [ite_eq_right (by omega), ite_eq_right (by omega)] at h
     exact (List.idxOf_inj hi).mp (by omega)
 
 /-- A loan already numbered keeps its number when a new loan joins `created`. -/
@@ -91,7 +89,7 @@ private lemma subLoanIndex_append {base : Nat} {created : List Nat} {i : Nat} (n
     (hi : i < base ∨ i ∈ created) : subLoanIndex base (created ++ [n]) i = subLoanIndex base created i := by
   unfold subLoanIndex
   rcases hi with hi | hi
-  · rw [if_pos hi, if_pos hi]
+  · rw [ite_eq_left hi, ite_eq_left hi]
   · split
     · rfl
     · rw [List.idxOf_append_of_mem hi]
@@ -100,7 +98,7 @@ private lemma subLoanIndex_append {base : Nat} {created : List Nat} {i : Nat} (n
 private lemma subLoanIndex_new {base : Nat} {created : List Nat} {n : Nat} (hbn : base ≤ n) (hn : n ∉ created) :
     subLoanIndex base (created ++ [n]) n = base + created.length := by
   unfold subLoanIndex
-  rw [if_neg (by omega), List.idxOf_append_of_notMem hn]
+  rw [ite_eq_right (by omega), List.idxOf_append_of_notMem hn]
   simp
 
 /-- What `brokerTxsFrom` keeps of one transaction run on `l`, and the new loans of the broker after it. -/
@@ -147,7 +145,7 @@ private lemma LendingLedger.brokerStep_cases (k k' base : Nat) (created : List N
   · cases tx with
     | close t => exact absurd rfl (hc' t)
     | loanSet =>
-      exact Or.inr (Or.inr (Or.inl ⟨rfl, rfl, hk, by simp only [LendingLedger.brokerStep]; exact if_pos hk⟩))
+      exact Or.inr (Or.inr (Or.inl ⟨rfl, rfl, hk, by simp only [LendingLedger.brokerStep]; exact ite_eq_left hk⟩))
     | loanAccept i | loanDelete i | loanManage i _ | loanPay i _ _ =>
       exact Or.inr (Or.inr (Or.inr (Or.inl ⟨i, rfl, hk, by simp [LendingLedger.brokerStep, hk,
         LendingTx.loanIndex?]⟩)))
@@ -215,7 +213,7 @@ private lemma LendingLedger.BPair.start {start : LendingLedger} (hr : start.Reac
     rw [hek] at hb
     have hk := LendingLedger.broker?_lt hb
     refine ⟨e, ?_, ?_, rfl⟩
-    · rw [subLoanIndex, if_pos (LendingLedger.loan?_lt he)]
+    · rw [subLoanIndex, ite_eq_left (LendingLedger.loan?_lt he)]
       exact he
     · rw [hek, LendingLedger.aloneBrokerIndex, min_eq_left hk.le]
 

@@ -49,8 +49,8 @@ private def canFundLoan {α : Type} [AssetPool α] (pool : α) (schedule : LoanS
 
   return .tesSUCCESS
 
--- LoanSet -> preclaim. The expiry and the pool phase are judged at the parent close time; the one-step
--- start date in `schedule` is the ledger close time (`LoanSchedule.build`).
+-- LoanSet -> preclaim. The expiry and the pool phase are judged at the parent close time.
+-- The one-step start date in `schedule` is the ledger close time (`LoanSchedule.build`).
 def Loan.canCreate {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principalRequested : Number)
     (fees : LoanFees) (schedule : LoanSchedule) (parentCloseTime : UInt32) (twoStep : Bool) : Except Error TER := do
   let scheduleTer ← schedule.checkTimeAvailability
@@ -75,7 +75,7 @@ def computeLoanPropertiesFromPeriodicRate (principal periodicRate : Number) (pay
 
   -- Round up when there is interest, else to nearest. The scale of the total value sets the loan scale.
   let mode : rounding_mode := if periodicRate.operator_eq Number.zero then .to_nearest else .upward
-  let amount ← periodicPayment.operator_mul (Number.ofInt64 paymentsRemaining.toInt64) mode
+  let amount ← periodicPayment.operator_mul (Number.ofInt64 paymentsRemaining.toInt64 mode) mode
   let amountSt ← STAmount.ofNumber nt amount mode
   let loanScale := max minimumScale amountSt.exponent
   let totalValueOutstanding ← STAmount.roundToNumericType nt amount mode (some loanScale)

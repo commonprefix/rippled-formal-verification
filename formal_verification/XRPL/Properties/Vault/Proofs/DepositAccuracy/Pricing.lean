@@ -40,7 +40,7 @@ lemma deposit_nonempty_chain_facts (v : Vault) (navN : Number) (hat : v.assetsTo
   obtain ⟨navN', hat', hok⟩ := bind_ok_peel _ _ _ hok
   rw [hat, Except.ok.injEq] at hat'
   subst hat'
-  rw [if_neg hne] at hok
+  rw [ite_eq_right hne] at hok
   obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨amountN, hamN, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨P, hP, hok⟩ := bind_ok_peel _ _ _ hok
@@ -110,7 +110,7 @@ lemma deposit_empty_chain_facts (v : Vault) (hscale : v.scale.toNat ≤ 18)
   obtain ⟨navN', hat', hok⟩ := bind_ok_peel _ _ _ hok
   rw [hat, Except.ok.injEq] at hat'
   subst hat'
-  rw [if_pos hmz] at hok
+  rw [ite_eq_left hmz] at hok
   obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨n2, hn2, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨sh', hsh, hlast⟩ := bind_ok_peel _ _ _ hok

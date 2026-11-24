@@ -3,11 +3,8 @@ import XRPL.Properties.Vault.Proofs.IsolationWitness
 
 /-! # Isolation of a holder's withdrawal
 
-A transaction by another holder, or by the owner, never makes a withdrawal by shares that would have succeeded fail,
-as long as it leaves the withdrawn shares in place. Without a partial early-exit fee a reachable vault pays every
-withdrawal by shares it covers. Under a partial fee the withdrawal needs the price of its shares not to fall: a deposit,
-a donation and an update keep it, another withdrawal keeps it on an XRP or MPT vault, and otherwise the amounts priced
-must be worth whole base units. -/
+A transaction by another holder or the owner never makes a withdrawal by shares fail that would have succeeded, as
+long as it leaves those shares in place. Under a partial early-exit fee this needs the share price not to fall. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -44,7 +41,7 @@ theorem Vault.Reachable.isolation (v : Vault) (t0 t : UInt32) (hr : Vault.Reacha
     (∀ (assets holderShares : STAmount) (waiveX : Bool) (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts),
       assets.CanonicalOrZero → assets.mNumericType = v.numericType → holderShares.ShareBalance →
       (waiveX = true ↔ v.IsSoleShareholder holderShares) →
-      (v.clawback assets holderShares waiveX hnn).run = .ok (.ok r) → r.shares.toRat ≤ holderShares.toRat →
+      (v.clawback assets holderShares waiveX hnn).run = .ok (.ok r) →
       r.shares.toRat + shares.toRat ≤ v.toExact.sharesTotal →
       -- under a partial fee, the clawed-back shares and the withdrawn shares are worth whole base units (FV_M2_3)
       (v.earlyExitFeeRateAt t ≠ 0 → v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate →
@@ -70,9 +67,9 @@ theorem Vault.Reachable.isolation (v : Vault) (t0 t : UInt32) (hr : Vault.Reacha
     fun amount holderShares waiveX hposX r hcX htyX hhs hsole hok hheld hother hwhole waive' =>
     Vault.Reachable.isolation_withdraw_proof v t0 t hr ht shares waive hpos hc hty rW hW amount holderShares waiveX
       hposX hcX htyX hhs hsole r hok hheld hother hwhole waive',
-    fun assets holderShares waiveX hnn r hcX htyX hhs hsole hok hheld hother hwhole waive' =>
+    fun assets holderShares waiveX hnn r hcX htyX hhs hsole hok hother hwhole waive' =>
     Vault.Reachable.isolation_clawback_proof v t0 t hr ht shares waive hpos hc hty rW hW assets holderShares waiveX
-      hnn hcX htyX hhs hsole r hok hheld hother hwhole waive',
+      hnn hcX htyX hhs hsole r hok hother hwhole waive',
     fun assetsMaximum blockDeposit v' hcan hok waive' =>
     Vault.Reachable.isolation_update_proof v t0 t hr ht shares waive hpos hc hty rW hW assetsMaximum blockDeposit
       v' hcan hok waive',

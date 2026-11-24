@@ -6,9 +6,8 @@ import XRPL.Properties.Vault.Proofs.OpenZone
 
 /-! # What can change the share total in the investment phase
 
-Proof bodies behind `Phases.lean`. In the investment phase a deposit is refused and a donation
-issues no shares, a withdrawal needs an early-exit fee rate, a burn needs an insolvent vault, and an
-update never touches the share total. -/
+Proofs behind `Phases.lean`. A deposit is refused, a donation issues no shares, a withdrawal needs an early-exit fee
+rate, a burn needs an insolvent vault, and an update never touches the share total. -/
 
 namespace XRPL.Model.SingleAssetVault
 

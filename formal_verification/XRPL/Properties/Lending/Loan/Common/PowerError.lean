@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaymentFactor
 
 /-! # Rounding error of a power by squaring
@@ -43,7 +44,7 @@ private lemma Number.mul_bounds (x y r : Number) (hx : x.isNormalized) (hy : y.i
 /-- A power by squaring of a base at least one is within `k − 1` product errors of the exact power. Each
 squaring doubles the error count of the half power and adds one, each multiplication by the base adds one. -/
 lemma Number.power_bounds (base : Number) (hb : base.isNormalized) (h1 : 1 ≤ base.toRat) :
-    ∀ (k : Nat) (r : Number), 1 ≤ k → base.power k = .ok r →
+    ∀ (k : Nat) (r : Number), 1 ≤ k → base.power k .to_nearest = .ok r →
       base.toRat ^ k * (1 - Number.mulError) ^ (k - 1) ≤ r.toRat ∧
         r.toRat ≤ base.toRat ^ k * (1 + Number.mulError) ^ (k - 1) := by
   have he := Number.mulError_pos

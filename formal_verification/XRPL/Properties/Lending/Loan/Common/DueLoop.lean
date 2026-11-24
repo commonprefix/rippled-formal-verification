@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.NextInstalment
 import XRPL.Properties.Lending.Loan.Common.OverpaymentReduces
 import XRPL.Properties.Lending.Loan.Common.PayMonotone
@@ -348,7 +349,7 @@ lemma Loan.regularPayInstalments_due (loan : Loan) (hroom : loan.LoopRoom) (v : 
       maxPaymentsPerTransaction amount = .ok q ∧ 0 ≤ q.amounts.feePaid.toRat ∧ due.toRat ≤ q.totalPaid.toRat ∧
       1 ≤ q.count ∧ q.totalPaid.isNormalized := by
     rw [show maxPaymentsPerTransaction = 99 + 1 from rfl, UnsettledPayment.payInstalments]
-    have hpr0 : (loan.unimpaired.paymentRemaining == 0) = false := by simpa using hrem
+    have hpr0 : (loan.unimpaired.paymentRemaining == 0) = false := by simpa using! hrem
     simp only [hpr0, Bool.false_eq_true, ↓reduceIte, Loan.scheduledComponents_unimpaired, hpc0, hfee, bind,
       Except.bind]
     rw [show ({ pc0 with untrackedManagementFee := loan.fees.serviceFee } : PaymentComponents) = pc from rfl]

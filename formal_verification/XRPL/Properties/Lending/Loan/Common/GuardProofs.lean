@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Common.PoolBalances
 import XRPL.Properties.Lending.Loan.Common.SetDefs
 import XRPL.Model.Lending.Loan.LoanAccept
@@ -65,7 +66,7 @@ private lemma canFundLoan_open (v : Vault) (schedule : LoanSchedule) (t : UInt32
     | some s =>
       have hb := hs s hsch
       simp only [Vault.pool_redemptionDate, hsch, Option.map_some, Option.getD_some]
-      rw [if_neg (by simp; omega)]
+      rw [ite_eq_right (by simp; omega)]
       show (if (e != v.baseExponent) = true then Except.ok TER.tecLIMIT_EXCEEDED else Except.ok TER.tesSUCCESS) = _
       split <;> rfl
 
@@ -88,7 +89,7 @@ private lemma canFundLoan_success_iff (v : Vault) (schedule : LoanSchedule) (t :
     refine ⟨hopen, ?_⟩
     rw [canFundLoan_open v schedule t nt e hopen hexp] at h
     by_contra hne
-    rw [if_pos (by simpa using hne)] at h
+    rw [ite_eq_left (by simpa using hne)] at h
     exact absurd h (by decide)
   · rintro ⟨hopen, he⟩
     rw [canFundLoan_open v schedule t nt e hopen hexp, he]
@@ -126,7 +127,7 @@ private lemma canFundLoan_codes (v : Vault) (schedule : LoanSchedule) (t : UInt3
           unfold canFundLoan at h
           simp only [Vault.pool_phase, hp, hexp, bind, Except.bind, Vault.pool_redemptionDate, hsch] at h
           simp only [Option.map_some, Option.getD_some, gt_iff_lt, pure_eq] at h
-          rw [if_neg (by omega)] at h
+          rw [ite_eq_right (by omega)] at h
           exact absurd h (by simp)
         | ok e =>
           rw [canFundLoan_open v schedule t nt e hopen hexp] at h
@@ -217,7 +218,7 @@ lemma Loan.canCreate_base_scale_proof (broker : LoanBroker) (v : Vault) (p : Num
     Loan.canCreate broker v p fees schedule t twoStep = .ok .tecLIMIT_EXCEEDED := by
   rw [canCreate_reduce broker v p fees schedule t twoStep hfits hstart,
     canFundLoan_open v schedule t _ e hopen (exponent_eq v _ assetsTotal e hat hexp),
-    if_pos (by simp; omega)]
+    ite_eq_left (by simp; omega)]
   rfl
 
 /-- Proof body of the precision line of `Loan.canCreate_exits`. -/
@@ -329,7 +330,7 @@ lemma Loan.canCreate_lawful_iff_proof (broker : LoanBroker) (v : Vault) (p : Num
         · simp only [hall, show TER.tesSUCCESS.isTesSuccess = true from rfl, Bool.not_true,
             Bool.false_eq_true, ↓reduceIte, Except.ok.injEq] at h
           exact absurd h (by decide)
-      · rw [if_pos (by rw [TER.isTesSuccess_eq_false vt hvt]; rfl)] at h
+      · rw [ite_eq_left (by rw [TER.isTesSuccess_eq_false vt hvt]; rfl)] at h
         exact absurd (Except.ok.inj h) hvt
   · rintro ⟨hfits, hstart, hopen, he, hexact⟩
     subst he
@@ -674,7 +675,7 @@ lemma LoanProperties.checkGuards_amortization (props : LoanProperties) (principa
     by_cases hgs : g.isTesSuccess = true
     · rw [(TER.isTesSuccess_iff g).mp hgs]
     · simp only [Bool.not_eq_true] at hgs
-      simp only [hgs, Bool.not_false, if_true, pure, Except.pure, Except.ok.injEq] at h
+      simp only [hgs, Bool.not_false, ite_true, pure, Except.pure, Except.ok.injEq] at h
       rw [h] at hgs; exact absurd hgs (by decide)
 
 end XRPL.Model.Lending

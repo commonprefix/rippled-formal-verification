@@ -3,19 +3,9 @@ import XRPL.Properties.Lending.Ledger.Common.LoanTxResults
 
 /-! # Witnesses for a late LoanPay above the XRP range
 
-Runs from a new closed-ended XRP vault, checked by `native_decide`. The largest XRP amount is `10^17` drops.
+Late LoanPays whose late interest (FV_M4_53) or vault total (FV_M4_59) leaves the XRP or MPT range end in an error. -/
 
-A vault of `5·10^15` drops lends all of it in one loan with one payment and a LateInterestRate of 100%. The loan is
-paid 25 years after its due date, so the late interest is `1.25·10^17` drops. LoanPay rounds the late interest to an
-XRP amount before it compares the amount due with the payment, and the model ends in an error where C++ throws
-(FV_M4_53). Every other condition of `LendingLedger.loanPay_no_exception_proof` holds on this ledger.
-
-A second run shows the credit condition is needed (FV_M4_59). A vault of `9·10^15` drops lends it in loans A of
-`10^14`, B of `4.4·10^15` and C of `4.5·10^15` drops, each paid 646,488,000 seconds late. The payment of A passes.
-The payment of B leaves an AssetsAvailable of `9.675·10^16` drops, an XRP amount, and a total with AssetsDeployed
-of `1.0125·10^17` drops, which is not one. The vault update stores the total as an amount and ends in an error. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -40,7 +30,7 @@ private def npGenesis : LendingLedger := { vault := npVault, shares := [], broke
 private lemma npGenesis_genesis : npGenesis.Genesis where
   created := ⟨none, none, npSchedule, none, false, .native, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨npVault.wf, npVault.valid⟩⟩
+    exact dite_eq_left ⟨npVault.wf, npVault.valid⟩⟩
   holds_asset := Or.inr (Or.inl rfl)
   no_holders := rfl
   no_brokers := rfl
@@ -233,5 +223,118 @@ lemma LendingLedger.loanPay_total_out_of_range_witness :
     exact hfeeq
   exact ⟨l, 1, npLatePayment, loan, q, LendingLedger.Reachable.of_run npGenesis_genesis hl, hat, hnt, hpre, hlate,
     hone, hcover, hint, hfee, hq, hcash, htotal, npOutOfRange_spec herr⟩
+
+/-- The new MPT vault VaultCreate makes for `npSchedule`. -/
+private def npMptVault : Vault := ⟨{ npRawVault with numericType := .int64 }, by native_decide, by native_decide⟩
+
+/-- The MPT ledger right after VaultCreate. -/
+private def npMptGenesis : LendingLedger := { vault := npMptVault, shares := [], brokers := [], loans := [], now := 0 }
+
+private lemma npMptGenesis_genesis : npMptGenesis.Genesis where
+  created := ⟨none, none, npSchedule, none, false, .int64, by native_decide, by
+    unfold Vault.create RawVault.to_lawful
+    exact dite_eq_left ⟨npMptVault.wf, npMptVault.valid⟩⟩
+  holds_asset := Or.inr (Or.inr rfl)
+  no_holders := rfl
+  no_brokers := rfl
+  no_loans := rfl
+  not_deleted := rfl
+
+/-- `9.2·10^18` units as a `Number`, above every amount due here. -/
+private def npMptPayment : Number := ⟨false, 9200000000000000000, 0⟩
+
+/-- A deposit of `9·10^15` units lent in one loan of 1000 payments, then eight instalments paid 112.6 years late. -/
+private def npMptSetup : List LendingTx :=
+  [.vaultDeposit 0 (STAmount.unchecked .int64 9000000000000000 0 false) false, .close 1001,
+    .loanBrokerCreate ⟨none, none, none, none⟩,
+    .loanSet 0 ⟨false, 9000000000000000000, -3⟩ npRates npFees (some 60) (some 1000) (some 60) 0 false false,
+    .close (1061 + 3552303357)] ++ List.replicate 8 (.loanPay 0 .late npMptPayment) ++ [.close 4015937045]
+
+/-- True when a run ended in the model's overflow error. -/
+private def npOverflow {α : Type} (r : Except Error α) : Bool :=
+  match r with
+  | .error .overflow => true
+  | _ => false
+
+private lemma npOverflow_spec {α : Type} {r : Except Error α} (h : npOverflow r = true) :
+    r = .error .overflow := by
+  unfold npOverflow at h
+  split at h
+  · rfl
+  · cases h
+
+/-- The loan is late and its fee and new AssetsAvailable fit, but the new total is above `2^63 - 1`, so it overflows. -/
+private def npMptTotalCheck : Bool :=
+  match npMptGenesis.run npMptSetup with
+  | .ok l =>
+    match l.loan? 0 with
+    | some e =>
+      match l.broker? e.brokerIndex with
+      | some b =>
+        match e.loan.withBroker b with
+        | .ok loan =>
+          match (loan.payInstalments l.vault .late npMptPayment l.now).run with
+          | .ok (.ok q) =>
+            decide (l.vault.numericType = NumericType.int64) &&
+              decide ((LendingTx.loanPay 0 .late npMptPayment).preflight l = .tesSUCCESS) &&
+              decide (loan.nextPaymentDueDate < l.now) &&
+              decide (loan.broker.coverAvailable.toRat < 10 ^ 96) &&
+              decide (q.amounts.feePaid.toRat + 1 ≤ NumericType.int64.maxValue.toNat) &&
+              decide (l.vault.assetsAvailable.toRat + q.amounts.principalPaid.toRat +
+                q.amounts.interestPaid.toRat + 1 ≤ NumericType.int64.maxValue.toNat) &&
+              decide ((NumericType.int64.maxValue.toNat : ℚ) < l.vault.assetsAvailable.toRat +
+                l.vault.assetsDeployed.toRat + q.amounts.interestPaid.toRat) &&
+              npOverflow (l.apply (.loanPay 0 .late npMptPayment)).run
+          | _ => false
+        | .error _ => false
+      | none => false
+    | none => false
+  | .error _ => false
+
+private lemma npMptTotalCheck_true : npMptTotalCheck = true := by native_decide
+
+/-- Late LoanPay on a reachable MPT ledger that takes AssetsAvailable + AssetsDeployed above the largest MPT amount
+-> an error. The fee and the new AssetsAvailable fit, so only the total fails. -/
+lemma LendingLedger.loanPay_total_out_of_range_mpt_witness :
+    ∃ (l : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (q : UnsettledPayment Vault),
+      l.Reachable ∧ l.LoanAt i loan ∧ l.vault.numericType = NumericType.int64 ∧
+      (LendingTx.loanPay i .late amount).preflight l = .tesSUCCESS ∧ loan.nextPaymentDueDate < l.now ∧
+      loan.broker.coverAvailable.toRat < 10 ^ 96 ∧ l.FeeFits i .late amount ∧
+      (loan.payInstalments l.vault .late amount l.now).run = .ok (.ok q) ∧
+      l.vault.assetsAvailable.toRat + q.amounts.principalPaid.toRat + q.amounts.interestPaid.toRat + 1 ≤
+        l.vault.numericType.maxValue.toNat ∧
+      (l.vault.numericType.maxValue.toNat : ℚ) <
+        l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + q.amounts.interestPaid.toRat ∧
+      (l.apply (.loanPay i .late amount)).run = .error .overflow := by
+  have h := npMptTotalCheck_true
+  unfold npMptTotalCheck at h
+  split at h
+  case h_2 => cases h
+  rename_i l hl
+  split at h
+  case h_2 => cases h
+  rename_i e he
+  split at h
+  case h_2 => cases h
+  rename_i b hb
+  split at h
+  case h_2 => cases h
+  rename_i loan hw
+  split at h
+  case h_2 => cases h
+  rename_i q hq
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨hnt, hpre⟩, hlate⟩, hcover⟩, hfeeq⟩, hcash⟩, htotal⟩, herr⟩ := h
+  have hat : l.LoanAt 0 loan := ⟨e, b, he, hb, hw⟩
+  have hfee : l.FeeFits 0 .late npMptPayment := by
+    intro loan' p hat' hp
+    obtain rfl := LendingLedger.LoanAt.eq hat' hat
+    rw [hq] at hp
+    obtain rfl : q = p := by injection hp with hp; injection hp
+    rw [hnt]
+    exact Or.inr ⟨Or.inr rfl, hfeeq⟩
+  rw [← hnt] at hcash htotal
+  exact ⟨l, 0, npMptPayment, loan, q, LendingLedger.Reachable.of_run npMptGenesis_genesis hl, hat, hnt, hpre, hlate,
+    hcover, hfee, hq, hcash, htotal, npOverflow_spec herr⟩
 
 end XRPL.Model.Lending

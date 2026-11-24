@@ -2,8 +2,8 @@ import XRPL.Properties.Lending.Ledger.Common.WrapLedger
 
 /-! # No transaction wraps a fixed-width integer around
 
-The model checks the fixed-width additions, subtractions and narrowing conversions the lending transactions run,
-and stops with `Error.wrap` where C++ wraps around. On a reachable ledger none of them fires. -/
+The model checks the fixed-width additions, subtractions, negations and narrowing conversions the lending
+transactions run, and stops with `Error.wrap` where C++ wraps around. On a reachable ledger none of them fires. -/
 
 namespace XRPL.Model
 

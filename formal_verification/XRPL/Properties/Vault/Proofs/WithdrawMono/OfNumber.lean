@@ -24,8 +24,8 @@ lemma frac_pack (n : Number) (r : STAmount) (hn : n.isNormalized)
     · exact hlo
   have hneg_dec : decide (n.signum < 0) = false := by rw [Number.signum_neg_decide]; exact hneg
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide : ¬ (NumericType.fractional.isIntegral = true)), hneg_dec] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  rw [ite_eq_right (by decide : ¬ (NumericType.fractional.isIntegral = true)), hneg_dec] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   cases hnorm : n.normalizeToRange kMinValue kMaxValue .to_nearest with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -73,8 +73,8 @@ lemma int_pack (nt : NumericType) (hint : nt.isIntegral = true) (n : Number) (r 
   have hneg_dec : decide (n.signum < 0) = false := by rw [Number.signum_neg_decide]; exact hneg
   obtain ⟨hnt, hoff, hmax⟩ := STAmount.ofNumber_integral_facts nt n .to_nearest r hint hok
   unfold STAmount.ofNumber at hok
-  rw [if_pos hint, hneg_dec] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  rw [ite_eq_left hint, hneg_dec] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   cases hr : n.to_rep .to_nearest with
   | error e => rw [hr] at hok; exact absurd hok (by simp)
   | ok iv =>

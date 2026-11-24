@@ -2,10 +2,8 @@ import XRPL.Properties.Protocol.STAmount.Add.Common.NearestProofs
 
 /-! # IOU addition rounds to nearest
 
-In `to_nearest`, IOU addition should return an amount at most half a unit away from the exact sum. The unit is
-`10 ^ result.mOffset`. The code rounds twice, to 19 digits and then to 16, and the two steps together can miss the
-nearest amount. The theorem assumes the exact sum is itself a Number (`hfit`), so the first step does nothing,
-and the `_attained` witness shows a sum that breaks it. -/
+IOU addition rounds twice, to 19 digits and then to 16, and can miss the nearest amount. The theorem assumes an
+exact sum that is a Number (`hfit`), and the `_attained` witness shows a sum that breaks it. -/
 
 namespace XRPL.Model.Protocol
 

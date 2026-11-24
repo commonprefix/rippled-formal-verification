@@ -3,9 +3,8 @@ import XRPL.Properties.Lending.Ledger.Common.VaultAccountingDefs
 
 /-! # The transactions of one loan
 
-A sequence of transactions and its subsequence of one loan's transactions, each at the same close time: the LoanSet
-that creates the loan, every LoanAccept, LoanDelete, LoanManage and LoanPay on it, and every ledger close. Without
-the other LoanSets the loan can get a lower number, so its transactions are renumbered. -/
+The subsequence of a loan's own transactions and every ledger close. Without the other LoanSets the loan can get a
+lower number, so its transactions are renumbered. -/
 
 namespace XRPL.Model.Lending
 

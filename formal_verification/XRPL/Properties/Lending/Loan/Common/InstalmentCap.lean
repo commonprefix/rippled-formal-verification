@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.InterestDue
 
 /-! # A scheduled instalment takes at most the rounded periodic payment

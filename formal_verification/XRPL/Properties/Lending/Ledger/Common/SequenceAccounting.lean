@@ -26,9 +26,8 @@ lemma LendingLedger.accounting_proof {start l : LendingLedger} {txs : List Lendi
     l.vault.lossUnrealized.toRat = start.vault.lossUnrealized.toRat + start.impaired txs - start.unimpaired txs ∧
     l.vault.yieldUnrealized.toRat = start.vault.yieldUnrealized.toRat + start.interestBooked txs -
       start.interestRemoved txs - start.interestDefaulted txs ∧
-    (start.SharesFitAlong txs →
-      l.vault.sharesTotal.toRat = start.vault.sharesTotal.toRat + start.sharesCreated txs - start.sharesRedeemed txs -
-        start.sharesDestroyed txs) ∧
+    l.vault.sharesTotal.toRat = start.vault.sharesTotal.toRat + start.sharesCreated txs - start.sharesRedeemed txs -
+      start.sharesDestroyed txs ∧
     (∀ (j : Nat) (b b' : LoanBroker), start.broker? j = some b → l.broker? j = some b' →
       b'.debtTotal.toRat = b.debtTotal.toRat + start.brokerLent j txs - start.brokerPrincipalPaid j txs -
         start.brokerDefaulted j txs - start.brokerDeletedPending j txs ∧

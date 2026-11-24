@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayLedgerWitness
 import XRPL.Properties.Lending.Loan.Common.ScheduledDue
 import XRPL.Properties.Lending.Loan.Common.PayLedgerDue
@@ -5,11 +6,9 @@ import XRPL.Properties.Lending.Loan.Common.SetWitness
 
 /-! # Witnesses for what a LoanPay transaction charges, on reachable ledgers
 
-Runs from new closed-ended IOU vaults at Scale 0, 2, 6 and 8, a deposit, a broker and a LoanSet, then LoanPay
-transactions, checked by `native_decide`. A payment amount that a 16-digit asset amount cannot hold is rounded up to
-one it can. -/
+LoanPay runs on new IOU vaults at Scale 0 to 8 that reach the bounds on what a payment charges. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -34,7 +33,7 @@ private def pdGenesis (v : Vault) : LendingLedger := { vault := v, shares := [],
 private lemma pdGenesis2 : (pdGenesis pdVault2).Genesis where
   created := ⟨some 2, none, pdSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨pdVault2.wf, pdVault2.valid⟩⟩
+    exact dite_eq_left ⟨pdVault2.wf, pdVault2.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl
@@ -44,7 +43,7 @@ private lemma pdGenesis2 : (pdGenesis pdVault2).Genesis where
 private lemma pdGenesis6 : (pdGenesis pdVault6).Genesis where
   created := ⟨some 6, none, pdSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨pdVault6.wf, pdVault6.valid⟩⟩
+    exact dite_eq_left ⟨pdVault6.wf, pdVault6.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl
@@ -54,7 +53,7 @@ private lemma pdGenesis6 : (pdGenesis pdVault6).Genesis where
 private lemma pdGenesis8 : (pdGenesis pdVault8).Genesis where
   created := ⟨some 8, none, pdSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨pdVault8.wf, pdVault8.valid⟩⟩
+    exact dite_eq_left ⟨pdVault8.wf, pdVault8.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl
@@ -565,7 +564,7 @@ private def pdVault0 : Vault := ⟨pdRawVault 0, by native_decide, by native_dec
 private lemma pdGenesis0 : (pdGenesis pdVault0).Genesis where
   created := ⟨some 0, none, pdSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨pdVault0.wf, pdVault0.valid⟩⟩
+    exact dite_eq_left ⟨pdVault0.wf, pdVault0.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

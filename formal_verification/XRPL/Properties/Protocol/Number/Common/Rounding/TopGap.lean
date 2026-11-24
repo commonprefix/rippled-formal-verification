@@ -2,10 +2,8 @@ import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 
 /-! # The gap between the largest Number and the next one
 
-The largest Number is `Number.top`. The next value up, `Number.top_plus_ten`, does not fit. An exact result between
-them should round to one of the two, and the rounding mode decides which. Add, subtract and divide check for overflow
-before they round (FV_M1_19), so they return a result exactly below `Number.top_plus_one`, in every mode. The lemmas
-here say for which exact results that agrees with the rule of each mode. -/
+An exact result between `Number.top` and `Number.top_plus_ten` should round to one of the two as the mode decides.
+Add, subtract and divide check for overflow before rounding (FV_M1_19), so they succeed only below `top_plus_one`. -/
 
 namespace XRPL.Model.Protocol
 

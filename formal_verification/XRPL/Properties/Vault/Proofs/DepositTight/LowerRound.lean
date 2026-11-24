@@ -27,12 +27,12 @@ private lemma push_round_one (g : Guard) (d : UInt64) (hd : 6 ≤ d.toNat) (hd' 
     rw [UInt64.lt_iff_toNat_lt, show (5764607523034234880 : UInt64).toNat = 5764607523034234880
       from rfl]
     omega
-  rw [if_pos hgt]
+  rw [ite_eq_left hgt]
 
 private lemma push3_round_lt (g : Guard) :
     (g.push 3).round .to_nearest ≠ 1 ∧ (g.push 3).round .to_nearest ≠ 0 := by
   by_cases hemp : (g.push 3).empty = true
-  · have : (g.push 3).round .to_nearest = -2 := by unfold Guard.round; rw [if_pos hemp]
+  · have : (g.push 3).round .to_nearest = -2 := by unfold Guard.round; rw [ite_eq_left hemp]
     rw [this]; decide
   · have hdig := toNat_push_digits g 3
     have h3 : (3 : UInt64).toNat = 3 := rfl
@@ -47,7 +47,7 @@ private lemma push3_round_lt (g : Guard) :
       have := UInt64.lt_iff_toNat_lt.mp h
       have := UInt64.lt_iff_toNat_lt.mp hlt
       omega
-    rw [round_to_nearest_def hemp, if_neg hngt, if_pos hlt]
+    rw [round_to_nearest_def hemp, ite_eq_right hngt, ite_eq_left hlt]
     decide
 
 /-- The pushed overflow guard of the two interior cusp mantissas. -/
@@ -67,8 +67,8 @@ private lemma pushOverflow_cusp (g : Guard) (m : UInt64) (hm : m.toNat = 9223372
             (9223372036854775808 : UInt64) == maxRep + (maxRepUp - maxRep) / 2)) = true := by
           rcases hr with h | h <;> (rw [h]; decide)
         unfold Guard.pushOverflowSpec
-        rw [if_pos (by decide)]
-        simp only [show (9223372036854775808 : UInt64) % 10 < 9 from by decide, if_true, hb]
+        rw [ite_eq_left (by decide)]
+        simp only [show (9223372036854775808 : UInt64) % 10 < 9 from by decide, ite_true, hb]
         congr 1
       rw [hp]
       exact push_round_one g 6 (by decide) (by decide)
@@ -79,9 +79,9 @@ private lemma pushOverflow_cusp (g : Guard) (m : UInt64) (hm : m.toNat = 9223372
         simp [hr.1, hr.2]
       have hp : g.pushOverflowSpec 9223372036854775808 .to_nearest = g.push 3 := by
         unfold Guard.pushOverflowSpec
-        rw [if_pos (by decide)]
-        simp only [show (9223372036854775808 : UInt64) % 10 < 9 from by decide, if_true, hb,
-          Bool.false_eq_true, if_false]
+        rw [ite_eq_left (by decide)]
+        simp only [show (9223372036854775808 : UInt64) % 10 < 9 from by decide, ite_true, hb,
+          Bool.false_eq_true, ite_false]
         congr 1
       rw [hp]
       exact ⟨hm, hr.1, hr.2, push3_round_lt g⟩
@@ -90,8 +90,8 @@ private lemma pushOverflow_cusp (g : Guard) (m : UInt64) (hm : m.toNat = 9223372
     left
     have hp : g.pushOverflowSpec 9223372036854775809 .to_nearest = g.push 6 := by
       unfold Guard.pushOverflowSpec
-      rw [if_pos (by decide)]
-      simp only [show ¬ ((9223372036854775809 : UInt64) % 10 < 9) from by decide, if_false]
+      rw [ite_eq_left (by decide)]
+      simp only [show ¬ ((9223372036854775809 : UInt64) % 10 < 9) from by decide, ite_false]
       congr 1
     rw [hp]
     exact push_round_one g 6 (by decide) (by decide)
@@ -135,7 +135,7 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
       refine ⟨?_, Or.inr (Or.inr hmU)⟩
       have h_pof : g.pushOverflowSpec maxRepUp .to_nearest = g := by
         unfold Guard.pushOverflowSpec
-        rw [if_neg]
+        rw [ite_eq_right]
         intro ⟨_, h⟩
         exact absurd (UInt64.lt_iff_toNat_lt.mp h) (lt_irrefl _)
       rw [h_pof] at hok
@@ -145,7 +145,7 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
           (g.round .to_nearest == 0 && maxRepUp % 2 == 1)) = true
       · rw [show (g.round .to_nearest == 1 || (g.round .to_nearest == 0 && maxRepUp % 2 == 1))
             = true from h_ru] at hok
-        rw [if_pos rfl, if_neg h_not_noncusp, if_neg h_not_cusp] at hok
+        rw [ite_eq_left rfl, ite_eq_right h_not_noncusp, ite_eq_right h_not_cusp] at hok
         have hdig : (g.push (maxRepUp % 10)).digits_.toNat < 5764607523034234880 := by
           have h := toNat_push_digits g (maxRepUp % 10)
           have h0 : (maxRepUp % 10).toNat = 0 := by decide
@@ -157,7 +157,7 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
               (maxRepUp / 10) % 2 == 1)) = false := by
           by_cases hemp : (g.push (maxRepUp % 10)).empty = true
           · rw [show (g.push (maxRepUp % 10)).round .to_nearest = -2 from by
-              unfold Guard.round; rw [if_pos hemp]]
+              unfold Guard.round; rw [ite_eq_left hemp]]
             rfl
           · rw [round_to_nearest_def hemp]
             have h5 : (5764607523034234880 : UInt64).toNat = 5764607523034234880 := rfl
@@ -167,23 +167,23 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
               rw [h5] at this; omega
             have h_lt : (g.push (maxRepUp % 10)).digits_ < 5764607523034234880 := by
               rw [UInt64.lt_iff_toNat_lt, h5]; exact hdig
-            rw [if_neg h_not_gt, if_pos h_lt]
+            rw [ite_eq_right h_not_gt, ite_eq_left h_lt]
             rfl
         rw [h_ru'_false] at hok
-        simp only [Bool.false_eq_true, if_false] at hok
+        simp only [Bool.false_eq_true, ite_false] at hok
         have h_resc : maxRepUp / 10 < largeRange.min ∧ maxRepUp / 10 ≠ 0 := by decide
-        rw [if_pos h_resc] at hok
+        rw [ite_eq_left h_resc] at hok
         simp only [] at hok
         by_cases h_under : e + 1 - 1 < minExponent ∨ (maxRepUp / 10) * 10 = 0
         · exfalso; apply hne
-          simp only [if_pos h_under] at hok
+          simp only [ite_eq_left h_under] at hok
           have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
-          simp only [hzexp, if_false] at hok
+          simp only [hzexp, ite_false] at hok
           exact (Except.ok.inj hok).symm ▸ rfl
-        · simp only [if_neg h_under] at hok
+        · simp only [ite_eq_right h_under] at hok
           have h_no_ovf : ¬ (e + 1 - 1 > maxExponent) := by
-            intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
-          simp only [if_neg h_no_ovf] at hok
+            intro h_ovf; simp only [ite_eq_left h_ovf] at hok; simp at hok
+          simp only [ite_eq_right h_no_ovf] at hok
           obtain rfl := Except.ok.inj hok
           change ((((maxRepUp / 10) * 10).toNat : ℕ) : ℚ) * 10 ^ (e + 1 - 1)
             = (maxRepUp.toNat : ℚ) * 10 ^ e
@@ -192,21 +192,21 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
       · rw [Bool.not_eq_true] at h_ru
         rw [show (g.round .to_nearest == 1 || (g.round .to_nearest == 0 && maxRepUp % 2 == 1))
             = false from h_ru] at hok
-        simp only [Bool.false_eq_true, if_false] at hok
-        rw [if_neg h_not_cusp] at hok
+        simp only [Bool.false_eq_true, ite_false] at hok
+        rw [ite_eq_right h_not_cusp] at hok
         have h_no_resc : ¬ (maxRepUp < largeRange.min ∧ maxRepUp ≠ 0) := by decide
-        rw [if_neg h_no_resc] at hok
+        rw [ite_eq_right h_no_resc] at hok
         simp only [] at hok
         by_cases h_under : e < minExponent ∨ (maxRepUp : UInt64) = 0
         · exfalso; apply hne
-          simp only [if_pos h_under] at hok
+          simp only [ite_eq_left h_under] at hok
           have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
-          simp only [hzexp, if_false] at hok
+          simp only [hzexp, ite_false] at hok
           exact (Except.ok.inj hok).symm ▸ rfl
-        · simp only [if_neg h_under] at hok
+        · simp only [ite_eq_right h_under] at hok
           have h_no_ovf : ¬ (e > maxExponent) := by
-            intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
-          simp only [if_neg h_no_ovf] at hok
+            intro h_ovf; simp only [ite_eq_left h_ovf] at hok; simp at hok
+          simp only [ite_eq_right h_no_ovf] at hok
           obtain rfl := Except.ok.inj hok
           rfl
     · have h_lt_up_nat : m.toNat < maxRepUp.toNat := by
@@ -225,20 +225,20 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
         rw [show ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 1
             || ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 0 && m % 2 == 1)) = true
             from h_ru] at hok
-        rw [if_pos rfl, if_neg h_not_noncusp, if_pos h_cusp_cond] at hok
+        rw [ite_eq_left rfl, ite_eq_right h_not_noncusp, ite_eq_left h_cusp_cond] at hok
         have h_no_resc : ¬ (maxRepUp < largeRange.min ∧ maxRepUp ≠ 0) := by decide
-        rw [if_neg h_no_resc] at hok
+        rw [ite_eq_right h_no_resc] at hok
         simp only [] at hok
         by_cases h_under : e < minExponent ∨ (maxRepUp : UInt64) = 0
         · exfalso; apply hne
-          simp only [if_pos h_under] at hok
+          simp only [ite_eq_left h_under] at hok
           have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
-          simp only [hzexp, if_false] at hok
+          simp only [hzexp, ite_false] at hok
           exact (Except.ok.inj hok).symm ▸ rfl
-        · simp only [if_neg h_under] at hok
+        · simp only [ite_eq_right h_under] at hok
           have h_no_ovf : ¬ (e > maxExponent) := by
-            intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
-          simp only [if_neg h_no_ovf] at hok
+            intro h_ovf; simp only [ite_eq_left h_ovf] at hok; simp at hok
+          simp only [ite_eq_right h_no_ovf] at hok
           obtain rfl := Except.ok.inj hok
           change ((m.toNat : ℚ) + 1) * 10 ^ e ≤ (maxRepUp.toNat : ℚ) * 10 ^ e
           apply mul_le_mul_of_nonneg_right _ (le_of_lt h10)
@@ -256,21 +256,21 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
         · rw [show ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 1
               || ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 0 && m % 2 == 1)) = false
               from h_ru] at hok
-          simp only [Bool.false_eq_true, if_false] at hok
-          rw [if_pos h_cusp_cond] at hok
+          simp only [Bool.false_eq_true, ite_false] at hok
+          rw [ite_eq_left h_cusp_cond] at hok
           have h_no_resc : ¬ (maxRep < largeRange.min ∧ maxRep ≠ 0) := by decide
-          rw [if_neg h_no_resc] at hok
+          rw [ite_eq_right h_no_resc] at hok
           simp only [] at hok
           by_cases h_under : e < minExponent ∨ (maxRep : UInt64) = 0
           · exfalso; apply hne
-            simp only [if_pos h_under] at hok
+            simp only [ite_eq_left h_under] at hok
             have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
-            simp only [hzexp, if_false] at hok
+            simp only [hzexp, ite_false] at hok
             exact (Except.ok.inj hok).symm ▸ rfl
-          · simp only [if_neg h_under] at hok
+          · simp only [ite_eq_right h_under] at hok
             have h_no_ovf : ¬ (e > maxExponent) := by
-              intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
-            simp only [if_neg h_no_ovf] at hok
+              intro h_ovf; simp only [ite_eq_left h_ovf] at hok; simp at hok
+            simp only [ite_eq_right h_no_ovf] at hok
             obtain rfl := Except.ok.inj hok
             change (maxRep.toNat : ℚ) * 10 ^ e = _
             rw [hmR]; norm_num

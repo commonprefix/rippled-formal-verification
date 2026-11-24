@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 A run from a new IOU vault at Scale 1, checked by `native_decide`. The loan is impaired with three instalments
 overdue, and one late payment clears the impairment while the loan stays two instalments behind. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

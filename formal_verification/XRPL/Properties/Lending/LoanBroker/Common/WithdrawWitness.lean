@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.WitnessSupport
 A run on a reachable broker of a vault with base exponent `-6`. Two withdrawals of `1.5` base units
 pay out one base unit each, while one withdrawal of `3` pays out all three. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

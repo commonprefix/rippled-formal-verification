@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaymentFactor
 import XRPL.Properties.Protocol.Common.TenthBips
 
@@ -24,8 +25,8 @@ lemma loanPeriodicRate_ge (ir : TenthBips32) (interval : UInt32) (rate : Number)
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
   have heq : loanPeriodicRate ir interval =
-      (((Number.ofInt64 interval.toInt64).operator_mul ir.toNumber .to_nearest) >>=
-        (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
+      (((Number.ofInt64 interval.toInt64 .to_nearest).operator_mul (ir.toNumber .to_nearest) .to_nearest) >>=
+        (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest)) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
@@ -37,7 +38,7 @@ lemma loanPeriodicRate_ge (ir : TenthBips32) (interval : UInt32) (rate : Number)
   obtain ⟨hY, hYv⟩ := TenthBips32.toNumber_facts (31536000 : UInt32)
   have hU' : (kTenthBipsPerUnity.toNat : ℚ) = 100000 := rfl
   have hY' : ((31536000 : UInt32).toNat : ℚ) = 31536000 := rfl
-  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) := rfl
+  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) .to_nearest := rfl
   rw [hy] at h
   rw [hU'] at hUv
   rw [hY'] at hYv
@@ -90,7 +91,7 @@ lemma loanPeriodicRate_ge (ir : TenthBips32) (interval : UInt32) (rate : Number)
 least `10^-12`. The closed form loses at most `12·n·ε` to rounding, tiny next to `n·rate`. -/
 private lemma computePowerMinusOneHybrid_le_three (rate : Number) (pr : UInt32) (pm : Number)
     (hrate : rate.isNormalized) (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hsmall : (pr.toNat : ℚ) * rate.toRat ≤ 1 / 2)
-    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toInt64) pr = .ok pm) :
+    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toInt64 .to_nearest) pr = .ok pm) :
     pm.toRat ≤ 3 * pr.toNat * rate.toRat := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
@@ -222,7 +223,7 @@ private lemma computePowerMinusOneHybrid_le_three (rate : Number) (pr : UInt32) 
 /-- A nonzero payment factor of a rate of at least `10^-12` over `n` payments is at least `1/(3·n)`, less three
 roundings. `(1 + rate)^n − 1` is at most `3·n·rate` while `n·rate ≤ 1/2`, else the factor is the rate or more. -/
 lemma computePaymentFactor_ge_third (rate : Number) (pr : UInt32) (f : Number) (hrate : rate.isNormalized)
-    (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (h : computePaymentFactor rate (Number.ofInt64 pr.toInt64) pr = .ok f)
+    (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (h : computePaymentFactor rate (Number.ofInt64 pr.toInt64 .to_nearest) pr = .ok f)
     (hf : f.toRat ≠ 0) : (1 - ε) ^ 3 / (3 * pr.toNat) ≤ f.toRat := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le

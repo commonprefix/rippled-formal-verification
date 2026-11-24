@@ -4,9 +4,8 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.DoRoundUp.Basic
 
 /-! # Exact success conditions for the rounding internals
 
-`doRoundUp` cannot overflow from a mantissa at most `maxRepUp` at an exponent at most `maxExponent`, and from
-`maxExponent` up its result has one of four shapes. `doNormalize128` succeeds exactly when its input `M * 10^e` is
-below `(maxRepUp + 1) * 10^maxExponent`. Every error of these internals is an overflow error. -/
+`doNormalize128` succeeds exactly when `M * 10^e` is below `(maxRepUp + 1) * 10^maxExponent`. These lemmas also
+bound when `doRoundUp` overflows, and show that every error of these internals is an overflow error. -/
 
 namespace XRPL.Model.Protocol
 
@@ -102,7 +101,7 @@ lemma Guard.bringIntoRangeSpec_exponent_le_of_lt (neg : Bool) (m : UInt64) (e : 
     (hlt : m < minM) (hne : m ≠ 0) (he : e ≤ B + 1) (hB : -2147483648 ≤ B) :
     (Guard.bringIntoRangeSpec neg m e minM).exponent_ ≤ B := by
   unfold Guard.bringIntoRangeSpec
-  rw [if_pos ⟨hlt, hne⟩]
+  rw [ite_eq_left ⟨hlt, hne⟩]
   dsimp only
   split_ifs <;> dsimp only <;> omega
 
@@ -155,7 +154,7 @@ lemma Guard.doRoundUp_ok_of_le_maxRepUp (g : Guard) (neg : Bool) (m : UInt64) (e
   obtain ⟨res, hle, hspec⟩ := Guard.doRoundUpSpec_exponent_le g neg m e mode loc hm
     (le_max_left e (-2147483648)) (le_max_right e (-2147483648))
   have hmax : Max.max e (-2147483648) ≤ maxExponent := max_le he (by unfold maxExponent; norm_num)
-  rw [Guard.doRoundUp_eq_spec _ _ _ _ _ _ _ largeRange_min_toNat_le, hspec, if_neg (by omega)]
+  rw [Guard.doRoundUp_eq_spec _ _ _ _ _ _ _ largeRange_min_toNat_le, hspec, ite_eq_right (by omega)]
   exact ⟨res, rfl, hle⟩
 
 /-- `bringIntoRangeSpec` keeps a mantissa at or above the minimum. -/
@@ -164,7 +163,7 @@ lemma Guard.bringIntoRangeSpec_of_ge (neg : Bool) {μ : UInt64} {e : Int} (hge :
     Guard.bringIntoRangeSpec neg μ e largeRange.min = { negative_ := neg, mantissa_ := μ, exponent_ := e } := by
   have hnlt : ¬ (μ < largeRange.min ∧ μ ≠ 0) := fun h => absurd h.1 (UInt64.not_lt.mpr hge)
   have hne : μ ≠ 0 := by rintro rfl; exact absurd hge (by decide)
-  rw [bringIntoRange_noscale_result hnlt, if_neg (not_or.mpr ⟨not_lt.mpr he, hne⟩)]
+  rw [bringIntoRange_noscale_result hnlt, ite_eq_right (not_or.mpr ⟨not_lt.mpr he, hne⟩)]
 
 /-- `bringIntoRangeSpec` scales a nonzero mantissa below the minimum up by one digit. -/
 lemma Guard.bringIntoRangeSpec_of_lt (neg : Bool) {μ : UInt64} {e : Int} (hlt : μ < largeRange.min) (hne : μ ≠ 0)
@@ -178,7 +177,7 @@ lemma Guard.bringIntoRangeSpec_of_lt (neg : Bool) {μ : UInt64} {e : Int} (hlt :
     have h' := congrArg UInt64.toNat h
     rw [hmul] at h'
     exact hμ (by simpa using h')
-  rw [bringIntoRange_rescale_result hlt hne, if_neg (not_or.mpr ⟨not_lt.mpr he, hne10⟩)]
+  rw [bringIntoRange_rescale_result hlt hne, ite_eq_right (not_or.mpr ⟨not_lt.mpr he, hne10⟩)]
 
 /-- The guard rounds an odd mantissa up: it is above the midpoint or at a tie. -/
 def Guard.roundsUpOdd (g : Guard) (mode : rounding_mode) : Bool := g.round mode == 1 || g.round mode == 0
@@ -234,7 +233,7 @@ lemma Guard.doRoundUp_top_shape (g : Guard) (neg : Bool) (m : UInt64) (e : Int) 
       rw [hrep] at this
       omega
     by_cases hru : (g.round mode == 1 || (g.round mode == 0 && m % 2 == 1)) = true
-    · rw [if_pos hru, if_pos hC1]
+    · rw [ite_eq_left hru, ite_eq_left hC1]
       have hadd : (m + 1).toNat = m.toNat + 1 := m_add_one_no_overflow (by rw [hrep]; omega)
       by_cases hsm : m.toNat + 1 < 10 ^ 18
       · have hlt' : m + 1 < largeRange.min :=
@@ -251,7 +250,7 @@ lemma Guard.doRoundUp_top_shape (g : Guard) (neg : Bool) (m : UInt64) (e : Int) 
         rw [Guard.bringIntoRangeSpec_of_ge neg hge hemin']
         exact ⟨m + 1, e, rfl, Or.inr (Or.inr (Or.inl ⟨by omega, by rw [hadd]; omega, by rw [hadd]; omega, rfl,
           fun h => by omega⟩))⟩
-    · rw [if_neg hru, if_neg hC2]
+    · rw [ite_eq_right hru, ite_eq_right hC2]
       have hru' := (Bool.not_eq_true _).mp hru
       by_cases hsm : m.toNat < 10 ^ 18
       · have hlt' : m < largeRange.min := UInt64.lt_iff_toNat_lt.mpr (by rw [largeRange_min_val]; omega)
@@ -276,7 +275,7 @@ lemma Guard.doRoundUp_top_shape (g : Guard) (neg : Bool) (m : UInt64) (e : Int) 
     · simp only [show ¬((9223372036854775807 : UInt64) < largeRange.max ∧ (9223372036854775807 : UInt64) < maxRep)
           from by decide,
         show ¬(maxRep < (9223372036854775807 : UInt64) ∧ (9223372036854775807 : UInt64) < maxRepUp)
-          from by decide, if_false]
+          from by decide, ite_false]
       split_ifs
       · rw [Guard.bringIntoRangeSpec_of_lt neg (by decide) (by decide) hemin'']
         exact ⟨_, _, rfl, Or.inr (Or.inr (Or.inl ⟨by decide, by decide, by decide, by omega,
@@ -290,7 +289,7 @@ lemma Guard.doRoundUp_top_shape (g : Guard) (neg : Bool) (m : UInt64) (e : Int) 
     · simp only [show ¬((9223372036854775808 : UInt64) < largeRange.max ∧ (9223372036854775808 : UInt64) < maxRep)
           from by decide,
         show (maxRep < (9223372036854775808 : UInt64) ∧ (9223372036854775808 : UInt64) < maxRepUp)
-          from by decide, and_self, if_false, if_true]
+          from by decide, and_self, ite_false, ite_true]
       split_ifs
       · rw [Guard.bringIntoRangeSpec_of_ge neg (by decide) hemin']
         exact ⟨_, _, rfl, Or.inr (Or.inr (Or.inl ⟨by decide, by decide, by decide, rfl,
@@ -301,7 +300,7 @@ lemma Guard.doRoundUp_top_shape (g : Guard) (neg : Bool) (m : UInt64) (e : Int) 
     · simp only [show ¬((9223372036854775809 : UInt64) < largeRange.max ∧ (9223372036854775809 : UInt64) < maxRep)
           from by decide,
         show (maxRep < (9223372036854775809 : UInt64) ∧ (9223372036854775809 : UInt64) < maxRepUp)
-          from by decide, and_self, if_false, if_true]
+          from by decide, and_self, ite_false, ite_true]
       split_ifs
       · rw [Guard.bringIntoRangeSpec_of_ge neg (by decide) hemin']
         exact ⟨_, _, rfl, Or.inr (Or.inr (Or.inl ⟨by decide, by decide, by decide, rfl,
@@ -310,7 +309,7 @@ lemma Guard.doRoundUp_top_shape (g : Guard) (neg : Bool) (m : UInt64) (e : Int) 
         exact ⟨_, _, rfl, Or.inr (Or.inr (Or.inl ⟨by decide, by decide, by decide, rfl,
           fun h => absurd h (by decide)⟩))⟩
     · rw [show g.pushOverflowSpec 9223372036854775810 mode = g from by
-        unfold Guard.pushOverflowSpec; rw [if_neg (by decide)]]
+        unfold Guard.pushOverflowSpec; rw [ite_eq_right (by decide)]]
       simp only [show ¬((9223372036854775810 : UInt64) < largeRange.max ∧ (9223372036854775810 : UInt64) < maxRep)
           from by decide,
         show ¬(maxRep < (9223372036854775810 : UInt64) ∧ (9223372036854775810 : UInt64) < maxRepUp)
@@ -318,19 +317,19 @@ lemma Guard.doRoundUp_top_shape (g : Guard) (neg : Bool) (m : UInt64) (e : Int) 
         show ((9223372036854775810 : UInt64) % 2 == 1) = false from by decide,
         show (9223372036854775810 : UInt64) % 10 = 0 from by decide,
         show ((9223372036854775810 : UInt64) / 10 % 2 == 1) = true from by decide,
-        if_false, Bool.and_false, Bool.or_false, Bool.and_true]
+        ite_false, Bool.and_false, Bool.or_false, Bool.and_true]
       by_cases h1 : (g.round mode == 1) = true
-      · rw [if_pos h1]
+      · rw [ite_eq_left h1]
         by_cases h2 : ((g.push 0).round mode == 1 || (g.push 0).round mode == 0) = true
-        · rw [if_pos h2, Guard.bringIntoRangeSpec_of_lt neg (by decide) (by decide) hemin'']
+        · rw [ite_eq_left h2, Guard.bringIntoRangeSpec_of_lt neg (by decide) (by decide) hemin'']
           refine ⟨_, _, rfl, Or.inr (Or.inr (Or.inr ⟨by decide, ?_, by decide, by omega⟩))⟩
           show (g.round mode == 1 && ((g.push 0).round mode == 1 || (g.push 0).round mode == 0)) = true
           rw [h1, h2]; rfl
-        · rw [if_neg h2, Guard.bringIntoRangeSpec_of_lt neg (by decide) (by decide) hemin'']
+        · rw [ite_eq_right h2, Guard.bringIntoRangeSpec_of_lt neg (by decide) (by decide) hemin'']
           refine ⟨_, _, rfl, Or.inr (Or.inr (Or.inl ⟨by decide, by decide, by decide, by omega, fun _ => ?_⟩))⟩
           show (g.round mode == 1 && ((g.push 0).round mode == 1 || (g.push 0).round mode == 0)) = false
           rw [h1, (Bool.not_eq_true _).mp h2]; rfl
-      · rw [if_neg h1, Guard.bringIntoRangeSpec_of_ge neg (by decide) hemin']
+      · rw [ite_eq_right h1, Guard.bringIntoRangeSpec_of_ge neg (by decide) hemin']
         refine ⟨_, _, rfl, Or.inr (Or.inr (Or.inl ⟨by decide, by decide, by decide, rfl, fun _ => ?_⟩))⟩
         show (g.round mode == 1 && ((g.push 0).round mode == 1 || (g.push 0).round mode == 0)) = false
         rw [(Bool.not_eq_true _).mp h1]; rfl
@@ -346,7 +345,7 @@ lemma Guard.doRoundUp_error_of_exp_gt (g : Guard) (neg : Bool) (m : UInt64) (e :
     · omega
     · exact h
     · exact h
-  rw [hspec, if_pos (by omega)]
+  rw [hspec, ite_eq_left (by omega)]
 
 /-- A value `(F + δ) * 10^e` is below `(maxRepUp + 1) * 10^maxExponent` exactly when its whole part `F` is below
 `(maxRepUp + 1) * 10^(maxExponent - e)`. -/
@@ -415,7 +414,7 @@ lemma doNormalize128_scaleUp_value (m : UInt128) (e : Int) :
     rw [show doNormalize128_scaleUpSpec largeRange.min m e
         = doNormalize128_scaleUpSpec largeRange.min (m * 10) (e - 1) from by
       rw [doNormalize128_scaleUpSpec.eq_def]
-      simp only [if_pos hcond]]
+      simp only [ite_eq_left hcond]]
     refine ⟨IH.1.trans ?_, IH.2⟩
     have hlt : m.toNat < 1000000000000000000 := by
       have := BitVec.lt_def.mp hcond.1
@@ -428,7 +427,7 @@ lemma doNormalize128_scaleUp_value (m : UInt128) (e : Int) :
     ring
   | case2 m e hcond =>
     rw [show doNormalize128_scaleUpSpec largeRange.min m e = (m, e) from by
-      rw [doNormalize128_scaleUpSpec.eq_def]; simp only [if_neg hcond]]
+      rw [doNormalize128_scaleUpSpec.eq_def]; simp only [ite_eq_right hcond]]
     refine ⟨rfl, ?_⟩
     by_cases hm : m < toUInt128 largeRange.min
     · exact Or.inr (not_lt.mp fun h => hcond ⟨hm, h⟩)
@@ -449,7 +448,7 @@ lemma doNormalize_scaleDown128_top_cases (m : UInt128) (e : Int) (g : Guard) (he
   induction m, e, g using doNormalize_scaleDown128Spec.induct largeRange.max with
   | case1 m e g hm hetop =>
     left
-    refine ⟨.normalize1, by rw [doNormalize_scaleDown128Spec, dif_pos hm, if_pos hetop], ?_⟩
+    refine ⟨.normalize1, by rw [doNormalize_scaleDown128Spec, dite_eq_left hm, ite_eq_left hetop], ?_⟩
     have hgt : 9999999999999999999 < m.toNat := by
       have := BitVec.lt_def.mp hm
       rwa [toNat_toUInt128, largeRange_max_val] at this
@@ -459,7 +458,7 @@ lemma doNormalize_scaleDown128_top_cases (m : UInt128) (e : Int) (g : Guard) (he
   | case2 m e g hm hetop IH =>
     have hstep : doNormalize_scaleDown128Spec largeRange.max m e g
         = doNormalize_scaleDown128Spec largeRange.max (m / 10) (e + 1) (g.push (toUInt64 (m % 10))) := by
-      rw [doNormalize_scaleDown128Spec, dif_pos hm, if_neg hetop]
+      rw [doNormalize_scaleDown128Spec, dite_eq_left hm, ite_eq_right hetop]
     have hdiv : (m / 10 : UInt128).toNat = m.toNat / 10 := by
       rw [BitVec.toNat_udiv, show (10 : UInt128).toNat = 10 from rfl]
     have hd : (maxExponent - e).toNat = (maxExponent - (e + 1)).toNat + 1 := by omega
@@ -474,7 +473,7 @@ lemma doNormalize_scaleDown128_top_cases (m : UInt128) (e : Int) (g : Guard) (he
     have hle : m.toNat ≤ 9999999999999999999 := by
       have := BitVec.le_def.mp (BitVec.not_lt.mp hm)
       rwa [toNat_toUInt128, largeRange_max_val] at this
-    exact ⟨m, e, g, by rw [doNormalize_scaleDown128Spec, dif_neg hm], he, hle, Iff.rfl⟩
+    exact ⟨m, e, g, by rw [doNormalize_scaleDown128Spec, dite_eq_right hm], he, hle, Iff.rfl⟩
 
 /-- `doNormalize128` succeeds exactly when its input `M * 10^e` is below `(maxRepUp + 1) * 10^maxExponent`, in every
 rounding mode. -/
@@ -484,12 +483,12 @@ lemma doNormalize128_ok_iff_value (zn : Bool) (M : UInt128) (e : Int) (mode : ro
   have hT : (0 : ℚ) < (10 : ℚ) ^ (maxExponent : ℤ) := zpow_pos (by norm_num) _
   by_cases hM0 : (M == 0) = true
   · have hM : M.toNat = 0 := by rw [beq_iff_eq] at hM0; rw [hM0]; rfl
-    refine iff_of_true ⟨Number.zero, by unfold doNormalize128; rw [if_pos hM0]⟩ ?_
+    refine iff_of_true ⟨Number.zero, by unfold doNormalize128; rw [ite_eq_left hM0]⟩ ?_
     rw [hM, Nat.cast_zero, zero_mul]
     exact mul_pos (by norm_num) hT
   rw [doNormalize128_eq_spec]
   unfold doNormalize128Spec
-  rw [if_neg hM0]
+  rw [ite_eq_right hM0]
   simp only []
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   simp only []
@@ -519,7 +518,7 @@ lemma doNormalize128_ok_iff_value (zn : Bool) (M : UInt128) (e : Int) (mode : ro
         _ ≤ 10 ^ (maxExponent - e').toNat := Nat.pow_le_pow_right (by norm_num) (by omega)
     have hfit : m'.toNat < 2 ^ 64 := by omega
     by_cases hund : (e' < minExponent || m' < toUInt128 largeRange.min) = true
-    · rw [if_pos hund]
+    · rw [ite_eq_left hund]
       refine iff_of_true ⟨Number.zero, rfl⟩ ?_
       rw [Bool.or_eq_true, decide_eq_true_eq, decide_eq_true_eq] at hund
       rcases hund with h | h
@@ -530,21 +529,21 @@ lemma doNormalize128_ok_iff_value (zn : Bool) (M : UInt128) (e : Int) (mode : ro
         rw [toNat_toUInt128, largeRange_min_val] at this
         set P := 10 ^ (maxExponent - e').toNat
         omega
-    rw [if_neg hund]
+    rw [ite_eq_right hund]
     unfold doNormalize_capAtMaxRep
     by_cases hcap : toUInt64 m' > maxRepUp
     · have hgt : 9223372036854775810 < m'.toNat := by
         have := UInt64.lt_iff_toNat_lt.mp hcap
         rwa [toNat_toUInt64 hfit, hmru] at this
-      rw [if_pos hcap]
+      rw [ite_eq_left hcap]
       by_cases hetop : e' ≥ maxExponent
-      · rw [if_pos hetop]
+      · rw [ite_eq_left hetop]
         simp only []
         refine iff_of_false (by rintro ⟨r, hr⟩; cases hr) ?_
         have hd : (maxExponent - e').toNat = 0 := by omega
         rw [hd, pow_zero]
         omega
-      · rw [if_neg hetop]
+      · rw [ite_eq_right hetop]
         simp only [divu10]
         have hq : toUInt64 m' / 10 ≤ maxRepUp := by
           rw [UInt64.le_iff_toNat_le, UInt64.toNat_div, toNat_toUInt64 hfit, hmru,
@@ -557,7 +556,7 @@ lemma doNormalize128_ok_iff_value (zn : Bool) (M : UInt128) (e : Int) (mode : ro
         have := hP10 (by omega)
         set P := 10 ^ (maxExponent - e').toNat
         omega
-    · rw [if_neg hcap]
+    · rw [ite_eq_right hcap]
       simp only []
       have hle : m'.toNat ≤ 9223372036854775810 := by
         have := UInt64.le_iff_toNat_le.mp (UInt64.not_lt.mp hcap)
@@ -573,11 +572,11 @@ lemma doNormalize128_ok_iff_value (zn : Bool) (M : UInt128) (e : Int) (mode : ro
     refine iff_of_false ?_ ?_
     · by_cases hgt : M₁ > toUInt128 largeRange.max
       · rw [show doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ = .error .normalize1 from by
-          rw [doNormalize_scaleDown128Spec, dif_pos hgt, if_pos (by omega)]]
+          rw [doNormalize_scaleDown128Spec, dite_eq_left hgt, ite_eq_left (by omega)]]
         simp only []
         rintro ⟨r, hr⟩; cases hr
       · rw [show doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ = .ok (M₁, e₁, g₀) from by
-          rw [doNormalize_scaleDown128Spec, dif_neg hgt]]
+          rw [doNormalize_scaleDown128Spec, dite_eq_right hgt]]
         simp only []
         have hle : M₁.toNat ≤ 9999999999999999999 := by
           have := BitVec.le_def.mp (BitVec.not_lt.mp hgt)
@@ -590,13 +589,13 @@ lemma doNormalize128_ok_iff_value (zn : Bool) (M : UInt128) (e : Int) (mode : ro
           · have := BitVec.lt_def.mp h
             rw [toNat_toUInt128, largeRange_min_val] at this
             omega
-        rw [if_neg hund]
+        rw [ite_eq_right hund]
         unfold doNormalize_capAtMaxRep
         by_cases hcap : toUInt64 M₁ > maxRepUp
-        · rw [if_pos hcap, if_pos (by omega)]
+        · rw [ite_eq_left hcap, ite_eq_left (by omega)]
           simp only []
           rintro ⟨r, hr⟩; cases hr
-        · rw [if_neg hcap]
+        · rw [ite_eq_right hcap]
           simp only []
           have hcap' : (toUInt64 M₁).toNat ≤ 9223372036854775810 := by
             have := UInt64.le_iff_toNat_le.mp (UInt64.not_lt.mp hcap)
@@ -652,7 +651,7 @@ lemma Guard.roundsUpOdd_to_nearest {g : Guard} {f : ℚ} (hg : represents g f) :
   rw [Bool.or_eq_true, beq_iff_eq, beq_iff_eq]
   by_cases hemp : g.empty = true
   · have hf : f = 0 := represents_empty_eq_zero hemp hg
-    have hr : g.round .to_nearest = -2 := by unfold Guard.round; rw [if_pos hemp]
+    have hr : g.round .to_nearest = -2 := by unfold Guard.round; rw [ite_eq_left hemp]
     rw [hr, hf]
     constructor
     · rintro (h | h) <;> exact absurd h (by decide)
@@ -704,10 +703,10 @@ lemma Guard.round_downward_eq_one_iff {g : Guard} {f : ℚ} (hg : represents g f
   dsimp only
   by_cases he : g.empty = true
   · have hf : f = 0 := hemp.mp he
-    rw [if_pos he, hf]
+    rw [ite_eq_left he, hf]
     simp
   · have hf : 0 < f := lt_of_le_of_ne hf0 fun h => he (hemp.mpr h.symm)
-    rw [if_neg he]
+    rw [ite_eq_right he]
     cases hs : g.sbit_ <;> simp [hf]
 
 /-- `upward` rounds a mantissa up exactly when the value is positive and a nonzero fraction was dropped. -/
@@ -719,10 +718,10 @@ lemma Guard.round_upward_eq_one_iff {g : Guard} {f : ℚ} (hg : represents g f) 
   dsimp only
   by_cases he : g.empty = true
   · have hf : f = 0 := hemp.mp he
-    rw [if_pos he, hf]
+    rw [ite_eq_left he, hf]
     simp
   · have hf : 0 < f := lt_of_le_of_ne hf0 fun h => he (hemp.mpr h.symm)
-    rw [if_neg he]
+    rw [ite_eq_right he]
     cases hs : g.sbit_ <;> simp [hf]
 
 end XRPL.Model.Protocol

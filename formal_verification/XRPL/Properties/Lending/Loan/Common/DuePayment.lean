@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.RecheckPayLoan
 import XRPL.Properties.Lending.Loan.Common.PayoffComponents
 import XRPL.Properties.Lending.Loan.Common.PayoffPay
@@ -362,7 +363,7 @@ lemma Loan.fullPayInstalments_due {loan : Loan} {t : UInt32} (hre : loan.Reachab
     omega
   have hpr : 2 ≤ loan.paymentRemaining.toNat := by
     have := UInt32.lt_iff_toNat_lt.mp (UInt32.not_le.mp h1)
-    simpa using this
+    simpa using! this
   have hnl' : now ≤ loan.nextPaymentDueDate := by
     simpa [Loan.isPaymentLate] using hnl
   obtain ⟨b1, b2, b3, b4, b5, hf0⟩ := Loan.fullComponents_below hre hls now hnl' hpr pc hpc'

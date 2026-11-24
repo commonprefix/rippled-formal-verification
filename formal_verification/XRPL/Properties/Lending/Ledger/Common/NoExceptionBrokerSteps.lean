@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionBrokerSet
 import XRPL.Properties.Lending.Ledger.Common.ManageTotal
 import XRPL.Properties.Lending.LoanBroker.Common.CoverDebit
@@ -7,9 +8,8 @@ import XRPL.Properties.Protocol.STAmount.Range.Success
 
 /-! # The steps of the cover transactions never throw within the asset's range
 
-Each cover transaction is a short chain of Number operations and conversions to the asset. A Number operation
-succeeds on values far below the largest Number, and a conversion succeeds on a value within the asset's maximum
-(XRP, MPT) or within `iouProofCap` (IOU). -/
+Each Number operation of a cover transaction succeeds far below the largest Number, and each conversion succeeds
+within the asset's maximum (XRP, MPT) or `iouProofCap` (IOU). -/
 
 namespace XRPL.Model.Protocol
 

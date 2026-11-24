@@ -7,10 +7,8 @@ import XRPL.Properties.Lending.Ledger.Common.WrapLoan
 
 /-! # Where a transaction could wrap around
 
-A transaction runs its preflight, the ledger lookups and the commit without any fixed-width operation, so it wraps
-only through the vault, broker or loan operation it runs. The preflight passes only normalized Numbers and amounts
-of the vault's asset, and a reachable ledger holds XRP, an MPT or an IOU with normalized shares, so none of the
-operations wraps while no broker has `2^32 − 1` loans. -/
+A transaction wraps only through the vault, broker or loan operation it runs, and on a reachable ledger none of them
+wraps while no broker has `2^32 − 1` loans. -/
 
 namespace XRPL.Model.Lending
 
@@ -210,9 +208,8 @@ lemma LendingLedger.applyLoan_ne_wrap (l : LendingLedger) (hr : l.Reachable) (tx
     simp only [LendingLedger.applyLoan] at h
     unfold_ter at h
     walk_ok
-    all_goals first
+    all_goals try first
       | exact Loan.withBroker_ne_wrap _ _ ‹_›
-      | skip
     rename_i _ e he _ b hb _ _ loan hw _ _ _ hdel
     have hlb : loan.broker = b := (congrArg RawLoan.broker (Loan.withBroker_eq hw) :)
     exact Loan.delete_ne_wrap _ _ (by rw [hlb]; exact hr.loanCountInv.loanCount_ne_zero he hb) hdel

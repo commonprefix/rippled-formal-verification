@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayMonotone
 import XRPL.Properties.Lending.Loan.Common.ManageCoverBase
 
@@ -83,9 +84,8 @@ private lemma Loan.tryOverpayment_lowers (l : Loan) (opc : PaymentComponents) (r
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   obtain ⟨-, b2, b3, b4⟩ := LoanState.build_eq _ _ _ _ ‹LoanState.build _ _ _ = Except.ok _›
   have hs := ‹l.state = Except.ok _›
@@ -125,7 +125,7 @@ private lemma UnsettledPayment.applyOverpayment_lowers (p p' : UnsettledPayment 
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first | exact absurd rfl hne | skip
+  all_goals try exact absurd rfl hne
   obtain ⟨state, deltas, hst, hd, hpo, hint, hmf, hb⟩ :=
     Loan.tryOverpayment_lowers _ _ _ ‹Loan.tryOverpayment _ _ = _›
   rename_i re _ _ _ _ _ l' hl'
@@ -198,7 +198,7 @@ private lemma STAmount.roundToNumericType_frac_canon (x y : Number) (mode : roun
     cases s with
     | none => exact ⟨ret, hfc, (STAmount.FracCanonZero.toNumber_val hfc mode y h).symm⟩
     | some s =>
-      simp only [hint, Bool.false_eq_true, if_false] at h
+      simp only [hint, Bool.false_eq_true, ite_false] at h
       cases hre : STAmount.roundToExponent ret s mode with
       | error e => rw [hre] at h; exact absurd h (by simp)
       | ok rounded =>
@@ -248,7 +248,7 @@ private lemma sumRoundAndSubtract_frac_room (A c : Number) (e : Int) (st : STAmo
     st.toRat ≤ 0 ∨ ∃ a : STAmount, a.FracCanonZero ∧ 0 ≤ a.toRat ∧ A.toRat + st.toRat ≤ a.toRat ∧
       a.toRat ≤ A.toRat + c.toRat := by
   unfold sumRoundAndSubtract at h
-  rw [if_neg (by decide)] at h
+  rw [ite_eq_right (by decide)] at h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨E, hE, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨sum, hsum, h⟩ := bind_ok_peel _ _ _ h
@@ -335,7 +335,7 @@ private lemma vault_credit_int_le (nt : NumericType) (hint : nt.isIntegral = tru
   obtain ⟨htv, htnn⟩ := htn toPool hto
   have hst' : STAmount.ofNumber nt c .downward = .ok st := by
     unfold sumRoundAndSubtract at hst
-    rw [if_pos hint] at hst
+    rw [ite_eq_left hint] at hst
     obtain ⟨x, hx, h⟩ := bind_ok_peel _ _ _ hst
     rw [hx, Except.ok.inj h]
 
@@ -548,9 +548,8 @@ private lemma Loan.tryOverpayment_norm (l : Loan) (opc : PaymentComponents) (re 
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   -- Find the steps by their shape only. A full search unfolds the `Number` operators of the other steps.
   rename_i hfee hres
   obtain rfl := Option.some.inj (Except.ok.inj hres)
@@ -570,9 +569,8 @@ private lemma UnsettledPayment.applyOverpayment_norm (p p' : UnsettledPayment Va
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact hok
-    | skip
   have hopc := Loan.overpaymentComponents_norm _ _ _ ‹Loan.overpaymentComponents _ _ = _›
   have hre := Loan.tryOverpayment_norm _ _ _ hopc ‹Loan.tryOverpayment _ _ = _›
   exact PaymentAmounts.add_norm hok hre ‹PaymentAmounts.add _ _ = _›
@@ -801,7 +799,7 @@ private lemma credit_at_base (nt : NumericType) (A c : Number) (b : Int) (st : S
   · have hb0 := hint hnt
     subst hb0
     unfold sumRoundAndSubtract at hst
-    rw [if_pos hnt] at hst
+    rw [ite_eq_left hnt] at hst
     obtain ⟨x, hx, h⟩ := bind_ok_peel _ _ _ hst
     obtain rfl := Except.ok.inj h
     have hneg := Number.negative_false_of_nonneg c hc hc0
@@ -902,7 +900,6 @@ lemma Loan.payment_vault_at_base (payment : UnsettledPayment Vault) (a : ℕ)
   refine ⟨by rw [hA'v, htov, hAv, htpv], fun e he => ?_, by rw [hA'v, hamt, hAv]⟩
   refine numberExponent_at_base _ _ _ e r.pool'.wf.assetsAvailable_norm r.pool'.exact.assetsAvailable_nonneg
     (by omega) hbint ?_ he
-  change r.pool'.assetsAvailable.toRat < _
   rw [hA'v, htov, hAv, htpv]
   have := Int.floor_le ((payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) /
     10 ^ v.baseExponent)

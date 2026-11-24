@@ -24,11 +24,6 @@ lemma _root_.Nat.toInt64Checked_eq_ok {n : Nat} {c : Int64} :
   unfold Nat.toInt64Checked
   split <;> simp_all
 
-lemma _root_.Int.toInt64Checked_eq_ok {i : Int} {c : Int64} :
-    i.toInt64Checked = .ok c ↔ (-9223372036854775808 ≤ i ∧ i ≤ 9223372036854775807) ∧ i.toInt64 = c := by
-  unfold Int.toInt64Checked
-  split <;> simp_all
-
 lemma _root_.UInt64.toInt64Checked_eq_ok {a : UInt64} {c : Int64} :
     a.toInt64Checked = .ok c ↔ a.toNat < 2 ^ 63 ∧ a.toInt64 = c := by
   unfold UInt64.toInt64Checked
@@ -99,10 +94,6 @@ lemma _root_.UInt32.subChecked_of_le {a b : UInt32} (h : b ≤ a) : a.subChecked
 lemma _root_.Nat.toInt64Checked_of_lt {n : Nat} (h : n < 2 ^ 63) : n.toInt64Checked = .ok n.toInt64 :=
   Nat.toInt64Checked_eq_ok.mpr ⟨h, rfl⟩
 
-lemma _root_.Int.toInt64Checked_of_bounds {i : Int} (h1 : -2 ^ 63 ≤ i) (h2 : i < 2 ^ 63) :
-    i.toInt64Checked = .ok i.toInt64 :=
-  Int.toInt64Checked_eq_ok.mpr ⟨⟨by omega, by omega⟩, rfl⟩
-
 lemma _root_.UInt64.toInt64Checked_of_lt {a : UInt64} (h : a.toNat < 2 ^ 63) :
     a.toInt64Checked = .ok a.toInt64 :=
   UInt64.toInt64Checked_eq_ok.mpr ⟨h, rfl⟩
@@ -162,10 +153,6 @@ lemma _root_.Nat.toInt64Checked_eq_error {n : Nat} {e : Error} (h : n.toInt64Che
   unfold Nat.toInt64Checked at h
   split at h <;> cases h; rfl
 
-lemma _root_.Int.toInt64Checked_eq_error {i : Int} {e : Error} (h : i.toInt64Checked = .error e) : e = .wrap := by
-  unfold Int.toInt64Checked at h
-  split at h <;> cases h; rfl
-
 lemma _root_.UInt64.toInt64Checked_eq_error {a : UInt64} {e : Error} (h : a.toInt64Checked = .error e) : e = .wrap := by
   unfold UInt64.toInt64Checked at h
   split at h <;> cases h; rfl
@@ -222,9 +209,6 @@ lemma _root_.UInt32.subChecked_ne_notLawful (a b : UInt32) : a.subChecked b ≠ 
 
 lemma _root_.Nat.toInt64Checked_ne_notLawful (n : Nat) : n.toInt64Checked ≠ .error .notLawful :=
   fun h => nomatch Nat.toInt64Checked_eq_error h
-
-@[simp] lemma _root_.Int.toInt64Checked_ne_notLawful (i : Int) : i.toInt64Checked ≠ .error .notLawful :=
-  fun h => nomatch Int.toInt64Checked_eq_error h
 
 @[simp] lemma _root_.UInt64.toInt64Checked_ne_notLawful (a : UInt64) : a.toInt64Checked ≠ .error .notLawful :=
   fun h => nomatch UInt64.toInt64Checked_eq_error h
@@ -310,6 +294,33 @@ lemma toUInt64_toNat_of_nonneg (a : Int64) (h0 : 0 ≤ a.toInt) : (a.toUInt64.to
     rw [Int.bmod_def] at h2
     split at h2 <;> omega
 
+/-- A checked negation never returns the smallest `Int64`. -/
+lemma _root_.Int64.negChecked_ne_minValue {a c : Int64} (h : a.negChecked = .ok c) : c ≠ Int64.minValue := by
+  obtain ⟨hne, rfl⟩ := Int64.negChecked_eq_ok.mp h
+  intro hc
+  apply hne
+  have h2 : - -a = -Int64.minValue := by rw [hc]
+  rw [Int64.neg_neg] at h2
+  rw [h2]; decide
+
+/-- A sum of two `Int64` values that stays in the `Int64` range is the sum of their values. -/
+lemma _root_.Int64.toInt_add_of_bounds {a b : Int64} (h1 : -2 ^ 63 ≤ a.toInt + b.toInt)
+    (h2 : a.toInt + b.toInt < 2 ^ 63) : (a + b).toInt = a.toInt + b.toInt := by
+  rw [Int64.toInt_add, Int.bmod_eq_iff (by norm_num)]
+  constructor <;> omega
+
+/-- Any `Int64` but the smallest has an absolute value below `2^63`. -/
+lemma _root_.Int64.natAbs_lt_of_ne_minValue {a : Int64} (h : a ≠ Int64.minValue) : a.toInt.natAbs < 2 ^ 63 := by
+  have h1 := a.le_toInt
+  have h2 := a.toInt_lt
+  have : a.toInt ≠ -2 ^ 63 := fun hc => h (Int64.toInt_inj.mp (by rw [hc]; rfl))
+  omega
+
+/-- An `Int64` whose absolute value is below `2^63` is not the smallest `Int64`. -/
+lemma _root_.Int64.ne_minValue_of_natAbs_lt {a : Int64} (h : a.toInt.natAbs < 2 ^ 63) : a ≠ Int64.minValue := by
+  rintro rfl
+  exact absurd h (by decide)
+
 /-- A non-negative `Int64` read as a `UInt64` is its magnitude. -/
 lemma _root_.Int64.toUInt64_eq_magnitude {a : Int64} (h : 0 ≤ a) : a.toUInt64 = a.magnitude := by
   have h0 : 0 ≤ a.toInt := by simpa using Int64.le_iff_toInt_le.mp h
@@ -338,14 +349,14 @@ lemma IOUAmount.absMant_toUInt64 (i : IOUAmount) :
     (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64 = i.mantissa_.magnitude := by
   unfold IOUAmount.signum
   by_cases h : i.mantissa_ < 0
-  · rw [if_pos h, if_pos (by decide)]
+  · rw [ite_eq_left h, ite_eq_left (by decide)]
     exact Int64.neg_toUInt64_eq_magnitude h
-  · rw [if_neg h]
+  · rw [ite_eq_right h]
     have h0 : 0 ≤ i.mantissa_ := by
       rcases Int64.lt_or_le i.mantissa_ 0 with h' | h'
       · exact absurd h' h
       · exact h'
-    rw [if_neg (by split <;> decide)]
+    rw [ite_eq_right (by split <;> decide)]
     exact Int64.toUInt64_eq_magnitude h0
 
 end XRPL.Model.Protocol

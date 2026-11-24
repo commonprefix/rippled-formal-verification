@@ -2,10 +2,8 @@ import XRPL.Properties.Lending.Ledger.Common.LoanSubsequenceDefs
 
 /-! # The transactions of one broker
 
-A sequence of transactions and its subsequence of one broker's and its loans' transactions, each at the same close
-time: the broker's own transactions, the LoanSets on it, every LoanAccept, LoanDelete, LoanManage and LoanPay on its
-loans, and every ledger close. Without the other brokers and loans the broker and its new loans can get lower
-numbers, so their transactions are renumbered. -/
+The subsequence of a broker's own transactions, its LoanSets, the transactions on its loans and every ledger close.
+Without the other brokers and loans their numbers can drop, so the transactions are renumbered. -/
 
 namespace XRPL.Model.Lending
 

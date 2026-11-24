@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Loan.Common.ManageDefs
 On the coarsened vault of `CoarsenedVault.lean` a default can credit the vault less than its capped cover amount.
 Defaulting loan B there pays the vault `-0.9`, and with a full cover of 1 it pays only `0.1`. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

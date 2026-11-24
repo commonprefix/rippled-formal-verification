@@ -2,11 +2,9 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 
 /-! # A full payment before StartDate pays no interest
 
-A run from a new IOU vault at Scale 1, checked by `native_decide`. A two-step loan of 100 at 10% is accepted on day
-0 with StartDate on day 30, so LoanAccept pays the principal out at once. On day 29 a full payment pays it off with
-no interest, since the interest accrues only from StartDate. -/
+A two-step loan accepted on day 0 with StartDate on day 30 is paid off in full on day 29 with no interest (FV_M4_48). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

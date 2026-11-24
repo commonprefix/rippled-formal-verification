@@ -7,9 +7,7 @@ import XRPL.Properties.Protocol.Number.Add.RoundsToRepresentable
 
 /-! # Exact results of rounding operations
 
-An operation that rounds to a neighbouring `Number` returns a value that already is a `Number` unchanged, in every
-mode, since both neighbours of such a value are the value itself. This file states it for addition of opposite signs,
-with the uniqueness lemmas for normalized `Number`s it needs. -/
+An addition of opposite signs whose exact value is already a `Number` returns it unchanged, in every mode. -/
 
 namespace XRPL.Model.Protocol
 
@@ -298,7 +296,7 @@ theorem Number.operator_add_exact_diff_sign (x y result : Number) (mode : roundi
     replace hok := Number.operator_add_ok_spec hok
     unfold Number.operator_addSpec at hok
     rw [h_guard_y, h_guard_x, h_guard_eq] at hok
-    simp only [Bool.false_eq_true, if_false, if_true] at hok
+    simp only [Bool.false_eq_true, ite_false, ite_true] at hok
     have h_result : result = Number.zero :=
       (Except.ok.inj (show (Except.ok Number.zero : Except Error Number) = .ok result
         from hok)).symm
@@ -332,12 +330,12 @@ theorem Number.operator_add_exact_diff_sign (x y result : Number) (mode : roundi
       have h := Number.operator_add_rounded_towards_zero x y result hx hy hok
       obtain ⟨n, hn_eq, hn_val⟩ := h
       by_cases h_nn : x.toRat + y.toRat ≥ 0
-      · rw [if_pos h_nn] at hn_eq
+      · rw [ite_eq_left h_nn] at hn_eq
         obtain ⟨n', hn'_eq, hn'_val⟩ := Number.lower_value_self w hw hw_ne
         rw [← hw_val] at hn_eq
         have hnn' : n = n' := Option.some.inj (hn_eq.symm.trans hn'_eq)
         rw [hn_val, hnn', ← hn'_val, hw_val]
-      · rw [if_neg h_nn] at hn_eq
+      · rw [ite_eq_right h_nn] at hn_eq
         obtain ⟨n', hn'_eq, hn'_val⟩ := Number.upper_value_self w hw hw_ne
         rw [← hw_val] at hn_eq
         have hnn' : n = n' := Option.some.inj (hn_eq.symm.trans hn'_eq)

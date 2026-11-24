@@ -1,13 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.BrokerSubsequenceDefs
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequenceWitness
 
 /-! # Witnesses for the transactions of one broker
 
-On the coarsened vault of `CoarsenedVault.lean`, a VaultWithdraw lets a late payment of 0.1 on a loan of broker 0
-pass, and in the broker's own transactions the same payment is rejected. A default whose cover is not on the coarse
-grid moves less cover once another loan's late payment coarsens the vault, and the broker keeps more. -/
+A payment (FV_M4_21) and a default on a coarsened vault (FV_M4_28) that differ in the broker's own transactions. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

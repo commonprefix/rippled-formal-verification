@@ -12,10 +12,8 @@ import XRPL.Properties.Lending.Ledger.Common.ShareValueRunWitness
 
 /-! # Share value around payments and default
 
-shareValue = (AssetsTotal − LossUnrealized) / SharesTotal, read exactly. defaultCovered is the cover a default
-pays the vault. The actions run on a reachable ledger's vault, on the loan stored at `i` read with its broker.
-`l.PaysLoan i fits l' paid` is a run from `l` to `l'` that never defaults the loan at `i`, where `paid` sums
-amountToPool, what the vault receives, over its payments of that loan, and each payment satisfies `fits`. -/
+How payments and a default move shareValue = (AssetsTotal − LossUnrealized) / SharesTotal on a reachable ledger.
+`l.PaysLoan i fits l' paid` is a run that never defaults loan `i` and sends the vault `paid` over its payments. -/
 
 namespace XRPL.Model
 
@@ -115,12 +113,10 @@ theorem Lending.Reachable.no_dilution (start l : LendingLedger) (txs : List Lend
     (hshares : start.SharesLeftAlong txs) -- SharesTotal is not zero before or after any step
     -- the vault is not coarsened before or after any step of the sequence (FV_M4_25)
     (hnc : start.NotCoarsenedAlong txs)
-    -- each VaultDeposit keeps SharesTotal within the share MPT maximum, which C++ accountSend enforces
-    (hfit : start.SharesFitAlong txs)
     -- each deposit, withdrawal and clawback moves shares worth whole base units (FV_M2_3)
     (hwhole : start.WholeWorthAlong txs) :
     start.vault.toRawVault.shareValue ≤ l.vault.toRawVault.shareValue :=
-  LendingLedger.no_dilution_proof start l txs hr hrun hkeep hshares hnc hfit hwhole
+  LendingLedger.no_dilution_proof start l txs hr hrun hkeep hshares hnc hwhole
 
 /-- Witness: a sequence where a VaultWithdraw price rounded to nearest lowers shareValue. One share of 2, worth
 `1.5`, is redeemed for `2`, and shareValue falls from `1.5` to `1`. -/
@@ -131,7 +127,6 @@ theorem Lending.Reachable.no_dilution_withdraw_attained :
       start.KeepsShareValueAlong txs ∧
       start.SharesLeftAlong txs ∧
       start.NotCoarsenedAlong txs ∧
-      start.SharesFitAlong txs ∧
       l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue :=
   LendingLedger.no_dilution_withdraw_witness
 
@@ -143,7 +138,6 @@ theorem Lending.Reachable.no_dilution_coarsened_attained :
       LendingLedger.Reaches start txs l ∧
       start.KeepsShareValueAlong txs ∧
       start.SharesLeftAlong txs ∧
-      start.SharesFitAlong txs ∧
       start.WholeWorthAlong txs ∧
       l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue :=
   LendingLedger.no_dilution_coarsened_witness

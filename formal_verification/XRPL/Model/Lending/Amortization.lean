@@ -10,10 +10,10 @@ def computePaymentFactor (rate paymentsRemainingNum : Number) (paymentsRemaining
     : Except Error Number := do
   if paymentsRemaining == 0 then return Number.zero
   if rate.operator_eq Number.zero then
-    (Number.ofInt64 1).operator_div paymentsRemainingNum .to_nearest
+    (Number.ofInt64 1 .to_nearest).operator_div paymentsRemainingNum .to_nearest
   else
     let powerMinusOne ← computePowerMinusOneHybrid rate paymentsRemainingNum paymentsRemaining
-    let raisedRate ← (Number.ofInt64 1).operator_add powerMinusOne .to_nearest
+    let raisedRate ← (Number.ofInt64 1 .to_nearest).operator_add powerMinusOne .to_nearest
     let numerator ← rate.operator_mul raisedRate .to_nearest
     numerator.operator_div powerMinusOne .to_nearest
 
@@ -21,7 +21,7 @@ def computePaymentFactor (rate paymentsRemainingNum : Number) (paymentsRemaining
 def loanPeriodicPayment (principal rate : Number) (paymentsRemaining : UInt32)
     : Except Error Number := do
   if principal.operator_eq Number.zero || paymentsRemaining == 0 then return Number.zero
-  let paymentsRemainingNum := Number.ofInt64 paymentsRemaining.toInt64
+  let paymentsRemainingNum := Number.ofInt64 paymentsRemaining.toInt64 .to_nearest
   if rate.operator_eq Number.zero then
     principal.operator_div paymentsRemainingNum .to_nearest
   else
@@ -32,7 +32,7 @@ def loanPeriodicPayment (principal rate : Number) (paymentsRemaining : UInt32)
 def loanPrincipalFromPeriodicPayment (periodicPayment rate : Number) (paymentsRemaining : UInt32)
     : Except Error Number := do
   if paymentsRemaining == 0 then return Number.zero
-  let paymentsRemainingNum := Number.ofInt64 paymentsRemaining.toInt64
+  let paymentsRemainingNum := Number.ofInt64 paymentsRemaining.toInt64 .to_nearest
   if rate.operator_eq Number.zero then
     periodicPayment.operator_mul paymentsRemainingNum .to_nearest
   else

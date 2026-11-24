@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.LoanReplay
 import XRPL.Properties.Lending.Loan.Common.PaySize
 import XRPL.Properties.Lending.Ledger.Common.RecheckLoan
@@ -5,9 +6,8 @@ import XRPL.Properties.Lending.Loan.Common.ValueDecrease
 
 /-! # A LoanPay replayed on another reachable ledger
 
-The payment computes the same instalments on the loan the second ledger stores, since the loan reads its broker
-only through the asset and the management fee rate. While the vault is not coarsened the credit lands at the base
-scale, so the settlement moves AssetsAvailable on the second ledger whenever it did on the first. -/
+The payment computes the same instalments on the second ledger, since the loan reads its broker only through the asset
+and the management fee rate. While the vault is not coarsened the settlement credits both vaults alike. -/
 
 namespace XRPL.Model.Lending
 

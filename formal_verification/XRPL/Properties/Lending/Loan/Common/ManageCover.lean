@@ -51,9 +51,9 @@ lemma Number.min_toRat (x y : Number) (hx : x.isNormalized) (hy : y.isNormalized
     (Number.min x y).toRat = min x.toRat y.toRat ∧ (Number.min x y).isNormalized := by
   unfold Number.min
   by_cases h : y.operator_lt x = true
-  · rw [if_pos h]
+  · rw [ite_eq_left h]
     exact ⟨(min_eq_right ((Number.operator_lt_iff _ _ hy hx).mp h).le).symm, hy⟩
-  · rw [if_neg h]
+  · rw [ite_eq_right h]
     refine ⟨(min_eq_left ?_).symm, hx⟩
     exact (Number.operator_lt_eq_false_iff _ _ hy hx).mp (by simpa using h)
 

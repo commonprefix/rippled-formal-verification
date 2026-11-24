@@ -29,8 +29,8 @@ lemma doRoundUp_small_cusp (g : Guard) (neg : Bool) (e : Int) (mode : rounding_m
     | to_nearest =>
       have htn : (g.push 9).round .to_nearest = 1 := by
         unfold Guard.round
-        rw [if_neg (by rw [hpush_ne]; exact Bool.false_ne_true),
-            if_pos (show (g.push 9).digits_ > 0x5000000000000000 from by
+        rw [ite_eq_right (by rw [hpush_ne]; exact Bool.false_ne_true),
+            ite_eq_left (show (g.push 9).digits_ > 0x5000000000000000 from by
               rw [gt_iff_lt, UInt64.lt_iff_toNat_lt,
                   show (0x5000000000000000 : UInt64).toNat = 5764607523034234880 from by decide]
               omega)]
@@ -39,16 +39,16 @@ lemma doRoundUp_small_cusp (g : Guard) (neg : Bool) (e : Int) (mode : rounding_m
       exfalso
       have : g.round .towards_zero = -1 ∨ g.round .towards_zero = -2 := by
         unfold Guard.round; by_cases he : g.empty = true
-        · rw [if_pos he]; right; rfl
-        · rw [if_neg he]; left; rfl
+        · rw [ite_eq_left he]; right; rfl
+        · rw [ite_eq_right he]; left; rfl
       rcases this with h | h <;> rw [h] at hb <;> simp at hb
     | downward =>
       have hsb : g.sbit_ = true := by
         by_contra hh; rw [Bool.not_eq_true] at hh
         have : g.round .downward = -1 ∨ g.round .downward = -2 := by
           unfold Guard.round; by_cases he : g.empty = true
-          · rw [if_pos he]; right; rfl
-          · rw [if_neg he, hh]; left; rfl
+          · rw [ite_eq_left he]; right; rfl
+          · rw [ite_eq_right he, hh]; left; rfl
         rcases this with h | h <;> rw [h] at hb <;> simp at hb
       exact round_bool_downward_neg (g.push 9) 999999999999999 (hpush_sbit.trans hsb) hpush_ne
     | upward =>
@@ -56,8 +56,8 @@ lemma doRoundUp_small_cusp (g : Guard) (neg : Bool) (e : Int) (mode : rounding_m
         by_contra hh; rw [Bool.not_eq_false] at hh
         have : g.round .upward = -1 ∨ g.round .upward = -2 := by
           unfold Guard.round; by_cases he : g.empty = true
-          · rw [if_pos he]; right; rfl
-          · rw [if_neg he, hh]; left; rfl
+          · rw [ite_eq_left he]; right; rfl
+          · rw [ite_eq_right he, hh]; left; rfl
         rcases this with h | h <;> rw [h] at hb <;> simp at hb
       exact round_bool_upward_pos (g.push 9) 999999999999999 (hpush_sbit.trans hsb) hpush_ne
   -- drive the doRoundUp pipeline through the doDropDigit branch
@@ -66,20 +66,20 @@ lemma doRoundUp_small_cusp (g : Guard) (neg : Bool) (e : Int) (mode : rounding_m
   unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_lt_maxRep (by rw [maxRep_val, cMaxValue_val]; omega) g mode, hb]
-  simp only [if_true]
-  rw [if_neg (show ¬ (cMaxValue < cMaxValue ∧ cMaxValue < maxRep) from fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by omega)),
-      if_neg (show ¬ (maxRep < cMaxValue ∧ cMaxValue < maxRepUp) from fun h =>
+  simp only [ite_true]
+  rw [ite_eq_right (show ¬ (cMaxValue < cMaxValue ∧ cMaxValue < maxRep) from fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by omega)),
+      ite_eq_right (show ¬ (maxRep < cMaxValue ∧ cMaxValue < maxRepUp) from fun h =>
         absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by rw [maxRep_val, cMaxValue_val]; omega))]
   unfold Guard.doDropDigit
   rw [h9, hdiv]
   simp only []
-  rw [if_pos hroundUp', hdivsucc,
+  rw [ite_eq_left hroundUp', hdivsucc,
       show Guard.bringIntoRangeSpec neg cMinValue (e + 1) cMinValue
           = { negative_ := neg, mantissa_ := cMinValue, exponent_ := e + 1 } from by
         rw [bringIntoRange_noscale_result (fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by omega)),
-            if_neg (not_or.mpr ⟨by omega, by decide⟩)]]
+            ite_eq_right (not_or.mpr ⟨by omega, by decide⟩)]]
   dsimp only
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (by omega)]
 
 /-- In every mode, re-rounding a 19-digit mantissa to the 16-digit range moves the value by at most one 16-digit
 unit `10^(exponent + 3)`. -/
@@ -158,8 +158,8 @@ theorem normalizeToRange_16_within_ulp (n : Number) (mode : rounding_mode)
   have htruth : n.toRat = (if n.negative_ then (-1 : ℚ) else 1)
       * ((n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_) := by
     by_cases hneg : n.negative_
-    · rw [Number.toRat_of_neg n hneg, if_pos hneg]; ring
-    · rw [Number.toRat_of_nonneg n (by simpa using hneg), if_neg (by simpa using hneg)]; ring
+    · rw [Number.toRat_of_neg n hneg, ite_eq_left hneg]; ring
+    · rw [Number.toRat_of_nonneg n (by simpa using hneg), ite_eq_right (by simpa using hneg)]; ring
   rw [hvalue, htruth]
   have hpow : (10 : ℚ) ^ (n.exponent_ + 3) = (10 : ℚ) ^ n.exponent_ * 1000 := by
     rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num
@@ -207,7 +207,7 @@ theorem normalizeToRange_16_within_half_ulp (n : Number) (mant : Int64) (exp : I
   set M : ℕ := n.mantissa_.toNat with hMdef
   -- The round decision is governed by the dropped tail `M % 1000` vs `500`.
   have hround_ne_empty : ∀ {r : Int}, g.round .to_nearest = r → r ≠ -2 → ¬ g.empty := by
-    intro r hr hr2 he; unfold Guard.round at hr; rw [if_pos he] at hr; exact hr2 hr.symm
+    intro r hr hr2 he; unfold Guard.round at hr; rw [ite_eq_left he] at hr; exact hr2 hr.symm
   have hempty_tail : g.empty = true → M % 1000 = 0 := by
     intro he
     simp only [Guard.empty, Guard.unrecoverable, Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true'] at he
@@ -337,8 +337,8 @@ theorem normalizeToRange_16_within_half_ulp (n : Number) (mant : Int64) (exp : I
   have htruth : n.toRat = (if n.negative_ then (-1 : ℚ) else 1)
       * ((M : ℚ) * 10 ^ n.exponent_) := by
     by_cases hneg : n.negative_
-    · rw [Number.toRat_of_neg n hneg, if_pos hneg]; ring
-    · rw [Number.toRat_of_nonneg n (by simpa using hneg), if_neg (by simpa using hneg)]; ring
+    · rw [Number.toRat_of_neg n hneg, ite_eq_left hneg]; ring
+    · rw [Number.toRat_of_nonneg n (by simpa using hneg), ite_eq_right (by simpa using hneg)]; ring
   rw [hvalue, htruth]
   have hpow : (10 : ℚ) ^ (n.exponent_ + 3) = (10 : ℚ) ^ n.exponent_ * 1000 := by
     rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num
@@ -490,8 +490,8 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
   have htruth : n.toRat = (if n.negative_ then (-1 : ℚ) else 1)
       * ((n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_) := by
     by_cases hneg : n.negative_
-    · rw [Number.toRat_of_neg n hneg, if_pos hneg]; ring
-    · rw [Number.toRat_of_nonneg n (by simpa using hneg), if_neg (by simpa using hneg)]; ring
+    · rw [Number.toRat_of_neg n hneg, ite_eq_left hneg]; ring
+    · rw [Number.toRat_of_nonneg n (by simpa using hneg), ite_eq_right (by simpa using hneg)]; ring
   -- The result value is `s · k · 10^(e+3)` for `k` determined by sign.
   -- Goal reduces (via the value formula) to a `k·1000 vs M` comparison.
   by_cases hneg : n.negative_
@@ -519,7 +519,7 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), htruth, hpow]
-      simp only [if_pos hneg]
+      simp only [ite_eq_left hneg]
       have hcast : ((n.mantissa_ / 10 / 10 / 10).toNat : ℚ) * 1000 = (n.mantissa_.toNat : ℚ) := by
         rw [hm3]
         have h : n.mantissa_.toNat / 1000 * 1000 = n.mantissa_.toNat :=
@@ -547,7 +547,7 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
         have hMk : n.mantissa_.toNat / 1000 = 10 ^ 16 - 1 := by
           have := congrArg UInt64.toNat hcusp; rw [hm3, hcMax] at this; exact this
         rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ cMinValue (by rw [hcMin]; omega), htruth]
-        simp only [if_pos hneg]
+        simp only [ite_eq_left hneg]
         rw [hcMin, show ((n.exponent_ + 3) + 1 : Int) = n.exponent_ + 4 by ring,
             zpow_add₀ (by norm_num : (10:ℚ) ≠ 0) n.exponent_ 4]
         have hge : (n.mantissa_.toNat : ℚ) ≤ (10 ^ 15 : ℚ) * 10 ^ 4 := by
@@ -573,7 +573,7 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hadd]; omega), htruth, hpow]
-        simp only [if_pos hneg]
+        simp only [ite_eq_left hneg]
         have hval : (n.mantissa_.toNat : ℚ) ≤ ((n.mantissa_ / 10 / 10 / 10 + 1).toNat : ℚ) * 1000 := by
           rw [hadd]
           have h : n.mantissa_.toNat ≤ (n.mantissa_.toNat / 1000 + 1) * 1000 := by omega
@@ -597,7 +597,7 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
     rw [hcompute] at hok
     obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), htruth, hpow]
-    simp only [if_neg hneg]
+    simp only [ite_eq_right hneg]
     have hle : ((n.mantissa_ / 10 / 10 / 10).toNat : ℚ) * 1000 ≤ (n.mantissa_.toNat : ℚ) := by
       rw [hm3]
       rw [show ((n.mantissa_.toNat / 1000 : ℕ) : ℚ) * 1000 = ((n.mantissa_.toNat / 1000 * 1000 : ℕ) : ℚ) by push_cast; ring]
@@ -627,8 +627,8 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
   have htruth : n.toRat = (if n.negative_ then (-1 : ℚ) else 1)
       * ((n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_) := by
     by_cases hneg : n.negative_
-    · rw [Number.toRat_of_neg n hneg, if_pos hneg]; ring
-    · rw [Number.toRat_of_nonneg n (by simpa using hneg), if_neg (by simpa using hneg)]; ring
+    · rw [Number.toRat_of_neg n hneg, ite_eq_left hneg]; ring
+    · rw [Number.toRat_of_nonneg n (by simpa using hneg), ite_eq_right (by simpa using hneg)]; ring
   by_cases hneg : n.negative_
   · -- negative (sbit = true): upward truncates ⟹ truth ≤ result
     have hsb : g.sbit_ = true := by rw [hsbit, hneg]
@@ -645,7 +645,7 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
     rw [hcompute] at hok
     obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), htruth, hpow]
-    simp only [if_pos hneg]
+    simp only [ite_eq_left hneg]
     push_cast
     have hle : ((n.mantissa_ / 10 / 10 / 10).toNat : ℚ) * 1000 ≤ (n.mantissa_.toNat : ℚ) := by
       rw [hm3]
@@ -677,7 +677,7 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), htruth, hpow]
-      simp only [if_neg hneg]
+      simp only [ite_eq_right hneg]
       push_cast
       have hcast : ((n.mantissa_ / 10 / 10 / 10).toNat : ℚ) * 1000 = (n.mantissa_.toNat : ℚ) := by
         rw [hm3]
@@ -702,7 +702,7 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ cMinValue (by rw [hcMin]; omega), htruth]
-        simp only [if_neg hneg]
+        simp only [ite_eq_right hneg]
         rw [hcMin, show ((n.exponent_ + 3) + 1 : Int) = n.exponent_ + 4 by ring,
             zpow_add₀ (by norm_num : (10:ℚ) ≠ 0) n.exponent_ 4]
         have hge : (n.mantissa_.toNat : ℚ) ≤ (10 ^ 15 : ℚ) * 10 ^ 4 := by
@@ -727,7 +727,7 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hadd]; omega), htruth, hpow]
-        simp only [if_neg hneg]
+        simp only [ite_eq_right hneg]
         push_cast
         have hval : (n.mantissa_.toNat : ℚ) ≤ ((n.mantissa_ / 10 / 10 / 10 + 1).toNat : ℚ) * 1000 := by
           rw [hadd]

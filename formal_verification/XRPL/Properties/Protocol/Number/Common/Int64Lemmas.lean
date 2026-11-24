@@ -79,10 +79,10 @@ lemma signed_mantissa_toInt (neg : Bool) (m : UInt64) (h : m.toNat < 2 ^ 63) :
       = (if neg then -1 else 1) * (m.toNat : ℤ) := by
   cases neg with
   | false =>
-    simp only [Bool.false_eq_true, if_false, one_mul]
+    simp only [Bool.false_eq_true, ite_false, one_mul]
     exact UInt64.toInt64_toInt_of_lt m h
   | true =>
-    simp only [if_true]
+    simp only [ite_true]
     rw [UInt64.neg_toInt64_toInt_of_lt m h]; ring
 
 /-- Magnitude of the signed mantissa `±m` is `m`. -/
@@ -100,12 +100,12 @@ lemma signed_mantissa_decide_neg (neg : Bool) (m : UInt64)
   | false =>
     apply decide_eq_false
     rw [Int64.lt_iff_toInt_lt, signed_mantissa_toInt false m h, h0]
-    simp only [Bool.false_eq_true, if_false, one_mul]
+    simp only [Bool.false_eq_true, ite_false, one_mul]
     omega
   | true =>
     apply decide_eq_true
     rw [Int64.lt_iff_toInt_lt, signed_mantissa_toInt true m h, h0]
-    simp only [if_true]
+    simp only [ite_true]
     omega
 
 end XRPL.Model.Protocol

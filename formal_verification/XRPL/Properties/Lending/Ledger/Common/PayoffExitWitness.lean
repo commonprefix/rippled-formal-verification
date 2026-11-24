@@ -4,11 +4,9 @@ import XRPL.Properties.Protocol.STAmount.Mul.Common.Integral
 
 /-! # An MPT vault whose sole holder can't withdraw every share
 
-A closed-ended MPT vault lends almost all its cash for one day at a 100% late rate, and the loan is paid 136 years
-late, which grows AssetsAvailable to about `1.23·10^18` units. The 19-digit price of all the shares then rounds one
-unit above the cash, and the final VaultWithdraw fails with tecINSUFFICIENT_FUNDS. -/
+A loan paid 136 years late grows an MPT vault so far that its sole holder's final VaultWithdraw fails (FV_M4_37). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -33,7 +31,7 @@ private def mpGenesis : LendingLedger := { vault := mpVault, shares := [], broke
 private lemma mpGenesis_genesis : mpGenesis.Genesis where
   created := ⟨none, none, mpSchedule, none, false, NumericType.int64, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨mpVault.wf, mpVault.valid⟩⟩
+    exact dite_eq_left ⟨mpVault.wf, mpVault.valid⟩⟩
   holds_asset := Or.inr (Or.inr rfl)
   no_holders := rfl
   no_brokers := rfl
@@ -99,7 +97,7 @@ private lemma STAmount.eq_of_int64_canonical {a b : STAmount} (ha : isCanonicalA
     (hpa : isPositiveAmount a = true) (hb : isCanonicalAmount b .int64 = true) (hpb : isPositiveAmount b = true)
     (hv : a.toRat = b.toRat) : a = b := by
   simp only [isCanonicalAmount, Bool.and_eq_true, beq_iff_eq, show NumericType.int64.isIntegral = true from rfl,
-    if_true, decide_eq_true_eq] at ha hb
+    ite_true, decide_eq_true_eq] at ha hb
   simp only [isPositiveAmount, Bool.and_eq_true, Bool.not_eq_true', bne_iff_ne, ne_eq] at hpa hpb
   rw [STAmount.toRat_of_nonneg_offset_zero a hpa.1 ha.2.1, STAmount.toRat_of_nonneg_offset_zero b hpb.1 hb.2.1]
     at hv
@@ -140,7 +138,7 @@ lemma LendingLedger.payoff_exit_mpt_witness :
     cases hok
   · have hp : (LendingTx.vaultWithdraw 0 (.vaultShares shares)).preflight l = .temBAD_AMOUNT := by
       simp only [LendingTx.preflight]
-      rw [if_neg hpre]
+      rw [ite_eq_right hpre]
     unfold LendingLedger.apply at hok
     rw [hp] at hok
     cases hok

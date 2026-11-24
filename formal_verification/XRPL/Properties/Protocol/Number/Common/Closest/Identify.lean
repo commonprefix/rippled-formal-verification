@@ -14,9 +14,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Identify `Number.lower` or `Number.upper` from the rounding side
 
-`closest_lower_of_no_inbetween` and `closest_upper_of_no_inbetween` turn "the result is on this side of the exact value,
-and no normalized Number lies between them, the exact value included" into `result = Number.lower truth` or
-`Number.upper truth`. -/
+A result on one side of the exact value, with no normalized Number in between, is `Number.lower` or `Number.upper`
+of that value. -/
 
 /-- If `result ≤ truth` and no normalized Number lies in `(result, truth]`, `result` has the value of
 `Number.lower truth`. -/
@@ -138,7 +137,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
       have hq_ne : q ≠ 0 := ne_of_gt hq_pos
       have h_upperPosAux_eq : upperPosAux q = some n_pos := by
         have h_unfold : Number.upper q = upperPosAux q := by
-          unfold Number.upper; rw [if_neg hq_ne, if_neg hq_not_neg]
+          unfold Number.upper; rw [ite_eq_right hq_ne, ite_eq_right hq_not_neg]
         rw [h_unfold] at h_n_pos_eq; exact h_n_pos_eq
       have h_lower_eq : Number.lower truth = some ({n_pos with negative_ := true} : Number) := by
         rw [Number.lower_neg_eq truth h_truth_neg]
@@ -259,7 +258,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
         have hq_ne : q ≠ 0 := ne_of_gt hq_pos
         have h_upperPosAux_eq : upperPosAux q = some n_pos := by
           have h_unfold : Number.upper q = upperPosAux q := by
-            unfold Number.upper; rw [if_neg hq_ne, if_neg hq_not_neg]
+            unfold Number.upper; rw [ite_eq_right hq_ne, ite_eq_right hq_not_neg]
           rw [h_unfold] at h_n_pos_eq; exact h_n_pos_eq
         have h_lower_eq : Number.lower truth = some ({n_pos with negative_ := true} : Number) := by
           rw [Number.lower_neg_eq truth h_truth_neg]
@@ -360,7 +359,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
         have h_q_ne : q ≠ 0 := ne_of_gt hq_pos
         have h_q_not_neg : ¬ (q < 0) := not_lt.mpr (le_of_lt hq_pos)
         have h_upper_unfold : Number.upper q = upperPosAux q := by
-          unfold Number.upper; rw [if_neg h_q_ne, if_neg h_q_not_neg]
+          unfold Number.upper; rw [ite_eq_right h_q_ne, ite_eq_right h_q_not_neg]
         have h_q_lt_pow : q < (10 : ℚ) ^ (minExponent + 18) := by
           have h_pow_form : smallest_pos_rep = (10 : ℚ) ^ (minExponent + 18) := by
             rw [h_spr_eq]
@@ -398,10 +397,10 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
             have h_e_q1_le_min : e_q + 1 ≤ minExponent := by linarith
             by_cases h_dif : minExponent ≤ e_q + 1 ∧ e_q + 1 ≤ maxExponent
             · have h_e_q1_eq : e_q + 1 = minExponent := le_antisymm h_e_q1_le_min h_dif.1
-              rw [dif_pos h_dif]
+              rw [dite_eq_left h_dif]
               change (some (⟨false, largeRange.min, e_q + 1⟩ : Number) : Option Number) = some n_up_target
               rw [h_e_q1_eq]
-            · rw [dif_neg h_dif]
+            · rw [dite_eq_right h_dif]
               have h_e_q1_lt : e_q + 1 < minExponent := by
                 rcases lt_or_eq_of_le h_e_q1_le_min with h | h
                 · exact h
@@ -410,7 +409,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
                   have h_min_eq : minExponent = -32768 := rfl
                   have h_max_eq : maxExponent = 32768 := rfl
                   omega
-              rw [if_pos h_e_q1_lt]
+              rw [ite_eq_left h_e_q1_lt]
           · change (if h_exp : minExponent ≤ e_q ∧ e_q ≤ maxExponent ∧ m_b < 2^64 then
                     some (⟨false, ⟨m_b, h_exp.2.2⟩, e_q⟩ : Number)
                   else if e_q < minExponent then
@@ -418,8 +417,8 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
                   else none) = some n_up_target
             have h_not_in : ¬ (minExponent ≤ e_q ∧ e_q ≤ maxExponent ∧ m_b < 2^64) := by
               intro ⟨h1, _, _⟩; linarith
-            rw [dif_neg h_not_in]
-            rw [if_pos h_e_q_lt_min']
+            rw [dite_eq_right h_not_in]
+            rw [ite_eq_left h_e_q_lt_min']
         have h_upper_q_target : Number.upper q = some n_up_target := by
           rw [h_upper_unfold]; exact h_upperPos_eq
         have h_lower_eq : Number.lower truth = some ({n_up_target with negative_ := true} : Number) := by
@@ -525,7 +524,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
     obtain ⟨n_lo, h_lo_aux⟩ := lowerPosAux_isSome_of_lt_top truth h_truth_pos h_truth_lt_top
     have h_lo_eq : Number.lower truth = some n_lo := by
       unfold Number.lower
-      rw [if_neg (ne_of_gt h_truth_pos), if_neg (not_lt.mpr (le_of_lt h_truth_pos))]
+      rw [ite_eq_right (ne_of_gt h_truth_pos), ite_eq_right (not_lt.mpr (le_of_lt h_truth_pos))]
       exact h_lo_aux
     refine ⟨n_lo, h_lo_eq, ?_⟩
     have h_max : ∀ m : Number, m.isNormalized → m.toRat ≤ truth → m.toRat ≤ result.toRat := by
@@ -646,7 +645,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
     have hq_ne : q ≠ 0 := ne_of_gt hq_pos
     have h_n_pos_eq : Number.lower q = some n_pos := by
       unfold Number.lower
-      rw [if_neg hq_ne, if_neg hq_not_neg]
+      rw [ite_eq_right hq_ne, ite_eq_right hq_not_neg]
       exact h_lowerPosAux_eq
     have h_upper_eq : Number.upper truth = some ({n_pos with negative_ := true} : Number) := by
       rw [Number.upper_neg_eq truth h_truth_neg]
@@ -658,7 +657,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
         have h_zero_toRat : n_pos.toRat = 0 := by rw [h_eq, Number.toRat_zero]
         have h_tight := Number.lower_tight q n_pos h_n_pos_eq r_pos h_r_pos_norm h_r_pos_le_q
         linarith
-      rw [if_neg h_n_pos_ne_zero]
+      rw [ite_eq_right h_n_pos_ne_zero]
     refine ⟨({n_pos with negative_ := true} : Number), h_upper_eq, ?_⟩
     have h_max : ∀ m : Number, m.isNormalized → m.toRat ≤ q → m.toRat ≤ r_pos.toRat := by
       intro m h_norm h_m_le
@@ -902,7 +901,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
         have h_truth_ne : truth ≠ 0 := ne_of_gt h_truth_pos
         have h_truth_not_neg : ¬ (truth < 0) := not_lt.mpr (le_of_lt h_truth_pos)
         have h_upper_unfold : Number.upper truth = upperPosAux truth := by
-          unfold Number.upper; rw [if_neg h_truth_ne, if_neg h_truth_not_neg]
+          unfold Number.upper; rw [ite_eq_right h_truth_ne, ite_eq_right h_truth_not_neg]
         have h_truth_lt_pow : truth < (10 : ℚ) ^ (minExponent + 18) := by
           have h_pow_form : smallest_pos_rep = (10 : ℚ) ^ (minExponent + 18) := by
             rw [h_spr_eq]
@@ -940,10 +939,10 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
             have h_e_q1_le_min : e_q + 1 ≤ minExponent := by linarith
             by_cases h_dif : minExponent ≤ e_q + 1 ∧ e_q + 1 ≤ maxExponent
             · have h_e_q1_eq : e_q + 1 = minExponent := le_antisymm h_e_q1_le_min h_dif.1
-              rw [dif_pos h_dif]
+              rw [dite_eq_left h_dif]
               change (some (⟨false, largeRange.min, e_q + 1⟩ : Number) : Option Number) = some n_up_target
               rw [h_e_q1_eq]
-            · rw [dif_neg h_dif]
+            · rw [dite_eq_right h_dif]
               have h_e_q1_lt : e_q + 1 < minExponent := by
                 rcases lt_or_eq_of_le h_e_q1_le_min with h | h
                 · exact h
@@ -952,7 +951,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
                   have h_min_eq : minExponent = -32768 := rfl
                   have h_max_eq : maxExponent = 32768 := rfl
                   omega
-              rw [if_pos h_e_q1_lt]
+              rw [ite_eq_left h_e_q1_lt]
           · change (if h_exp : minExponent ≤ e_q ∧ e_q ≤ maxExponent ∧ m_b < 2^64 then
                     some (⟨false, ⟨m_b, h_exp.2.2⟩, e_q⟩ : Number)
                   else if e_q < minExponent then
@@ -960,8 +959,8 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
                   else none) = some n_up_target
             have h_not_in : ¬ (minExponent ≤ e_q ∧ e_q ≤ maxExponent ∧ m_b < 2^64) := by
               intro ⟨h1, _, _⟩; linarith
-            rw [dif_neg h_not_in]
-            rw [if_pos h_e_q_lt_min']
+            rw [dite_eq_right h_not_in]
+            rw [ite_eq_left h_e_q_lt_min']
         have h_upper_eq_target : Number.upper truth = some n_up_target := by
           rw [h_upper_unfold]; exact h_upperPos_eq
         refine ⟨n_up_target, h_upper_eq_target, ?_⟩

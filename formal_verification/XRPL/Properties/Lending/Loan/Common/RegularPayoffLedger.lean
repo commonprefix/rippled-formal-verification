@@ -3,10 +3,8 @@ import XRPL.Properties.Lending.Loan.Common.RegularPayoffSplit
 
 /-! # A loan paid off by regular payments on the ledger
 
-A run of ledger transactions in which only regular LoanPays pay the loan at `i`. Any other transaction may come in
-between, other loans and brokers, vault transactions, close, and LoanAccept, impair or unimpair of that loan, but
-no other payment type and no default of it. Read at slot `i` it is a regular payoff run of the loan,
-`Loan.RegularPayoff`, so the sums of the loan-level theorems carry over. -/
+A ledger run in which only regular LoanPays pay loan `i` and nothing defaults it is, read at slot `i`, a regular
+payoff run of the loan (`Loan.RegularPayoff`), so the loan-level sums carry over. -/
 
 namespace XRPL.Model.Lending
 

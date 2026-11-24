@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayLedger
 import XRPL.Properties.Lending.Loan.Common.PayCharge
 import XRPL.Properties.Lending.Loan.Common.PaySums

@@ -29,7 +29,7 @@ lemma Number.truncateAux_val (m : UInt64) (e : Int) :
   | case1 m e h ih =>
     intro he
     rw [show Number.truncateAux m e = Number.truncateAux (m / 10) (e + 1) from by
-      rw [Number.truncateAux, if_pos h]]
+      rw [Number.truncateAux, ite_eq_left h]]
     obtain ⟨hval, hle, hzero⟩ := ih (by omega)
     have hdiv10 : (m / 10).toNat = m.toNat / 10 := by
       rw [UInt64.toNat_div]
@@ -47,7 +47,7 @@ lemma Number.truncateAux_val (m : UInt64) (e : Int) :
   | case2 m e h =>
     intro he
     rw [show Number.truncateAux m e = (m, e) from by
-      rw [Number.truncateAux, if_neg h]]
+      rw [Number.truncateAux, ite_eq_right h]]
     by_cases he0 : e = 0
     · subst he0
       refine ⟨by norm_num, le_refl _, fun _ => rfl⟩
@@ -65,7 +65,7 @@ lemma Number.truncate_floor (n t : Number) (hn : n.isNormalized)
     t.toRat = (⌊n.toRat⌋ : ℚ) ∧ (t.mantissa_ ≠ 0 → t.isNormalized) := by
   unfold Number.truncate at hok
   by_cases hg : n.exponent_ ≥ 0 ∨ n.mantissa_ = 0
-  · rw [if_pos hg] at hok
+  · rw [ite_eq_left hg] at hok
     have ht : t = n := (Except.ok.inj hok).symm
     subst ht
     by_cases hm : t.mantissa_ = 0
@@ -83,7 +83,7 @@ lemma Number.truncate_floor (n t : Number) (hn : n.isNormalized)
         rw [← zpow_natCast (10 : ℚ) t.exponent_.toNat, Int.toNat_of_nonneg hexp]
       rw [hval, Int.floor_natCast]
       exact ⟨rfl, fun _ => hn⟩
-  · rw [if_neg hg] at hok
+  · rw [ite_eq_right hg] at hok
     push Not at hg
     obtain ⟨hexp_neg', hm_ne⟩ := hg
     have hexp_neg : n.exponent_ < 0 := by omega
@@ -224,7 +224,7 @@ lemma Number.operator_add_downward_nonneg_le (x y result : Number)
   replace hok := Number.operator_add_ok_spec hok
   unfold Number.operator_addSpec at hok
   by_cases hy0 : y.operator_eq Number.zero = true
-  · rw [if_pos hy0] at hok
+  · rw [ite_eq_left hy0] at hok
     have hym : y.mantissa_ = 0 := by
       by_contra h
       rw [Number.operator_eq_zero_false_of_mantissa_ne y h] at hy0
@@ -232,9 +232,9 @@ lemma Number.operator_add_downward_nonneg_le (x y result : Number)
     have hy0v : y.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero y hym
     rw [← Except.ok.inj hok, hy0v]
     exact ⟨by linarith, hxnn⟩
-  · rw [if_neg hy0] at hok
+  · rw [ite_eq_right hy0] at hok
     by_cases hx0 : x.operator_eq Number.zero = true
-    · rw [if_pos hx0] at hok
+    · rw [ite_eq_left hx0] at hok
       have hxm : x.mantissa_ = 0 := by
         by_contra h
         rw [Number.operator_eq_zero_false_of_mantissa_ne x h] at hx0
@@ -242,9 +242,9 @@ lemma Number.operator_add_downward_nonneg_le (x y result : Number)
       have hx0v : x.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero x hxm
       rw [← Except.ok.inj hok, hx0v]
       exact ⟨by linarith, hynn⟩
-    · rw [if_neg hx0] at hok
+    · rw [ite_eq_right hx0] at hok
       by_cases hxy : x.operator_eq (y.operator_neg) = true
-      · rw [if_pos hxy] at hok
+      · rw [ite_eq_left hxy] at hok
         rw [← Except.ok.inj hok, Number.toRat_zero]
         exact ⟨by linarith, le_refl _⟩
       · have hxm : x.mantissa_ ≠ 0 := fun h =>
@@ -270,7 +270,7 @@ lemma Number.truncate_source_ne_zero (n t : Number)
     (hok : n.truncate = .ok t) (ht : t.mantissa_ ≠ 0) : n.mantissa_ ≠ 0 := by
   intro h0
   unfold Number.truncate at hok
-  rw [if_pos (Or.inr h0)] at hok
+  rw [ite_eq_left (Or.inr h0)] at hok
   rw [← Except.ok.inj hok] at ht
   exact ht h0
 
@@ -287,7 +287,7 @@ lemma operator_add_nonneg_rounds (x y result : Number)
     have hres : result = x := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_pos (by rw [hy0]; decide)] at hok
+      rw [ite_eq_left (by rw [hy0]; decide)] at hok
       exact (Except.ok.inj hok).symm
     refine RoundsWithin_mono result _ 0 _ _ (RoundsWithin_of_eq result _ _ ?_) hε
     rw [hres, hy0, Number.toRat_zero, add_zero]
@@ -297,8 +297,8 @@ lemma operator_add_nonneg_rounds (x y result : Number)
     have hres : result = y := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hym),
-          if_pos (by rw [hx0]; decide)] at hok
+      rw [ite_eq_right (Number.not_operator_eq_zero_of_mantissa_ne hym),
+          ite_eq_left (by rw [hx0]; decide)] at hok
       exact (Except.ok.inj hok).symm
     refine RoundsWithin_mono result _ 0 _ _ (RoundsWithin_of_eq result _ _ ?_) hε
     rw [hres, hx0, Number.toRat_zero, zero_add]
@@ -334,7 +334,7 @@ lemma operator_add_nonneg_rounds (x y result : Number)
     intro hcon
     have hnegy : y.operator_neg = { y with negative_ := !y.negative_ } := by
       unfold Number.operator_neg
-      rw [if_neg (by simpa using hym)]
+      rw [ite_eq_right (by simpa using hym)]
     unfold Number.operator_eq at hcon
     rw [hnegy] at hcon
     simp only [Bool.and_eq_true, beq_iff_eq] at hcon

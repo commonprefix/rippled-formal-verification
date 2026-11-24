@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.Isolation
 import XRPL.Properties.Lending.Ledger.Common.PaymentCoarsening
 import XRPL.Properties.Lending.Loan.Common.SeparatePayments
@@ -5,9 +6,8 @@ import XRPL.Properties.Lending.Loan.Common.TwinPay
 
 /-! # Payments on two loans in either order
 
-A payment's amounts depend only on its own loan and its broker's asset and management fee rate, so at base scale
-both orders leave the same vault and DebtTotal. Only CoverAvailable can differ: each payment decides from the broker
-before it whether its fee goes to the cover. -/
+At base scale both orders leave the same vault and DebtTotal. Only CoverAvailable can differ, since each payment
+decides from the broker before it whether its fee goes to the cover. -/
 
 namespace XRPL.Model.Lending
 
@@ -254,7 +254,7 @@ private lemma LendingLedger.pay_pair {l la lab : LendingLedger} (hr : l.Reachabl
       if k = i then some { eA with loan := rA.loan' } else l.loan? k := by
     intro k
     rw [LendingLedger.loan?_commitLoan,
-      if_pos (show (LoanEffect.ofLoan i eA rA.loan' rA.pool').loanIndex < l.loans.length from hiA)]
+      ite_eq_left (show (LoanEffect.ofLoan i eA rA.loan' rA.pool').loanIndex < l.loans.length from hiA)]
     rfl
   have hloab : ∀ k, ((l.commitLoan (LoanEffect.ofLoan i eA rA.loan' rA.pool')).commitLoan
       (LoanEffect.ofLoan j eB rB.loan' rB.pool')).loan? k =
@@ -262,7 +262,7 @@ private lemma LendingLedger.pay_pair {l la lab : LendingLedger} (hr : l.Reachabl
       else (l.commitLoan (LoanEffect.ofLoan i eA rA.loan' rA.pool')).loan? k := by
     intro k
     rw [LendingLedger.loan?_commitLoan,
-      if_pos (show (LoanEffect.ofLoan j eB rB.loan' rB.pool').loanIndex < _ from hjB)]
+      ite_eq_left (show (LoanEffect.ofLoan j eB rB.loan' rB.pool').loanIndex < _ from hjB)]
     rfl
   refine ⟨?_, ?_, ?_, ?_, hfB.reserved.trans hfA.reserved, hfA.settings.trans hfB.settings, ?_, ?_, ?_, ?_, ?_⟩
   · show rB.pool'.assetsAvailable.toRat = _
@@ -281,53 +281,53 @@ private lemma LendingLedger.pay_pair {l la lab : LendingLedger} (hr : l.Reachabl
     show rA.pool'.lossUnrealized.toRat - _ = _
     rw [hfA.loss]
   · intro k hkA hkB
-    rw [hlab, if_neg hkB, hla, if_neg hkA]
+    rw [hlab, ite_eq_right hkB, hla, ite_eq_right hkA]
   · intro k b₀ hb₀ hkAB
     rw [hlab, hla]
     by_cases hkB : k = eB.brokerIndex
     · -- the second payment wrote this broker, from the copy it read
       subst hkB
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
       refine ⟨_, rfl, ?_, ?_⟩
       · rw [hfB.broker]
         rw [hla] at hbB₁
         by_cases hkA : eB.brokerIndex = eA.brokerIndex
-        · rw [if_pos hkA] at hbB₁
+        · rw [ite_eq_left hkA] at hbB₁
           obtain hbr := Option.some.inj hbB₁
           rw [← hbr, hfA.broker]
           rw [hkA, hbA] at hb₀
           rw [← Option.some.inj hb₀]
-        · rw [if_neg hkA, hb₀] at hbB₁
+        · rw [ite_eq_right hkA, hb₀] at hbB₁
           rw [← Option.some.inj hbB₁]
       · rw [hla] at hbB₁
         by_cases hkA : eB.brokerIndex = eA.brokerIndex
-        · rw [if_pos hkA] at hbB₁
+        · rw [ite_eq_left hkA] at hbB₁
           obtain hbr := Option.some.inj hbB₁
-          rw [if_pos hkA, if_pos rfl]
+          rw [ite_eq_left hkA, ite_eq_left rfl]
           rw [hkA, hbA] at hb₀
           obtain rfl := Option.some.inj hb₀
           rw [← hbr] at hDB
           linarith
-        · rw [if_neg hkA, hb₀] at hbB₁
+        · rw [ite_eq_right hkA, hb₀] at hbB₁
           obtain hbr := Option.some.inj hbB₁
-          rw [if_neg hkA, if_pos rfl]
+          rw [ite_eq_right hkA, ite_eq_left rfl]
           rw [← hbr] at hDB
           linarith
     · -- only the first payment wrote this broker
       have hkA : k = eA.brokerIndex := hkAB.resolve_right hkB
       subst hkA
-      rw [if_neg hkB, if_pos rfl]
+      rw [ite_eq_right hkB, ite_eq_left rfl]
       rw [hbA] at hb₀
       obtain rfl := Option.some.inj hb₀
       refine ⟨_, rfl, hfA.broker, ?_⟩
-      rw [if_pos rfl, if_neg hkB]
+      rw [ite_eq_left rfl, ite_eq_right hkB]
       linarith
   · intro k hki hkj
-    rw [hloab, if_neg hkj, hloa, if_neg hki]
+    rw [hloab, ite_eq_right hkj, hloa, ite_eq_right hki]
   · refine ⟨rA.loan', ?_, hfA.raw⟩
-    rw [hloab, if_neg hij, hloa, if_pos rfl]
+    rw [hloab, ite_eq_right hij, hloa, ite_eq_left rfl]
   · refine ⟨rB.loan', ?_, ?_⟩
-    · rw [hloab, if_pos rfl]
+    · rw [hloab, ite_eq_left rfl]
     · rw [hfB.raw, htwp.raw]
 
 /-- Two vaults that keep the settings of a third keep each other's. -/

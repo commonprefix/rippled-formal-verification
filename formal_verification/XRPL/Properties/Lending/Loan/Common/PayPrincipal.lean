@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Common.Walk
 import XRPL.Properties.Lending.Loan.Common.Grid
 import XRPL.Properties.Lending.Loan.Common.Loss
@@ -454,9 +455,8 @@ private lemma Loan.tryOverpayment_principal (l : Loan) (opc : PaymentComponents)
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   obtain ⟨-, hs2, -, -⟩ := Loan.state_fields l _ ‹l.state = _›
   have hP := l.wf.principalOutstanding_norm
@@ -485,9 +485,8 @@ private lemma UnsettledPayment.applyOverpayment_paidOn (payment p' : UnsettledPa
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact ⟨hp, hls⟩
-    | skip
   refine ⟨?_, hls'⟩
   subst hls
   have hsb := Loan.loanScale_bounds payment.loan

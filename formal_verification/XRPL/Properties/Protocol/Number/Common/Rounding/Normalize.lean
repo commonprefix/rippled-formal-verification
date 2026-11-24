@@ -24,7 +24,7 @@ lemma doNormalize_scaleUp_id (minMant m : UInt64) (e : Int)
     exact Nat.not_lt.mpr (UInt64.le_iff_toNat_le.mp h)
   have : ¬ (m < minMant ∧ minExponent < e) := by
     intro ⟨hlt, _⟩; exact h_nlt hlt
-  rw [if_neg this]
+  rw [ite_eq_right this]
 
 /-- `doNormalize_scaleDown` is identity when `m ≤ maxMant`. -/
 lemma doNormalize_scaleDown_id (maxMant m : UInt64) (e : Int) (g : Guard)
@@ -34,12 +34,12 @@ lemma doNormalize_scaleDown_id (maxMant m : UInt64) (e : Int) (g : Guard)
     change ¬ maxMant < m
     rw [UInt64.lt_iff_toNat_lt]
     exact Nat.not_lt.mpr (UInt64.le_iff_toNat_le.mp h)
-  rw [dif_neg h_ngt]
+  rw [dite_eq_right h_ngt]
 
 /-- Any EMPTY guard rounds to the sentinel `-2` in any mode. -/
 lemma empty_guard_round_neg_two (g : Guard) (mode : rounding_mode) (h_empty : g.empty = true) :
     g.round mode = -2 := by
-  unfold Guard.round; rw [if_pos h_empty]
+  unfold Guard.round; rw [ite_eq_left h_empty]
 
 /-- With an empty guard, `m ≥ minMantissa`, `m` outside the cusp `(maxRep, maxRepUp)` and `e` in the exponent
 range, `doRoundUp` returns `{ negative, m, e }` unchanged in every mode. -/
@@ -66,13 +66,13 @@ lemma empty_guard_doRoundUp_id
       empty_guard_round_neg_two g mode h_empty]
   have h_round_false : ((-2 : Int) == 1 || ((-2 : Int) == 0 && m % 2 == 1)) = false := by rfl
   rw [h_round_false]
-  simp only [if_false, Bool.false_eq_true]
-  rw [if_neg h_no_push]
+  simp only [ite_false, Bool.false_eq_true]
+  rw [ite_eq_right h_no_push]
   unfold Guard.bringIntoRangeSpec
-  rw [if_neg (show ¬ (m < largeRange.min ∧ m ≠ 0) from fun h => h_no_resc h.1)]
+  rw [ite_eq_right (show ¬ (m < largeRange.min ∧ m ≠ 0) from fun h => h_no_resc h.1)]
   simp only []
-  rw [if_neg (show ¬ (e < minExponent ∨ m = 0) from not_or.mpr ⟨not_lt.mpr hexp, h_m_ne⟩),
-      if_neg (not_lt.mpr hexp_le)]
+  rw [ite_eq_right (show ¬ (e < minExponent ∨ m = 0) from not_or.mpr ⟨not_lt.mpr hexp, h_m_ne⟩),
+      ite_eq_right (not_lt.mpr hexp_le)]
 
 /-- For `maxRep < m ≤ largeRange.max`, `m / 10` is below `largeRange.min`. -/
 lemma div_ten_lt_minMantissa
@@ -136,19 +136,19 @@ lemma empty_guard_doRoundUp_divu10
   have h_round_false :
       ((-2 : Int) == 1 || ((-2 : Int) == 0 && (m / 10) % 2 == 1)) = false := by rfl
   rw [h_round_false]
-  simp only [if_false, Bool.false_eq_true]
+  simp only [ite_false, Bool.false_eq_true]
   have h_not_cusp : ¬ (maxRep < m / 10 ∧ m / 10 < maxRepUp) := by
     intro h; exact absurd (UInt64.lt_iff_toNat_lt.mp h.1) (Nat.not_lt.mpr h_div_le_maxRep)
-  rw [if_neg h_not_cusp]
+  rw [ite_eq_right h_not_cusp]
   unfold Guard.bringIntoRangeSpec
-  rw [if_pos (show m / 10 < largeRange.min ∧ m / 10 ≠ 0 from ⟨h_resc, h_div_ne⟩)]
+  rw [ite_eq_left (show m / 10 < largeRange.min ∧ m / 10 ≠ 0 from ⟨h_resc, h_div_ne⟩)]
   simp only []
   have h_mul : ((m / 10) * 10).toNat = m.toNat := mul_div_ten_cancel h_mod h_le_max
   have h_mul_eq : (m / 10) * 10 = m := UInt64.toNat_inj.mp h_mul
   have h_exp_eq : (e + 1 - 1 : ℤ) = e := by ring
   rw [h_mul_eq, h_exp_eq]
-  rw [if_neg (show ¬ (e < minExponent ∨ m = 0) from not_or.mpr ⟨not_lt.mpr hexp, h_m_ne⟩),
-      if_neg (not_lt.mpr hexp_le)]
+  rw [ite_eq_right (show ¬ (e < minExponent ∨ m = 0) from not_or.mpr ⟨not_lt.mpr hexp, h_m_ne⟩),
+      ite_eq_right (not_lt.mpr hexp_le)]
 
 /-- For an EMPTY guard, `m ≥ minMantissa`, `m` not in the strict cusp, and `e > maxExponent`:
 `doRoundUp` errors (the final exponent check fails). Used to derive exponent bounds from success. -/
@@ -174,13 +174,13 @@ lemma empty_guard_doRoundUp_exp_overflow
       empty_guard_round_neg_two g mode h_empty]
   have h_round_false : ((-2 : Int) == 1 || ((-2 : Int) == 0 && m % 2 == 1)) = false := by rfl
   rw [h_round_false]
-  simp only [if_false, Bool.false_eq_true]
-  rw [if_neg h_no_push]
+  simp only [ite_false, Bool.false_eq_true]
+  rw [ite_eq_right h_no_push]
   unfold Guard.bringIntoRangeSpec
-  rw [if_neg (show ¬ (m < largeRange.min ∧ m ≠ 0) from fun h => h_no_resc h.1)]
+  rw [ite_eq_right (show ¬ (m < largeRange.min ∧ m ≠ 0) from fun h => h_no_resc h.1)]
   simp only []
-  rw [if_neg (show ¬ (e < minExponent ∨ m = 0) from not_or.mpr ⟨not_lt.mpr hexp, h_m_ne⟩),
-      if_pos h_over]
+  rw [ite_eq_right (show ¬ (e < minExponent ∨ m = 0) from not_or.mpr ⟨not_lt.mpr hexp, h_m_ne⟩),
+      ite_eq_left h_over]
 
 /-- `doNormalize` under the hypotheses returns `.ok` with the input Number. -/
 lemma doNormalize_id
@@ -206,7 +206,7 @@ lemma doNormalize_id
   have h_eq_false : (m == 0) = false := by
     rw [beq_eq_false_iff_ne]; exact hm_ne_zero
   rw [h_eq_false]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   have h_min_le : largeRange.min ≤ m := UInt64.le_iff_toNat_le.mpr hmin
   have h_max_le : m ≤ largeRange.max := UInt64.le_iff_toNat_le.mpr hmax
   have h_no_under_mant : ¬ m < largeRange.min := by
@@ -218,7 +218,7 @@ lemma doNormalize_id
   have h_check_false : (e < minExponent || m < largeRange.min) = false := by
     simp [h_no_under_exp, h_no_under_mant]
   rw [h_check_false]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   by_cases h_mru : m > maxRepUp
   · -- m > maxRepUp: capAtMaxRep divides via divu10.
     have h_mr : m > maxRep := by
@@ -240,16 +240,16 @@ lemma doNormalize_id
         doNormalize_capAtMaxRep m e g = .ok (m / 10, e + 1, g.push 0) := by
       intro g
       unfold doNormalize_capAtMaxRep
-      rw [if_pos h_mru, if_neg h_nge_exp]
+      rw [ite_eq_left h_mru, ite_eq_right h_nge_exp]
       simp [divu10, h_mod_u]
     cases negative
-    · simp only [Bool.false_eq_true, if_false]
+    · simp only [Bool.false_eq_true, ite_false]
       rw [h_cap_eq Guard.new, guard_new_push_zero]
       simp only []
       rw [empty_guard_doRoundUp_divu10 Guard.new mode false m e .normalize2
         (by decide) h_mr hmax h_mod hexp h_exp_le]
       rfl
-    · simp only [if_true]
+    · simp only [ite_true]
       have h_push_sn : Guard.new.set_negative.push 0 = Guard.new.set_negative := by
         unfold Guard.push Guard.set_negative Guard.new; simp
       rw [h_cap_eq Guard.new.set_negative, h_push_sn]
@@ -262,7 +262,7 @@ lemma doNormalize_id
         doNormalize_capAtMaxRep m e g = .ok (m, e, g) := by
       intro g
       unfold doNormalize_capAtMaxRep
-      rw [if_neg h_mru]
+      rw [ite_eq_right h_mru]
     -- No multiple of 10 lies strictly in `(maxRep, maxRepUp)`, so `pushOverflow` cannot change the empty guard.
     have h_no_push : ¬ (maxRep < m ∧ m < maxRepUp) := by
       rintro ⟨h1, h2⟩
@@ -273,13 +273,13 @@ lemma doNormalize_id
       have hup : maxRepUp.toNat = maxRepUpNat := rfl
       rw [hup] at hb2; omega
     cases negative
-    · simp only [Bool.false_eq_true, if_false]
+    · simp only [Bool.false_eq_true, ite_false]
       rw [h_cap_eq Guard.new]
       simp only []
       rw [empty_guard_doRoundUp_id Guard.new mode false m e .normalize2
         (by decide) h_min_le h_no_push hexp h_exp_le]
       rfl
-    · simp only [if_true]
+    · simp only [ite_true]
       rw [h_cap_eq Guard.new.set_negative]
       simp only []
       rw [empty_guard_doRoundUp_id Guard.new.set_negative mode true m e .normalize2
@@ -297,7 +297,7 @@ lemma Number.normalize_mantissa_ne_zero_of_result {n result : Number}
   replace hok := doNormalize_ok_spec hok
   unfold doNormalizeSpec at hok
   have h_cond : (n.mantissa_ == 0) = true := by rw [beq_iff_eq]; exact h_zero
-  simp only [h_cond, if_true] at hok
+  simp only [h_cond, ite_true] at hok
   have h_res_eq : Number.zero = result := Except.ok.inj hok
   rw [← h_res_eq] at hres
   exact hres rfl
@@ -334,31 +334,31 @@ lemma Number.normalize_eq_of_invariants {n result : Number} {mode : rounding_mod
     replace hok := doNormalize_ok_spec hok
     unfold doNormalizeSpec at hok
     rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     rw [doNormalize_scaleUp_id largeRange.min n.mantissa_ n.exponent_ h_min_le] at hok
     rw [doNormalize_scaleDown_id largeRange.max n.mantissa_ n.exponent_ _ h_max_le] at hok
     simp only [] at hok
     rw [h_check_false] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     by_cases h_mru : n.mantissa_ > maxRepUp
     · rw [show doNormalize_capAtMaxRep n.mantissa_ n.exponent_
           (if n.negative_ then Guard.new.set_negative else Guard.new)
           = .error .normalize1_5 from by
-        unfold doNormalize_capAtMaxRep; rw [if_pos h_mru, if_pos (le_of_lt h)]] at hok
+        unfold doNormalize_capAtMaxRep; rw [ite_eq_left h_mru, ite_eq_left (le_of_lt h)]] at hok
       exact absurd hok (by intro hc; cases hc)
     · cases hn : n.negative_
-      · simp only [hn, Bool.false_eq_true, if_false] at hok
+      · simp only [hn, Bool.false_eq_true, ite_false] at hok
         rw [show doNormalize_capAtMaxRep n.mantissa_ n.exponent_ Guard.new
             = .ok (n.mantissa_, n.exponent_, Guard.new) from by
-          unfold doNormalize_capAtMaxRep; rw [if_neg h_mru]] at hok
+          unfold doNormalize_capAtMaxRep; rw [ite_eq_right h_mru]] at hok
         simp only [] at hok
         rw [empty_guard_doRoundUp_exp_overflow Guard.new mode false n.mantissa_ n.exponent_
           .normalize2 (by decide) h_min_le h_no_push h_exp h] at hok
         exact absurd hok (by intro hc; cases hc)
-      · simp only [hn, if_true] at hok
+      · simp only [hn, ite_true] at hok
         rw [show doNormalize_capAtMaxRep n.mantissa_ n.exponent_ Guard.new.set_negative
             = .ok (n.mantissa_, n.exponent_, Guard.new.set_negative) from by
-          unfold doNormalize_capAtMaxRep; rw [if_neg h_mru]] at hok
+          unfold doNormalize_capAtMaxRep; rw [ite_eq_right h_mru]] at hok
         simp only [] at hok
         rw [empty_guard_doRoundUp_exp_overflow Guard.new.set_negative mode true n.mantissa_
           n.exponent_ .normalize2 (by decide) h_min_le h_no_push h_exp h] at hok
@@ -370,17 +370,17 @@ lemma Number.normalize_eq_of_invariants {n result : Number} {mode : rounding_mod
     replace hok := doNormalize_ok_spec hok
     unfold doNormalizeSpec at hok
     rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     rw [doNormalize_scaleUp_id largeRange.min n.mantissa_ n.exponent_ h_min_le] at hok
     rw [doNormalize_scaleDown_id largeRange.max n.mantissa_ n.exponent_ _ h_max_le] at hok
     simp only [] at hok
     rw [h_check_false] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     have h_mru_u64 : n.mantissa_ > maxRepUp := UInt64.lt_iff_toNat_lt.mpr h_mru_nat
     rw [show doNormalize_capAtMaxRep n.mantissa_ n.exponent_
         (if n.negative_ then Guard.new.set_negative else Guard.new)
         = .error .normalize1_5 from by
-      unfold doNormalize_capAtMaxRep; rw [if_pos h_mru_u64, if_pos h_ge]] at hok
+      unfold doNormalize_capAtMaxRep; rw [ite_eq_left h_mru_u64, ite_eq_left h_ge]] at hok
     exact absurd hok (by intro hc; cases hc)
   have h_doNorm_id : doNormalize n.negative_ n.mantissa_ n.exponent_
       largeRange.min largeRange.max mode
@@ -424,31 +424,31 @@ lemma Number.normalize_exp_bound {n result : Number} {mode : rounding_mode}
   replace hok := doNormalize_ok_spec hok
   unfold doNormalizeSpec at hok
   rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   rw [doNormalize_scaleUp_id largeRange.min n.mantissa_ n.exponent_ h_min_le] at hok
   rw [doNormalize_scaleDown_id largeRange.max n.mantissa_ n.exponent_ _ h_max_le] at hok
   simp only [] at hok
   rw [h_check_false] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   by_cases h_mru : n.mantissa_ > maxRepUp
   · rw [show doNormalize_capAtMaxRep n.mantissa_ n.exponent_
         (if n.negative_ then Guard.new.set_negative else Guard.new)
         = .error .normalize1_5 from by
-      unfold doNormalize_capAtMaxRep; rw [if_pos h_mru, if_pos (le_of_lt h)]] at hok
+      unfold doNormalize_capAtMaxRep; rw [ite_eq_left h_mru, ite_eq_left (le_of_lt h)]] at hok
     exact absurd hok (by intro hc; cases hc)
   · cases hn : n.negative_
-    · simp only [hn, Bool.false_eq_true, if_false] at hok
+    · simp only [hn, Bool.false_eq_true, ite_false] at hok
       rw [show doNormalize_capAtMaxRep n.mantissa_ n.exponent_ Guard.new
           = .ok (n.mantissa_, n.exponent_, Guard.new) from by
-        unfold doNormalize_capAtMaxRep; rw [if_neg h_mru]] at hok
+        unfold doNormalize_capAtMaxRep; rw [ite_eq_right h_mru]] at hok
       simp only [] at hok
       rw [empty_guard_doRoundUp_exp_overflow Guard.new mode false n.mantissa_ n.exponent_
         .normalize2 (by decide) h_min_le h_no_push h_exp h] at hok
       exact absurd hok (by intro hc; cases hc)
-    · simp only [hn, if_true] at hok
+    · simp only [hn, ite_true] at hok
       rw [show doNormalize_capAtMaxRep n.mantissa_ n.exponent_ Guard.new.set_negative
           = .ok (n.mantissa_, n.exponent_, Guard.new.set_negative) from by
-        unfold doNormalize_capAtMaxRep; rw [if_neg h_mru]] at hok
+        unfold doNormalize_capAtMaxRep; rw [ite_eq_right h_mru]] at hok
       simp only [] at hok
       rw [empty_guard_doRoundUp_exp_overflow Guard.new.set_negative mode true n.mantissa_
         n.exponent_ .normalize2 (by decide) h_min_le h_no_push h_exp h] at hok
@@ -475,19 +475,19 @@ lemma Number.normalize_no_cusp_overflow {n result : Number} {mode : rounding_mod
   replace hok := doNormalize_ok_spec hok
   unfold doNormalizeSpec at hok
   rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   rw [doNormalize_scaleUp_id largeRange.min n.mantissa_ n.exponent_ h_min_le] at hok
   rw [doNormalize_scaleDown_id largeRange.max n.mantissa_ n.exponent_ _ h_max_le] at hok
   simp only [] at hok
   have h_check_false : (n.exponent_ < minExponent || n.mantissa_ < largeRange.min) = false := by
     simp [h_no_under_exp, h_no_under_mant]
   rw [h_check_false] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   rw [show doNormalize_capAtMaxRep n.mantissa_ n.exponent_
       (if n.negative_ then Guard.new.set_negative else Guard.new)
       = .error .normalize1_5 from by
     unfold doNormalize_capAtMaxRep
-    rw [if_pos (UInt64.lt_iff_toNat_lt.mpr h_mr), if_pos h_ge]] at hok
+    rw [ite_eq_left (UInt64.lt_iff_toNat_lt.mpr h_mr), ite_eq_left h_ge]] at hok
   exact absurd hok (by intro hc; cases hc)
 
 /-- Given the four `doRoundUp` output invariants for a `RoundResult` `res` and

@@ -249,8 +249,8 @@ theorem Number.lower_eq_floor_in_decade_neg (q : ℚ) (E : ℤ)
   -- lower q = (upperPosAux (−q)).map (negate), and upper (−q) routes through upperPosAux.
   have h_up_unfold : Number.upper (-q) = upperPosAux (-q) := by
     unfold Number.upper
-    rw [if_neg (by intro h; linarith : ¬ (-q : ℚ) = 0),
-        if_neg (by push Not; linarith : ¬ (-q : ℚ) < 0)]
+    rw [ite_eq_right (by intro h; linarith : ¬ (-q : ℚ) = 0),
+        ite_eq_right (by push Not; linarith : ¬ (-q : ℚ) < 0)]
   rw [h_up_unfold] at hm_eq
   rw [Number.lower_neg_eq q hq_neg, hm_eq]
   refine ⟨{ m with negative_ := true }, rfl, ?_⟩
@@ -291,8 +291,8 @@ theorem Number.upper_eq_ceil_in_decade_neg (q : ℚ) (E : ℤ)
   obtain ⟨m, hm_eq, hm_val⟩ := Number.lower_eq_floor_in_decade (-q) E hE_lo hE_hi h_lo h_hi
   have h_lo_unfold : Number.lower (-q) = lowerPosAux (-q) := by
     unfold Number.lower
-    rw [if_neg (by intro h; linarith : ¬ (-q : ℚ) = 0),
-        if_neg (by push Not; linarith : ¬ (-q : ℚ) < 0)]
+    rw [ite_eq_right (by intro h; linarith : ¬ (-q : ℚ) = 0),
+        ite_eq_right (by push Not; linarith : ¬ (-q : ℚ) < 0)]
   rw [h_lo_unfold] at hm_eq
   rw [Number.upper_neg_eq q hq_neg, hm_eq]
   simp only [Option.map_some]
@@ -315,7 +315,7 @@ theorem Number.upper_eq_ceil_in_decade_neg (q : ℚ) (E : ℤ)
     intro h_eq
     rw [h_eq, Number.toRat_zero] at hm_pos
     exact lt_irrefl 0 hm_pos
-  rw [if_neg hm_ne_zero]
+  rw [ite_eq_right hm_ne_zero]
   have hm_neg_false : m.negative_ = false := by
     rcases hmn : m.negative_ with _ | _
     · rfl

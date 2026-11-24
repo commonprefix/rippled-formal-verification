@@ -1,12 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.NextPayment
 import XRPL.Properties.Lending.Loan.Common.FactorBound
 
 /-! # The instalment loop with the tight payment factor
 
-`Loan.LoopRoom` asks an XRP or MPT asset to hold 80 times the payments left, because it bounds the theoretical
-principal with a payment factor of at least `1/(64·n)`. A loan's rate gives a factor of at least `1/(3·n)`, so 4.9
-times the payments left is enough. Every reachable XRP loan then has the room, whatever it owes. The lemmas here
-repeat those of `NextInstalment.lean` and `DueLoop.lean` with that bound. -/
+A loan's rate gives a payment factor of at least `1/(3·n)`, so 4.9 times the payments left is room enough, not the
+80 times `Loan.LoopRoom` asks. Every reachable XRP loan then has the room. -/
 
 namespace XRPL.Model.Lending
 
@@ -101,7 +100,7 @@ private lemma LoanState.buildTheoretical_tight (pp rate : Number) (ir : TenthBip
   have hppB : pp.toRat ≤ B := by nlinarith
   have hcN := Number.ofInt64_isNormalized k.toInt64
   have hcv := Number.ofInt64_count k
-  obtain ⟨vo, hvo⟩ := Number.operator_mul_ok_of_abs pp (Number.ofInt64 k.toInt64) .to_nearest hpp hcN
+  obtain ⟨vo, hvo⟩ := Number.operator_mul_ok_of_abs pp (Number.ofInt64 k.toInt64 .to_nearest) .to_nearest hpp hcN
     (by rw [abs_of_nonneg hpp0]; linarith [show (10 : ℚ) ^ 18 < 10 ^ 200 by norm_num])
     (by rw [hcv, abs_of_nonneg (by positivity)]; linarith [show (2 : ℚ) ^ 32 < 10 ^ 200 by norm_num])
   have hvoN := Number.operator_mul_isNormalized _ _ _ _ hpp hcN hvo
@@ -604,7 +603,7 @@ lemma Loan.regularPayInstalments_due_room (loan : Loan) (hroom : loan.PayRoom) (
       maxPaymentsPerTransaction amount = .ok q ∧ 0 ≤ q.amounts.feePaid.toRat ∧ due.toRat ≤ q.totalPaid.toRat ∧
       1 ≤ q.count ∧ q.totalPaid.isNormalized := by
     rw [show maxPaymentsPerTransaction = 99 + 1 from rfl, UnsettledPayment.payInstalments]
-    have hpr0 : (loan.unimpaired.paymentRemaining == 0) = false := by simpa using hrem
+    have hpr0 : (loan.unimpaired.paymentRemaining == 0) = false := by simpa using! hrem
     simp only [hpr0, Bool.false_eq_true, ↓reduceIte, Loan.scheduledComponents_unimpaired, hpc0, hfee, bind,
       Except.bind]
     rw [show ({ pc0 with untrackedManagementFee := loan.fees.serviceFee } : PaymentComponents) = pc from rfl]

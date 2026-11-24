@@ -37,7 +37,7 @@ lemma IOUAmount.normalize_vfacts (m : Int64) (e : Int) (mode : rounding_mode) (r
   have hm_ne : (⟨m, e⟩ : IOUAmount).mantissa_ ≠ 0 := by
     show m ≠ 0; intro h; rw [h] at hm_lo; simp at hm_lo
   unfold IOUAmount.normalize at hok
-  rw [if_neg (by simpa using hm_ne)] at hok
+  rw [ite_eq_right (by simpa using hm_ne)] at hok
   cases hfr : Number.from_rep m e largeRange.min largeRange.max mode with
   | error err => rw [hfr] at hok; simp at hok
   | ok v =>
@@ -108,8 +108,8 @@ lemma IOUAmount.normalize_InRange16 (m : Int64) (e : Int) (mode : rounding_mode)
 lemma IOUAmount.signum_neg_iff (i : IOUAmount) : i.signum < 0 ↔ i.mantissa_ < 0 := by
   unfold IOUAmount.signum
   by_cases h_lt : i.mantissa_ < 0
-  · rw [if_pos h_lt]; simp [h_lt]
-  · rw [if_neg h_lt]; split <;> simp_all
+  · rw [ite_eq_left h_lt]; simp [h_lt]
+  · rw [ite_eq_right h_lt]; split <;> simp_all
 
 /-- The canonicalize-pack magnitude: `|i.mantissa_|` as a `UInt64` equals the natural
 absolute value of the mantissa. -/
@@ -119,11 +119,11 @@ lemma IOUAmount.absMant_toNat (i : IOUAmount) (h_fit : i.mantissa_.toInt.natAbs 
   have h_absToInt : (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toInt
       = (i.mantissa_.toInt.natAbs : ℤ) := by
     by_cases h_lt : i.mantissa_ < 0
-    · rw [if_pos ((IOUAmount.signum_neg_iff i).mpr h_lt)]
+    · rw [ite_eq_left ((IOUAmount.signum_neg_iff i).mpr h_lt)]
       have h_lt' : i.mantissa_.toInt < 0 := by simpa using Int64.lt_iff_toInt_lt.mp h_lt
       rw [Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
       constructor <;> omega
-    · rw [if_neg (fun h => h_lt ((IOUAmount.signum_neg_iff i).mp h))]
+    · rw [ite_eq_right (fun h => h_lt ((IOUAmount.signum_neg_iff i).mp h))]
       have hge : 0 ≤ i.mantissa_.toInt := by
         rcases lt_or_ge i.mantissa_.toInt 0 with hh | hh
         · exact absurd (Int64.lt_iff_toInt_lt.mpr (by simpa using hh)) h_lt
@@ -151,12 +151,12 @@ lemma STAmount.iou_pack_toRat (i : IOUAmount) (hr : i.InRange16) :
   have hsign : (if decide (i.mantissa_ < 0) then (-1 : ℚ) else 1) * (i.mantissa_.toInt.natAbs : ℚ)
       = (i.mantissa_.toInt : ℚ) := by
     by_cases hlt : i.mantissa_ < 0
-    · rw [if_pos (by simpa using hlt)]
+    · rw [ite_eq_left (by simpa using hlt)]
       have hlt' : i.mantissa_.toInt < 0 := by simpa using Int64.lt_iff_toInt_lt.mp hlt
       have hc : (i.mantissa_.toInt.natAbs : ℚ) = -(i.mantissa_.toInt : ℚ) := by
         rw [Nat.cast_natAbs]; push_cast; rw [abs_of_neg (by exact_mod_cast hlt')]
       rw [hc]; ring
-    · rw [if_neg (by simpa using hlt)]
+    · rw [ite_eq_right (by simpa using hlt)]
       have hge : 0 ≤ i.mantissa_.toInt := by
         rcases lt_or_ge i.mantissa_.toInt 0 with hh | hh
         · exact absurd (Int64.lt_iff_toInt_lt.mpr (by simpa using hh)) hlt

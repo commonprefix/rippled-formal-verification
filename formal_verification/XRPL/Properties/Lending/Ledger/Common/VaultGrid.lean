@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayPrincipal
 import XRPL.Properties.Lending.Common.GridRounding
 import XRPL.Properties.Lending.Ledger.Common.LossInv
@@ -337,7 +338,7 @@ private lemma LendingTx.preflight_vaultDeposit (l : LendingLedger) (h : Nat) (am
   split at hpre
   · rename_i hc
     simp only [Bool.and_eq_true, isCanonicalAmount, isPositiveAmount, hfr, NumericType.isIntegral,
-      Bool.false_eq_true, if_false, beq_iff_eq, Bool.or_eq_true, decide_eq_true_eq, Bool.not_eq_true',
+      Bool.false_eq_true, ite_false, beq_iff_eq, Bool.or_eq_true, decide_eq_true_eq, Bool.not_eq_true',
       bne_iff_ne, ne_eq] at hc
     obtain ⟨⟨hty, hm⟩, -, hnz⟩ := hc
     rcases hm with hm | ⟨⟨⟨hlo, hhi⟩, helo⟩, hehi⟩

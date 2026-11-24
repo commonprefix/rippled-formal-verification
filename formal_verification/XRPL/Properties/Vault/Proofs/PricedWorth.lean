@@ -9,9 +9,8 @@ import XRPL.Properties.Protocol.Number.Common.NumberBridge
 
 /-! # A withdrawal price against the shares' worth
 
-On an Open-zone vault a nonzero withdrawal price is a whole number of units of its last digit, a grid no coarser
-than the base grid, and sits within half a unit plus a tiny 19-digit error of the worth. When the worth is a whole
-number of base units, the price can only land on the worth. -/
+On an Open-zone vault a nonzero withdrawal price is within half a unit of its last digit, plus a tiny 19-digit error,
+of the worth. When the worth is a whole number of base units, the price lands on it. -/
 
 namespace XRPL.Model.SingleAssetVault
 

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Vault.Proofs.ClawbackRecovery
 import XRPL.Properties.Vault.Proofs.WithdrawTight.Shares
 import XRPL.Properties.Protocol.Number.Mul.RoundsToRepresentable

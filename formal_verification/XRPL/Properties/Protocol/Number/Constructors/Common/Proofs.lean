@@ -9,10 +9,10 @@ lemma Number.unchecked_toRat (neg : Bool) (m : UInt64) (e : Int) :
     (Number.unchecked neg m e).toRat
       = (if neg then (-1 : ℚ) else 1) * ((m.toNat : ℚ) * (10 : ℚ) ^ e) := by
   by_cases hneg : neg = true
-  · rw [if_pos hneg, Number.toRat_of_neg (Number.unchecked neg m e) hneg]
+  · rw [ite_eq_left hneg, Number.toRat_of_neg (Number.unchecked neg m e) hneg]
     simp only [Number.unchecked]; ring
-  · have hf : (Number.unchecked neg m e).negative_ = false := eq_false_of_ne_true hneg
-    rw [if_neg hneg, Number.toRat_of_nonneg (Number.unchecked neg m e) hf]
+  · have hf : (Number.unchecked neg m e).negative_ = false := Bool.eq_false_of_ne_true hneg
+    rw [ite_eq_right hneg, Number.toRat_of_nonneg (Number.unchecked neg m e) hf]
     simp only [Number.unchecked]; ring
 
 /-- The magnitude/sign split in `from_rep` is exact: the unchecked number built from `mantissa`'s sign and
@@ -31,9 +31,9 @@ lemma Number.from_rep_input_toRat (mantissa : Int64) (e : Int) :
     rw [Int64.lt_iff_toInt_lt]; rfl
   rw [hnw, Nat.cast_natAbs]
   by_cases h : mantissa.toInt < 0
-  · rw [if_pos (decide_eq_true (hsign.mpr h)), abs_of_neg (by exact_mod_cast h)]
+  · rw [ite_eq_left (decide_eq_true (hsign.mpr h)), abs_of_neg (by exact_mod_cast h)]
     push_cast; ring
-  · rw [if_neg (by rw [decide_eq_true_eq, hsign]; exact h),
+  · rw [ite_eq_right (by rw [decide_eq_true_eq, hsign]; exact h),
       abs_of_nonneg (by exact_mod_cast not_lt.mp h)]
     ring
 

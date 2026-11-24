@@ -1,12 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.PaymentTotal
 import XRPL.Properties.Lending.Ledger.Common.ManageTotal
 import XRPL.Properties.Lending.Ledger.Common.ClosedLoans
 
 /-! # Every transaction on an impaired loan that passes its checks succeeds
 
-An impaired loan is active. Its LoanAccept and impair never pass their checks, its unimpair succeeds, its default
-succeeds while the vault is not coarsened, its LoanDelete passes only once no payment is left and then succeeds, and
-its payment is a payment of `loan_ops_total`. -/
+On an impaired loan LoanAccept and impair never pass their checks. Unimpair, LoanDelete, a default on a vault that is
+not coarsened and a payment under the conditions of `loan_ops_total` succeed once they pass them. -/
 
 namespace XRPL.Model.Lending
 

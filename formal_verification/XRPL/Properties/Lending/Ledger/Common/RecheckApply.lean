@@ -28,8 +28,8 @@ lemma LendingLedger.apply_error {l : LendingLedger} {tx : LendingTx} {e : Error}
   generalize hp : tx.preflight l = p at h
   dsimp only at h
   cases hs : p.isTesSuccess
-  · rw [hs, if_pos (by decide)] at h; cases h
-  · rw [hs, if_neg (by decide)] at h; exact ⟨(TER.isTesSuccess_iff p).mp hs, h⟩
+  · rw [hs, ite_eq_left (by decide)] at h; cases h
+  · rw [hs, ite_eq_right (by decide)] at h; exact ⟨(TER.isTesSuccess_iff p).mp hs, h⟩
 
 /-- A vault transaction fails the model only through its vault operation. -/
 lemma LendingLedger.apply_ne_notLawful_of_vault {l : LendingLedger} {tx : LendingTx} (hv : tx.isVault = true)

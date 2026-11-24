@@ -3,11 +3,8 @@ import XRPL.Properties.Lending.Loan.Common.ManageLedgerWitness
 
 /-! # `LoanManage`: impair, unimpair and default
 
-What impair, unimpair and default write to the loan, the vault and the broker, how impair and default move the share
-value, and the cover a default pays (`r.amountToPool`). Each theorem takes a successful LoanManage on the loan at `i`
-from the ledger `l` to `l'`, which reads `loan` on `l` and `loan'` on `l'`. `r` is the result of the impair or default
-on `loan`, with `r.pool'` the vault after it. shareValue = (AssetsTotal − LossUnrealized) / SharesTotal, read
-exactly. -/
+What impair, unimpair and default write to the loan, the vault and the broker, and how they move the share value.
+`loan` is read on `l`, `loan'` on `l'`, and `r` is the result of the impair or default on `loan`. -/
 
 namespace XRPL.Model
 

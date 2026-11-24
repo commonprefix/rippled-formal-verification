@@ -43,13 +43,13 @@ lemma STAmount.roundToExponent_to_nearest_small (value result : STAmount) (s : �
       nlinarith [zpow_pos (show (0 : ℚ) < 10 by norm_num) value.mOffset]
     linarith
   unfold STAmount.roundToExponent at hok
-  rw [if_neg (by rw [h_int]; exact Bool.false_ne_true),
-      if_neg (by
+  rw [ite_eq_right (by rw [h_int]; exact Bool.false_ne_true),
+      ite_eq_right (by
         show ¬ value.isZero = true
         unfold STAmount.isZero
         rw [beq_eq_false_iff_ne.mpr h_mv_ne]
         exact Bool.false_ne_true),
-      if_neg (by show ¬ value.mOffset ≥ s; omega)] at hok
+      ite_eq_right (by show ¬ value.mOffset ≥ s; omega)] at hok
   rw [show STAmount.checked value.mNumericType kMinValue s value.negative .to_nearest
         = .ok ⟨value.mNumericType, kMinValue, s, value.mIsNegative⟩ from by
       rw [hc.is_fractional]
@@ -133,7 +133,7 @@ lemma STAmount.roundToNumericType_to_nearest_small (x T : Number) (s : ℤ) (hx 
     simp only at hok
     have hty := STAmount.ofNumber_mNumericType _ _ _ st hof
     have hint : st.integral = false := by unfold STAmount.integral; rw [hty]; rfl
-    rw [if_neg (by rw [hint]; decide)] at hok
+    rw [ite_eq_right (by rw [hint]; decide)] at hok
     obtain ⟨hc, -, -, -, -⟩ := STAmount.ofNumber_frac_stage x .to_nearest st hx h0 (Or.inl rfl) hof hst
     have hneg := Number.negative_false_of_nonneg x hx h0
     have hst0 : 0 ≤ st.toRat := STAmount.ofNumber_nonneg _ _ _ _ hx hneg hof
@@ -201,7 +201,7 @@ lemma STAmount.roundToNumericType_frac_nonpos (x T : Number) (mode : rounding_mo
     simp only at hok
     have hfc := STAmount.ofNumber_fractional_fczr x mode st hof
     have hsti : st.integral = false := by unfold STAmount.integral; rw [hfc.1]; rfl
-    rw [if_neg (by rw [hsti]; decide)] at hok
+    rw [ite_eq_right (by rw [hsti]; decide)] at hok
     have hst0 := STAmount.ofNumber_frac_nonpos x mode st hx h0 hof
     cases hr : STAmount.roundToExponent st s mode with
     | error e => rw [hr] at hok; exact absurd hok (by simp)
@@ -252,7 +252,7 @@ lemma STAmount.roundToNumericType_frac_upward_ge (x T : Number) (s : ℤ) (hx : 
     simp only at hok
     have hfc := STAmount.ofNumber_fractional_fczr x .upward st hof
     have hsti : st.integral = false := by unfold STAmount.integral; rw [hfc.1]; rfl
-    rw [if_neg (by rw [hsti]; decide)] at hok
+    rw [ite_eq_right (by rw [hsti]; decide)] at hok
     cases hr : STAmount.roundToExponent st s .upward with
     | error e => rw [hr] at hok; exact absurd hok (by simp)
     | ok r =>
@@ -367,7 +367,7 @@ lemma STAmount.roundToNumericType_frac_downward_le (x T : Number) (s : ℤ) (hx 
     simp only at hok
     have hfc := STAmount.ofNumber_fractional_fczr x .downward st hof
     have hsti : st.integral = false := by unfold STAmount.integral; rw [hfc.1]; rfl
-    rw [if_neg (by rw [hsti]; decide)] at hok
+    rw [ite_eq_right (by rw [hsti]; decide)] at hok
     cases hr : STAmount.roundToExponent st s .downward with
     | error e => rw [hr] at hok; exact absurd hok (by simp)
     | ok r =>

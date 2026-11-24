@@ -7,9 +7,7 @@ namespace XRPL.Model.Protocol
 
 /-! # scaleDown128Spec invariant
 
-`scaleDown128Spec` divides a UInt128 product `M` by 10 repeatedly until
-`m ≤ maxRepUp` (the Enabled330 `repLimit`), pushing each dropped digit into
-the guard. -/
+`scaleDown128Spec` divides `M` by 10 until it is at most `maxRepUp`, and pushes each dropped digit into the guard. -/
 
 /-- Euclidean step: splitting `a % 10^(k+1)` through `a % 10`. -/
 lemma nat_mod_pow_step (a k : ℕ) :

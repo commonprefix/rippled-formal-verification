@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.Ledger.Common.ReachableProofs
 The run of the FV_M4_27 repro on the lending ledger, where late interest takes the vault past
 10^16 base units. Other witnesses build on this run. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -30,7 +30,7 @@ def cwGenesis : LendingLedger := { vault := cwVault, shares := [], brokers := []
 lemma cwGenesis_genesis : cwGenesis.Genesis where
   created := ⟨some 1, none, cwSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨cwVault.wf, cwVault.valid⟩⟩
+    exact dite_eq_left ⟨cwVault.wf, cwVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

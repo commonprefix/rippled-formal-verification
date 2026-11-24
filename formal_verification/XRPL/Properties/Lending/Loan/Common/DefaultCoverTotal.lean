@@ -61,8 +61,8 @@ lemma STAmount.roundToExponent_downward_ok (value : STAmount) (s : Int) (hc : va
   have h1000 : (10 : ℚ) ^ (19 : ℕ) * (10 : ℚ) ^ (s - 3) = 10 ^ 16 * 10 ^ s := by
     rw [zpow_sub₀ (by norm_num : (10 : ℚ) ≠ 0)]; field_simp
   unfold STAmount.roundToExponent
-  rw [if_neg (by rw [h_int]; exact Bool.false_ne_true), if_neg (by rw [hz]; exact Bool.false_ne_true),
-    if_neg (not_le.mpr hexp)]
+  rw [ite_eq_right (by rw [h_int]; exact Bool.false_ne_true), ite_eq_right (by rw [hz]; exact Bool.false_ne_true),
+    ite_eq_right (not_le.mpr hexp)]
   have hchk : STAmount.checked value.mNumericType kMinValue s value.negative .downward =
       .ok ⟨.fractional, kMinValue, s, false⟩ := by
     rw [hc.is_fractional]
@@ -207,8 +207,8 @@ lemma sumRoundAndSubtract_frac_downward_ok (A c : Number) (b : Int) (hA : A.isNo
   obtain ⟨e, he'⟩ : ∃ e, numberExponent s0 b .fractional = .ok e := by
     unfold numberExponent
     by_cases hz : s0.operator_eq Number.zero = true
-    · rw [if_pos hz]; exact ⟨b, rfl⟩
-    · rw [if_neg hz]
+    · rw [ite_eq_left hz]; exact ⟨b, rfl⟩
+    · rw [ite_eq_right hz]
       obtain ⟨st, hst, -⟩ := STAmount.ofNumber_fractional_ok_fczr s0 .downward hs0n
         (by rw [abs_of_nonneg hs00]; nlinarith)
       rw [hst]
@@ -285,7 +285,7 @@ lemma sumRoundAndSubtract_frac_downward_ok (A c : Number) (b : Int) (hA : A.isNo
   obtain ⟨st, hst, hstf⟩ := STAmount.ofNumber_fractional_ok_fczr d .downward hdn hdlt
   refine ⟨st, ?_, hstf⟩
   unfold sumRoundAndSubtract
-  rw [if_neg (by decide)]
+  rw [ite_eq_right (by decide)]
   show (pure PUnit.unit >>= fun _ => (do
       let exponent ← postSumExponent A c e NumericType.fractional
       let sum ← A.operator_add c rounding_mode.downward
@@ -332,11 +332,9 @@ private lemma Vault.HoldsAsset.integral_room {v : Vault} (h : Vault.HoldsAsset v
   · refine ⟨?_, by decide, by decide⟩
     show (10 : ℚ) ^ 16 + 1 ≤ ((100000000000000000 : UInt64).toNat : ℚ)
     norm_num
-    decide
   · refine ⟨?_, by decide, by decide⟩
     show (10 : ℚ) ^ 16 + 1 ≤ ((9223372036854775807 : UInt64).toNat : ℚ)
     norm_num
-    decide
 
 /-- The cover a default pays always computes on the base grid. The asset is XRP, an MPT or an IOU,
 AssetsAvailable plus the loan's principal stays below `10^16` base units, and DebtTotal is whole base units. -/
@@ -438,7 +436,7 @@ lemma Loan.defaultCover_ok (loan : Loan) (v : Vault) (hasset : Vault.HoldsAsset 
         (by nlinarith) (by nlinarith)
       refine ⟨st, ?_, ?_⟩
       · unfold sumRoundAndSubtract
-        rw [if_pos hint, hof]
+        rw [ite_eq_left hint, hof]
         rfl
       · obtain ⟨hic, hty⟩ := STAmount.ofNumber_integral_canonical _ _ _ st hint hof
         have hsmall : st.mValue.toNat ≤ 2 ^ 63 - 1 := by

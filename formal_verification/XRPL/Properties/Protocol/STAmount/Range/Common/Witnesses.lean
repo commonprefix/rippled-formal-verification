@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 /-! # Inputs where an operation and the range of the type disagree
 
 Each input below either returns a result although the exact value rounds out of range, or fails although the
-exact value rounds into range. They are evaluated on the model. -/
+exact value rounds into range, or stops with the wrap error. They are evaluated on the model. -/
 
 namespace XRPL.Model.Protocol
 
@@ -44,26 +44,21 @@ lemma STAmount.checked_range_witness_out :
   simp only [RoundsWithinUnits]
   norm_num
 
-/-- IOU from mantissa `2^64 - 1` at exponent 80 returns `-10^80`: the mantissa is cast to the int64 `-1`. -/
+/-- IOU from mantissa `2^63` stops with the wrap error: the mantissa does not fit an int64. -/
 lemma STAmount.checked_iou_range_witness :
-    STAmount.checked .fractional 18446744073709551615 80 false .to_nearest
-      = .ok ⟨.fractional, 1000000000000000, 65, true⟩ := by
+    STAmount.checked .fractional 9223372036854775808 0 false .to_nearest = .error .wrap := by
   decide +kernel
 
-/-- `(2^64 - 1) * 10^80` is above the largest IOU amount. -/
-lemma STAmount.checked_iou_range_witness_out :
-    ¬ STAmount.RoundsInRange .fractional .to_nearest
-      (STAmount.unchecked .fractional 18446744073709551615 80 false).toRat := by
-  have hv : (STAmount.unchecked .fractional 18446744073709551615 80 false).toRat
-      = 18446744073709551615 * 10 ^ 80 := by
+/-- `2^63` rounds to the IOU amount `9223372036854776e3`. -/
+lemma STAmount.checked_iou_range_witness_in :
+    STAmount.RoundsInRange .fractional .to_nearest
+      (STAmount.unchecked .fractional 9223372036854775808 0 false).toRat := by
+  have hv : (STAmount.unchecked .fractional 9223372036854775808 0 false).toRat = 9223372036854775808 := by
     decide +kernel
-  rw [STAmount.roundsInRange_fractional_iff, hv]
-  simp only [RoundsWithinUnits]
+  rw [hv]
+  simp only [STAmount.RoundsInRange]
+  rw [abs_of_nonneg (by norm_num)]
   norm_num
-
-/-- The returned amount `-10^80` is negative. -/
-lemma STAmount.checked_iou_range_witness_neg : (⟨.fractional, 1000000000000000, 65, true⟩ : STAmount).toRat < 0 := by
-  decide +kernel
 
 /-- The largest IOU amount `9999999999999999e80` is canonical. -/
 lemma STAmount.iou_range_witness_canonical_left :
@@ -173,18 +168,16 @@ lemma STAmount.mpt_range_witness_canonical_right (neg : Bool) :
     (⟨NumericType.int64, 1, 0, neg⟩ : STAmount).IntegralCanonical := by
   cases neg <;> exact ⟨by decide, by decide, by decide⟩
 
-/-- MPT `-(2^63 - 1) + -1` returns `-(2^63 - 8)`. -/
+/-- MPT `-(2^63 - 1) + -1` stops with the wrap error: the sum is `-2^63`, and its negation does not fit an int64. -/
 lemma STAmount.operator_add_mpt_range_witness :
     STAmount.operator_add ⟨NumericType.int64, 9223372036854775807, 0, true⟩
-      ⟨NumericType.int64, 1, 0, true⟩ .to_nearest
-      = .ok ⟨NumericType.int64, 9223372036854775800, 0, true⟩ := by
+      ⟨NumericType.int64, 1, 0, true⟩ .to_nearest = .error .wrap := by
   decide +kernel
 
-/-- MPT `-(2^63 - 1) - 1` returns `-(2^63 - 8)`. -/
+/-- MPT `-(2^63 - 1) - 1` stops with the wrap error in the same way. -/
 lemma STAmount.operator_sub_mpt_range_witness :
     STAmount.operator_sub ⟨NumericType.int64, 9223372036854775807, 0, true⟩
-      ⟨NumericType.int64, 1, 0, false⟩ .to_nearest
-      = .ok ⟨NumericType.int64, 9223372036854775800, 0, true⟩ := by
+      ⟨NumericType.int64, 1, 0, false⟩ .to_nearest = .error .wrap := by
   decide +kernel
 
 /-- `-2^63` is below the smallest MPT amount. -/
@@ -221,7 +214,7 @@ lemma STAmount.mpt_wrap_witness_canonical_right (neg : Bool) :
     (⟨NumericType.int64, 2, 0, neg⟩ : STAmount).IntegralCanonical := by
   cases neg <;> exact ⟨by decide, by decide, by decide⟩
 
-/-- MPT `(2^63 - 1) + 2` stops with the wrap error: the int64 sum does not fit. C++ returns `-(2^63 - 1)`. -/
+/-- MPT `(2^63 - 1) + 2` stops with the wrap error: the int64 sum does not fit. -/
 lemma STAmount.operator_add_mpt_wrap_witness :
     STAmount.operator_add ⟨NumericType.int64, 9223372036854775807, 0, false⟩
       ⟨NumericType.int64, 2, 0, false⟩ .to_nearest = .error .wrap := by
@@ -256,5 +249,15 @@ lemma STAmount.operator_sub_mpt_wrap_witness_out :
   rw [STAmount.roundsInRange_int64_iff, h1, h2]
   simp only [RoundsWithinUnits]
   norm_num
+
+/-- XRP with mantissa `2^63` read as an int64 stops with the wrap error. -/
+lemma STAmount.intAmount_wrap_witness_xrp :
+    (⟨NumericType.native, 9223372036854775808, 0, false⟩ : STAmount).intAmount = .error .wrap := by
+  decide +kernel
+
+/-- MPT with mantissa `2^63` read as an int64 stops with the wrap error. -/
+lemma STAmount.intAmount_wrap_witness_mpt :
+    (⟨NumericType.int64, 9223372036854775808, 0, false⟩ : STAmount).intAmount = .error .wrap := by
+  decide +kernel
 
 end XRPL.Model.Protocol

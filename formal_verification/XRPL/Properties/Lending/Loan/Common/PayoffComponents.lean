@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FullPaymentSize
 import XRPL.Properties.Lending.Loan.Common.RoundTotal
 import XRPL.Properties.Lending.Loan.Common.ScheduleComputes
@@ -16,8 +17,8 @@ open private Loan.fullComponents roundAndSplitInterest from XRPL.Model.Lending.L
 
 /-- A count of seconds is a normalized `Number` of that value, below `2^32`. -/
 private lemma Number.ofInt64_seconds (n : UInt32) :
-    (Number.ofInt64 n.toInt64).isNormalized ∧ |(Number.ofInt64 n.toInt64).toRat| < 2 ^ 32 ∧
-      (n ≠ 0 → 1 ≤ |(Number.ofInt64 n.toInt64).toRat|) := by
+    (Number.ofInt64 n.toInt64 .to_nearest).isNormalized ∧ |(Number.ofInt64 n.toInt64 .to_nearest).toRat| < 2 ^ 32 ∧
+      (n ≠ 0 → 1 ≤ |(Number.ofInt64 n.toInt64 .to_nearest).toRat|) := by
   refine ⟨Number.ofInt64_isNormalized _, ?_, fun hn => ?_⟩
   · rw [Number.ofInt64_count, abs_of_nonneg (by positivity)]
     exact_mod_cast n.toNat_lt
@@ -72,7 +73,7 @@ private lemma loanAccruedInterest_ok (tpo rate : Number) (now start prev interva
   · have := (Number.div_near _ _ _ hm2n hin hq).abs_le
     rw [abs_div] at this
     have h1 := hil hint'
-    calc |q.toRat| ≤ |m2.toRat| / |(Number.ofInt64 interval.toInt64).toRat| * (1 + Number.nearestError) :=
+    calc |q.toRat| ≤ |m2.toRat| / |(Number.ofInt64 interval.toInt64 .to_nearest).toRat| * (1 + Number.nearestError) :=
           this
       _ ≤ |m2.toRat| / 1 * (1 + Number.nearestError) := by gcongr
       _ ≤ 10 ^ 182 * 2 := by rw [div_one]; gcongr; linarith
@@ -101,11 +102,11 @@ lemma computeFullPaymentInterest_ok (tpo rate : Number) (now interval prev start
   unfold computeFullPaymentInterest
   rw [ha, ok_bind]
   by_cases hc : (cr == 0) = true
-  · rw [if_pos hc] at hp
+  · rw [ite_eq_left hc] at hp
     obtain rfl := Except.ok.inj hp
     simp only [hc, ↓reduceIte, pure_bind]
     exact hfi
-  · rw [if_neg hc] at hp
+  · rw [ite_eq_right hc] at hp
     simp only [hc, ↓reduceIte, Bool.false_eq_true]
     rw [hp, ok_bind]
     exact hfi
@@ -161,7 +162,7 @@ lemma computeManagementFee_ok (nt : NumericType) (x : Number) (rate : TenthBips1
     show ((rate.toUInt32).toNat : ℚ) ≤ 10000
     rw [UInt16.toNat_toUInt32]; exact_mod_cast hrate
   -- the raw fee is near a tenth of the amount at most
-  have hmul : ∀ m, x.operator_mul rate.toTenthBips32.toNumber .to_nearest = .ok m →
+  have hmul : ∀ m, x.operator_mul (rate.toTenthBips32.toNumber .to_nearest) .to_nearest = .ok m →
       0 ≤ m.toRat ∧ m.toRat ≤ x.toRat * 10000 * (1 + Number.nearestError) := by
     intro m hm
     obtain ⟨hbn, hbv⟩ := TenthBips32.toNumber_facts rate.toTenthBips32

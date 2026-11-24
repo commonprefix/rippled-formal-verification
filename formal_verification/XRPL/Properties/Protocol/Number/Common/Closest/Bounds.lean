@@ -177,9 +177,9 @@ lemma Number.le_upper (q : ℚ) (n : Number) (h : Number.upper q = some n) :
     rw [← heq]
     by_cases h_n'_zero : n' = Number.zero
     · rw [h_n'_zero]
-      simp only [if_true, Number.toRat_zero]
+      simp only [ite_true, Number.toRat_zero]
       linarith
-    · simp only [if_neg h_n'_zero]
+    · simp only [ite_eq_right h_n'_zero]
       have h_n_neg : ({ n' with negative_ := true } : Number).negative_ = true := rfl
       rw [Number.toRat_of_neg _ h_n_neg]
       change q ≤ -((n'.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n'.exponent_)

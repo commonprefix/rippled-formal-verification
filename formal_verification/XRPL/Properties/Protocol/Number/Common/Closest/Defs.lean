@@ -87,7 +87,7 @@ theorem Number.lower_eq_zero_of_pos_small (q : ℚ) (hq : 0 < q)
     rw [h_pow_form] at h_small
     linarith [le_trans h_pow_mono h_log_le]
   unfold Number.lower
-  rw [if_neg (ne_of_gt hq), if_neg (not_lt.mpr (le_of_lt hq))]
+  rw [ite_eq_right (ne_of_gt hq), ite_eq_right (not_lt.mpr (le_of_lt hq))]
   unfold lowerPosAux
   simp only []
   split_ifs with h1 h2 h3 h4 <;> first
@@ -103,10 +103,10 @@ theorem Number.upper_eq_zero_of_neg_small (q : ℚ) (hq : q < 0)
     have hq' : 0 < -q := by linarith
     have h := Number.lower_eq_zero_of_pos_small (-q) hq' h_small
     unfold Number.lower at h
-    rwa [if_neg (ne_of_gt hq'), if_neg (not_lt.mpr (le_of_lt hq'))] at h
+    rwa [ite_eq_right (ne_of_gt hq'), ite_eq_right (not_lt.mpr (le_of_lt hq'))] at h
   unfold Number.upper
-  rw [if_neg (ne_of_lt hq), if_pos hq, h_lower_neg]
+  rw [ite_eq_right (ne_of_lt hq), ite_eq_left hq, h_lower_neg]
   simp only [Option.map_some]
-  rw [if_true]
+  rw [ite_true]
 
 end XRPL.Model.Protocol

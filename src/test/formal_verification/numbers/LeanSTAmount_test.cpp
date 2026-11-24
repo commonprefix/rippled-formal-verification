@@ -86,33 +86,46 @@ stAmountFieldsEqual(LeanSTAmountResult const& lean, STAmount const& cpp)
         lean.mOffset == cpp.exponent() && (lean.isNegative != 0) == cpp.negative();
 }
 
-// Signed drops of raw STAmount fields as int64, or nullopt when they leave the int64 range.
-// For an integral amount C++ casts mValue to int64 without a check there, the model reports
-// `Error.wrap`. For an IOU the model casts like C++.
+// Signed drops of raw STAmount fields as int64, or nullopt when mValue does not fit an int64.
+// C++ casts mValue to int64 without a check there, the model reports `Error.wrap`.
 std::optional<int64_t>
 signedDrops(uint64_t mValue, bool negative)
 {
     constexpr auto kInt64Max = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
-    if (mValue <= kInt64Max)
-        return negative ? -static_cast<int64_t>(mValue) : static_cast<int64_t>(mValue);
-    if (negative && mValue == kInt64Max + 1)
-        return std::numeric_limits<int64_t>::min();
-    return std::nullopt;
+    if (mValue > kInt64Max)
+        return std::nullopt;
+    return negative ? -static_cast<int64_t>(mValue) : static_cast<int64_t>(mValue);
 }
 
-// Whether the model's integral add (sub negates b first) reports `Error.wrap`: the drops of an
-// operand leave int64. C++ wraps them silently.
+// Whether the model's add (sub negates b first) reports `Error.wrap`, where C++ wraps silently:
+// an mValue that does not fit an int64, an int64 sum that overflows, or a sum of INT64_MIN.
 bool
 addWraps(STAmountPair const& a, STAmountPair const& b, bool isAdd)
 {
+    constexpr auto kInt64Min = std::numeric_limits<int64_t>::min();
+    constexpr auto kInt64Max = std::numeric_limits<int64_t>::max();
     auto const& x = a.leanSt;
     auto const& y = b.leanSt;
-    if (x.numericType != y.numericType || x.numericType == kFractional)
+    if (x.numericType != y.numericType || y.mValue == 0)
         return false;
-    if (x.mValue == 0 || y.mValue == 0)
-        return false;
+
     bool const yNegative = (y.isNegative != 0) == isAdd;
-    return !signedDrops(x.mValue, x.isNegative != 0) || !signedDrops(y.mValue, yNegative);
+    auto const yDrops = signedDrops(y.mValue, yNegative);
+    // Zero plus an IOU amount builds a new amount from the fields of b, and reads its mValue.
+    if (x.mValue == 0)
+        return x.numericType == kFractional && !yDrops;
+
+    auto const xDrops = signedDrops(x.mValue, x.isNegative != 0);
+    if (!xDrops || !yDrops)
+        return true;
+    if (x.numericType == kFractional)
+        return false;
+    if (*yDrops > 0 && *xDrops > kInt64Max - *yDrops)
+        return true;
+    if (*yDrops < 0 && *xDrops < kInt64Min - *yDrops)
+        return true;
+
+    return *xDrops + *yDrops == kInt64Min;
 }
 
 // Raw STAmount fields for the checked constructor.
@@ -268,12 +281,23 @@ class LeanSTAmount_test : public LeanSuite
         uint8_t const leanMode = toLeanMode(mode);
         bool ok = true;
 
-        // intAmount reads the drops of an integral amount, and toNumber reads them too.
-        if (nt != kFractional && !signedDrops(mValue, isNeg != 0))
+        // intAmount reads the mValue of an integral amount as an int64, iou reads the mValue of
+        // an IOU amount, and toNumber goes through one of them.
+        if (!signedDrops(mValue, isNeg != 0))
         {
             auto const build = [&] { return STAmountFFI::build(nt, mValue, mOffset, isNeg); };
-            auto const drops = readExcept<Int64FFI>(leanCall(lean_stamount_int_amount, build()));
-            ok &= expectWrap(tag + ".intAmount", drops.error);
+            if (nt != kFractional)
+            {
+                auto const drops =
+                    readExcept<Int64FFI>(leanCall(lean_stamount_int_amount, build()));
+                ok &= expectWrap(tag + ".intAmount", drops.error);
+            }
+            else
+            {
+                auto const iou =
+                    readExcept<IOUAmountFFI>(leanCall(lean_stamount_iou, build(), leanMode));
+                ok &= expectWrap(tag + ".iou", iou.error);
+            }
             auto const number =
                 readExcept<NumberFFI>(leanCall(lean_stamount_to_number, build(), leanMode));
             ok &= expectWrap(tag + ".toNumber", number.error);
@@ -372,23 +396,28 @@ class LeanSTAmount_test : public LeanSuite
     {
         auto const& s = p.leanSt;
         NumberRoundModeGuard mg(mode);
+        std::string const tag = label("checked", s.numericType, s.mValue, s.mOffset, s.isNegative);
+        lean_object* const lean = leanCall(
+            lean_stamount_checked,
+            NumericTypeFFI::build(s.numericType),
+            s.mValue,
+            s.mOffset,
+            s.isNegative,
+            toLeanMode(mode));
+        // An IOU amount is canonicalized through iou, which reads mValue as an int64.
+        if (s.numericType == kFractional && !signedDrops(s.mValue, s.isNegative != 0))
+        {
+            expectWrap(tag, readExcept<STAmountFFI>(lean).error);
+            return tesSUCCESS;  // C++ returns the amount of the wrapped mantissa.
+        }
         // Use the checked ctor to match Lean's error path.
-        return runSTAmountOp(
-            label("checked", s.numericType, s.mValue, s.mOffset, s.isNegative),
-            STAmountFFI::fromExcept(leanCall(
-                lean_stamount_checked,
-                NumericTypeFFI::build(s.numericType),
+        return runSTAmountOp(tag, STAmountFFI::fromExcept(lean), [&] {
+            return STAmount{
+                assetForNumericType(s.numericType),
                 s.mValue,
-                s.mOffset,
-                s.isNegative,
-                toLeanMode(mode))),
-            [&] {
-                return STAmount{
-                    assetForNumericType(s.numericType),
-                    s.mValue,
-                    static_cast<int>(s.mOffset),
-                    s.isNegative != 0};
-            });
+                static_cast<int>(s.mOffset),
+                s.isNegative != 0};
+        });
     }
 
     TER
@@ -577,11 +606,17 @@ class LeanSTAmount_test : public LeanSuite
         bool const neg = v < 0;
         std::stringstream tag;
         tag << "uncheckedFromInt64(nt=" << static_cast<int>(nt) << "," << v << "e" << offset << ")";
-        return runSTAmountOp(
-            tag.str(),
-            STAmountFFI::fromObject(
-                leanCall(lean_stamount_unchecked_from_int64, NumericTypeFFI::build(nt), v, offset)),
-            [&] { return stAmountUnchecked(nt, magnitude(v), offset, neg ? 1 : 0); });
+        lean_object* const lean =
+            leanCall(lean_stamount_unchecked_from_int64, NumericTypeFFI::build(nt), v, offset);
+        // C++ `set` negates a negative value, and INT64_MIN cannot be negated.
+        if (v == std::numeric_limits<int64_t>::min())
+        {
+            expectWrap(tag.str(), readExcept<STAmountFFI>(lean).error);
+            return tesSUCCESS;
+        }
+        return runSTAmountOp(tag.str(), STAmountFFI::fromExcept(lean), [&] {
+            return stAmountUnchecked(nt, magnitude(v), offset, neg ? 1 : 0);
+        });
     }
 
     TER
@@ -977,7 +1012,7 @@ public:
                 checkNeg(makeSTAmountPair(nt, 0, 0, neg));
                 checkLt(makeSTAmountPair(nt, u64Max, 0, neg), makeSTAmountPair(nt, 0, 0, neg));
             }
-            // Both sides read u64Max back as int64 (iou() gives -1).
+            // C++ reads u64Max back as int64 (iou() gives -1), the model reports the wrap.
             checkAddSub(
                 "add",
                 true,
@@ -1000,8 +1035,8 @@ public:
         }
     }
 
-    // Integral values staged above INT64_MAX: C++ reads them back as int64 via mpt()/getMPTValue
-    // (u64Max -> -1), the model reports the wrap from intAmount and toNumber.
+    // XRP and MPT values staged above INT64_MAX: C++ reads them back as int64 via xrp() and mpt()
+    // (2^63 -> -2^63, u64Max -> -1), the model reports the wrap from intAmount and toNumber.
     void
     test_integral_int64_wrap()
     {
@@ -1009,12 +1044,48 @@ public:
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         Number::RoundingMode const m = Number::RoundingMode::ToNearest;
         constexpr uint64_t u64Max = std::numeric_limits<uint64_t>::max();
+        constexpr uint64_t twoTo63 = uint64_t{1} << 63;
 
-        checkAccessors(makeSTAmountPair(kIntegral, u64Max, 0, 0), m);
+        for (uint8_t nt : {kNative, kIntegral})
+        {
+            for (uint8_t neg : {uint8_t{0}, uint8_t{1}})
+            {
+                checkAccessors(makeSTAmountPair(nt, twoTo63, 0, neg), m);
+                checkAccessors(makeSTAmountPair(nt, u64Max, 0, neg), m);
+            }
+        }
     }
 
-    // IOU mantissas staged at and above 2^63: both sides cast them to int64 (u64Max -> -1), so a
-    // positive amount reads back negative. Negative 2^63 is left out, C++ negates INT64_MIN there.
+    // MPT sums at the int64 limits. The model reports the wrap where the int64 sum overflows, and
+    // where the sum is INT64_MIN, which C++ `set` negates. C++ returns a wrapped value there.
+    void
+    test_integral_sum_wrap()
+    {
+        beginCase("LeanSTAmount.integral_sum_wrap");
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+        constexpr uint64_t int64Max = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+        auto const mpt = [](uint64_t value, uint8_t neg) {
+            return makeSTAmountPair(kIntegral, value, 0, neg);
+        };
+
+        for (auto mode : kRoundingModes)
+        {
+            // largest and smallest sums that fit: both sides return them
+            checkAddSub("add", true, mpt(int64Max - 1, 0), mpt(1, 0), mode);
+            checkAddSub("add", true, mpt(int64Max - 1, 1), mpt(1, 1), mode);
+            checkAddSub("sub", false, mpt(int64Max - 1, 1), mpt(1, 0), mode);
+            // the sum is INT64_MIN
+            checkAddSub("add", true, mpt(int64Max, 1), mpt(1, 1), mode);
+            checkAddSub("sub", false, mpt(int64Max, 1), mpt(1, 0), mode);
+            // the int64 sum overflows
+            checkAddSub("add", true, mpt(int64Max, 0), mpt(2, 0), mode);
+            checkAddSub("add", true, mpt(int64Max, 1), mpt(2, 1), mode);
+            checkAddSub("sub", false, mpt(int64Max, 0), mpt(2, 1), mode);
+        }
+    }
+
+    // IOU mantissas staged at and above 2^63: C++ casts them to int64 (u64Max -> -1), so a
+    // positive amount reads back negative (FV_M1_25). The model reports the wrap.
     void
     test_iou_int64_cast()
     {
@@ -1028,8 +1099,6 @@ public:
         {
             for (uint64_t mantissa : {twoTo63, twoTo63 + 1, 9'999'999'999'999'999'999ULL, u64Max})
             {
-                if (neg != 0 && mantissa == twoTo63)
-                    continue;
                 for (int64_t offset : {int64_t{0}, int64_t{80}})
                 {
                     checkAccessors(makeSTAmountPair(kFractional, mantissa, offset, neg), m);
@@ -2228,6 +2297,7 @@ private:
         test_known_round_to_exponent();
         test_extreme_values();
         test_integral_int64_wrap();
+        test_integral_sum_wrap();
         test_iou_int64_cast();
         testBoundaries();
     }

@@ -63,8 +63,8 @@ theorem Number.operator_div_rounded_upward_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact hyz hmeq
     unfold Number.operator_div at hok
-    rw [if_neg hy_guard,
-        if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
+    rw [ite_eq_right hy_guard,
+        ite_eq_left (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
       (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     apply hresult

@@ -1,14 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.PayoffRun
 import XRPL.Properties.Lending.Ledger.Common.PaymentTotalWitness
 
 /-! # Reachable late loans no payment can pay off
 
-Three late loans whose late payment of exactly totalDue fails, each for one reason: the coarsened vault of loan C,
-the negative interest part of a tiny-rate instalment, and an instalment that is only management fee. A smaller
-amount is too little, a larger one makes the same payment, and the other payment types are rejected, so no run of
-payments moves the loan. -/
+Three reachable late loans no payment can pay off (FV_M4_21, FV_M4_29, FV_M4_34). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

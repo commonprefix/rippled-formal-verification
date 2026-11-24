@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PrincipalLeft
 
 /-! # A re-amortization keeps PeriodicPayment from vanishing
@@ -48,9 +49,8 @@ private lemma Loan.tryOverpayment_periodic_ge (l : Loan) (opc : PaymentComponent
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   rename_i _ rate hrate _ st hst _ th hth _ de hde _ rp0 hrp0 _ props hprops _ s1 hs1 _ s2 hs2 _ pin hpin _ gi hgi
     _ pmf hpmf _ s3 hs3 _ po hpo _ int hintr _ tvo htvo _ tvo' htvo' _ mfo hmfo _ s4 hs4 _ dl hdl _ io hio _ g hg

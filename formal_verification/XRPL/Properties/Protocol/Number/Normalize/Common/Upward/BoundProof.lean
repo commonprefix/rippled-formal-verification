@@ -56,7 +56,6 @@ theorem Number.normalize_rounding_bound_upward (n result : Number)
       · -- ===== CUSP =====
         have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
           .normalize2 res_pos h_rup_pos hres_pos_mant_ne
-        try simp only at h_cusp_val
         have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
           rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
         have h_truth_signed : n.toRat = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
@@ -98,7 +97,6 @@ theorem Number.normalize_rounding_bound_upward (n result : Number)
         have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
         have h_nc_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
           .normalize2 res_pos h_rup_pos hres_pos_mant_ne
-        try simp only at h_nc_val
         have h_truth_signed : n.toRat = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
           have h1 : |n.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' := habs_n_eq
           rw [h_abs_truth_eq] at h1; exact h1
@@ -124,7 +122,6 @@ theorem Number.normalize_rounding_bound_upward (n result : Number)
     · -- ===== NO ROUND UP (truncate) =====
       have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep
         .normalize2 res_pos h_rup_pos hres_pos_mant_ne
-      try simp only at h_tr_val
       by_cases h_zn : n.negative_ = true
       · -- n < 0. Truncating magnitude toward zero ⇒ |result| ≤ |n|, both ≤ 0 ⇒ n ≤ result.
         have h_truth_nonpos : n.toRat ≤ 0 := Number.toRat_nonpos_of_negative n h_zn
@@ -218,7 +215,7 @@ theorem Number.normalize_rounding_bound_upward (n result : Number)
     -- The plain-guard round decision is dead (the guard is empty).
     have h_ground : g.round .upward = -2 := by
       unfold Guard.round
-      rw [if_pos hempty]
+      rw [ite_eq_left hempty]
     have h_gbool_false :
         ((g.round .upward == 1) || ((g.round .upward == 0) && (zm % 2 == 1))) = false := by
       rw [h_ground]

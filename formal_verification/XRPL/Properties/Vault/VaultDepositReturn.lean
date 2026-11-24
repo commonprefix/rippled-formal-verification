@@ -2,9 +2,8 @@ import XRPL.Properties.Vault.Proofs.DepositExits
 
 /-! # `Vault.deposit` exits
 
-One line per exit of `Vault.deposit_exits`, in the order the deposit runs its checks. A rejection
-carries only its code: the vault is not touched. The later exits assume the earlier checks passed,
-read off the code (`Vault.DepositOpen` for the four entry checks). -/
+One line per exit of `Vault.deposit_exits`, in check order. A rejection carries only its code, and the later exits
+assume the earlier checks passed (`Vault.DepositOpen` for the four entry checks). -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -68,6 +67,18 @@ theorem Vault.deposit_exits (amountDeposit : STAmount) (isDonation : Bool) (t : 
       ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
         assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero)) = true →
       (v.deposit amountDeposit isDonation t hpos).run = .ok (.error .tecLIMIT_EXCEEDED)) ∧
+    -- the new share total passes the MPT maximum, so the share send fails (C++ accountSend)
+    (∀ (roundedAmount : STAmount) (amounts : VaultAmounts) (raw : RawVault) (assetsTotal' : Number),
+      amountDeposit.Canonical → amountDeposit.mNumericType = v.numericType → v.DepositOpen isDonation t →
+      (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
+      (computeDeposit v roundedAmount isDonation).run = .ok (.ok amounts) →
+      v.checkOpenLimit amounts.assets = .ok .tesSUCCESS →
+      (v.adjustAssetsAndShares amounts.assets amounts.shares).run = .ok (.ok raw) →
+      raw.assetsTotal = .ok assetsTotal' →
+      ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
+        assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero)) = false →
+      2 ^ 63 - 1 < (v.toExact.sharesTotal : ℚ) + amounts.shares.toRat →
+      (v.deposit amountDeposit isDonation t hpos).run = .ok (.error .tecPATH_DRY)) ∧
     -- the new share total stays within the MPT maximum
     ∀ (roundedAmount : STAmount) (amounts : VaultAmounts) (raw : RawVault) (assetsTotal' : Number),
       amountDeposit.Canonical → amountDeposit.mNumericType = v.numericType → v.DepositOpen isDonation t →
@@ -91,6 +102,9 @@ theorem Vault.deposit_exits (amountDeposit : STAmount) (isDonation : Bool) (t : 
       roundedAmount _ hopen hrounded,
     Vault.deposit_inflow_rejected_proof v amountDeposit isDonation t hpos,
     Vault.deposit_maximum_exceeded_proof v amountDeposit isDonation t hpos,
+    fun roundedAmount amounts raw assetsTotal' hc hty =>
+      Vault.deposit_share_overflow_proof v amountDeposit isDonation t hpos hc hty roundedAmount amounts raw
+        assetsTotal',
     fun roundedAmount amounts raw assetsTotal' hc hty =>
       Vault.deposit_success_proof v amountDeposit isDonation t hpos hc hty roundedAmount amounts raw assetsTotal'⟩
 

@@ -148,14 +148,14 @@ theorem Number.operator_mul_rounding_bound_downward (x y result : Number)
             exfalso
             unfold Guard.round at h0
             by_cases he : g.empty
-            · rw [if_pos he] at h0; norm_num at h0
-            · rw [if_neg he] at h0
+            · rw [ite_eq_left he] at h0; norm_num at h0
+            · rw [ite_eq_right he] at h0
               by_cases hs : g.sbit_ = true
-              · rw [if_pos hs] at h0
+              · rw [ite_eq_left hs] at h0
                 by_cases hd : (g.digits_ > 0 || g.xbit_) = true
-                · rw [if_pos hd] at h0; norm_num at h0
-                · rw [if_neg hd] at h0; norm_num at h0
-              · rw [if_neg hs] at h0; norm_num at h0
+                · rw [ite_eq_left hd] at h0; norm_num at h0
+                · rw [ite_eq_right hd] at h0; norm_num at h0
+              · rw [ite_eq_right hs] at h0; norm_num at h0
         have h_sru : g.shouldRoundUp_downward := (round_downward_eq_one_iff g).mp h_fire1
         have hf_pos : 0 < f := represents_pos_of_shouldRoundUp_downward g f hf_rep' h_sru
         refine ⟨?_, ?_⟩
@@ -272,7 +272,6 @@ theorem Number.operator_mul_rounding_bound_downward (x y result : Number)
     · -- ===== CUSP =====
       have h_cusp_val := doRoundUp_value_downward_roundUp_cusp g false zm ze' h_cusp h_sru
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      try simp only at h_cusp_val
       have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
         rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
       have h_truth_signed : x.toRat * y.toRat
@@ -320,7 +319,6 @@ theorem Number.operator_mul_rounding_bound_downward (x y result : Number)
       have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
       have h_nc_val := doRoundUp_value_downward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      try simp only at h_nc_val
       have h_truth_signed : x.toRat * y.toRat
           = -(((zm.toNat : ℚ) + f) * 10 ^ ze') := by
         have h1 : |x.toRat * y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' := habs_xy_eq
@@ -349,7 +347,6 @@ theorem Number.operator_mul_rounding_bound_downward (x y result : Number)
       exact ⟨h_direction, h_magnitude⟩
   · -- ===== NO ROUND UP (truncate) =====
     have h_tr_val := doRoundUp_value_downward_truncate g false zm ze' h_sru h_zm_le_rep .overflow res_pos h_rup_pos hres_pos_mant_ne
-    try simp only at h_tr_val
     -- |result| = zm · 10^ze'.
     -- shouldRoundUp_downward fails: sbit=false OR digits=0 ∧ xbit=false.
     by_cases h_zn : (x.negative_ != y.negative_) = true

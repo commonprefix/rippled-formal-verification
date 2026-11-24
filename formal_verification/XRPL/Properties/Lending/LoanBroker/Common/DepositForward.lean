@@ -70,7 +70,7 @@ lemma LoanBroker.canCoverDeposit_of_units (lb : LoanBroker) (v : Vault) (amount 
         (by linarith) hle
       have hr : sumRoundAndSubtract lb.coverAvailable aN v.baseExponent lb.numericType .downward = .ok r := by
         unfold sumRoundAndSubtract
-        rw [if_pos hi]
+        rw [ite_eq_left hi]
         simp only [bind_pure]
         exact hof
       obtain ⟨hcan, hrnt⟩ := STAmount.ofNumber_integral_canonical _ aN .downward r hi hof
@@ -96,7 +96,7 @@ lemma LoanBroker.canCoverDeposit_of_units (lb : LoanBroker) (v : Vault) (amount 
   have hr0 : 0 < r.toRat := by rw [← hrNr, hrNv]; exact ha0
   have hrun : (lb.roundedCoverAmount v amount).run = .ok (.ok r) := by
     rw [LoanBroker.roundedCoverAmount_run lb v amount aN r hanum hr,
-      if_neg (not_le.mpr ((STAmount.signum_pos_iff_toRat_pos r).mpr hr0))]
+      ite_eq_right (not_le.mpr ((STAmount.signum_pos_iff_toRat_pos r).mpr hr0))]
 
   -- the cover plus the credit is exact on the base grid
   have hrNg : rN.toRat = ((k : ℤ) : ℚ) * 10 ^ v.baseExponent := by rw [hrNv, hkv]; push_cast; ring
@@ -118,8 +118,8 @@ lemma LoanBroker.canCoverDeposit_of_units (lb : LoanBroker) (v : Vault) (amount 
   obtain ⟨e, he⟩ : ∃ e, numberExponent s v.baseExponent lb.numericType = .ok e := by
     unfold numberExponent
     by_cases hz0 : s.operator_eq Number.zero = true
-    · rw [if_pos hz0]; exact ⟨_, rfl⟩
-    rw [if_neg hz0]
+    · rw [ite_eq_left hz0]; exact ⟨_, rfl⟩
+    rw [ite_eq_right hz0]
     obtain ⟨st, hst⟩ : ∃ st, STAmount.ofNumber lb.numericType s .downward = .ok st := by
       by_cases hi : lb.numericType.isIntegral = true
       · have hden : s.toRat.den = 1 := by
@@ -154,7 +154,7 @@ lemma LoanBroker.canCoverDeposit_of_units (lb : LoanBroker) (v : Vault) (amount 
   have htn := Number.operator_add_isNormalized_any _ _ _ _ hA hrNn ht
   have htle : t.toRat ≤ L.toRat := by
     obtain ⟨l, hlo, htv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hA hrNn ht
-    rw [if_pos (by linarith)] at hlo
+    rw [ite_eq_left (by linarith)] at hlo
     rw [htv, hLv]
     linarith [Number.lower_le _ l hlo]
   have hgt : t.operator_gt L = false := by

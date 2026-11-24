@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Model.Lending.Loan.LoanPay
 import XRPL.Properties.Lending.Common.PoolBalances
 import XRPL.Properties.Lending.Loan.LoanValid
@@ -271,7 +272,7 @@ def Loan.unimpaired (loan : Loan) : Loan :=
 private lemma Loan.unimpaired_to_lawful (loan : Loan) :
     ({ loan.toRawLoan with isImpaired := false } : RawLoan).to_lawful = .ok loan.unimpaired := by
   unfold RawLoan.to_lawful
-  rw [dif_pos ⟨RawLoan.wf_unimpaired _ loan.wf, RawLoan.valid_unimpaired _ loan.valid⟩]
+  rw [dite_eq_left ⟨RawLoan.wf_unimpaired _ loan.wf, RawLoan.valid_unimpaired _ loan.valid⟩]
   rfl
 
 lemma Loan.unimpaired_of_not (loan : Loan) (h : loan.isImpaired = false) : loan.unimpaired = loan := by

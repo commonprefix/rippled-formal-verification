@@ -5,9 +5,8 @@ import XRPL.Properties.Vault.Proofs.Support.ExactCash
 
 /-! # Paying out a settled vault
 
-A vault with nothing lent and nothing lost, whose cash is a whole number of base units stored exactly, pays out all
-its cash to one withdrawal of every share. An XRP or MPT cash must stay below `2.5·10^17` units, where the
-19-digit price of all the shares together is less than half a unit from the cash. -/
+A vault with nothing lent or lost and whole cash stored exactly pays all its cash to one withdrawal of every share.
+XRP or MPT cash must stay below `2.5·10^17` units, where the 19-digit price is within half a unit of the cash. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -212,7 +211,7 @@ lemma Vault.Settled.sharesToAssetsWithdraw_all_ok (v : Vault) (hz : v.Settled)
       refine ⟨cash, ?_⟩
       rw [← hcash]
       unfold STAmount.ofNumber
-      simp only [hs1, hs2, Bool.false_eq_true, if_false, hint, if_true, hi, hi', hii]
+      simp only [hs1, hs2, Bool.false_eq_true, ite_false, hint, ite_true, hi, hi', hii]
     · -- an IOU asset: the quotient stays half a unit below the IOU ceiling
       rw [NumericType.eq_fractional_of_not_integral (nt := v.numericType) (by simpa using hint)]
       exact STAmount.ofNumber_fractional_ok_below an hann hanpos (by nlinarith)

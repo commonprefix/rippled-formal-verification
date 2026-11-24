@@ -44,12 +44,11 @@ theorem Number.operator_add_rounding_bound_same_sign_upward (x y : Number) (resu
   · -- ===== IN RANGE: zm ≤ maxRep =====
     by_cases h_sru : g.shouldRoundUp_upward
     · -- ROUND UP case
-      have hf_pos : 0 < f := represents_pos_of_shouldRoundUp_upward g f hf_rep h_sru
+      have hf_pos : 0 < f := represents_t_pos_of_shouldRoundUp_upward hf_rep h_sru
       by_cases h_cusp : zm = maxRep
       · -- CUSP: result mag = maxRepCuspTarget * 10^ze'.
         have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
           .overflow res_pos h_rup_pos hres_pos_mant_ne
-        try simp only at h_cusp_val
         have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
           rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
         rw [h_cusp_val]
@@ -76,7 +75,6 @@ theorem Number.operator_add_rounding_bound_same_sign_upward (x y : Number) (resu
         have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
         have h_nc_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
           .overflow res_pos h_rup_pos hres_pos_mant_ne
-        try simp only at h_nc_val
         rw [h_nc_val]
         have h_diff_eq : ((zm.toNat : ℚ) + 1) * 10 ^ ze' -
             ((zm.toNat : ℚ) + f) * 10 ^ ze' = (1 - f) * 10 ^ ze' := by ring
@@ -89,7 +87,6 @@ theorem Number.operator_add_rounding_bound_same_sign_upward (x y : Number) (resu
     · -- TRUNCATE case
       have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      try simp only at h_tr_val
       rw [h_tr_val]
       have h_diff_eq : (zm.toNat : ℚ) * 10 ^ ze' -
           ((zm.toNat : ℚ) + f) * 10 ^ ze' = -(f * 10 ^ ze') := by ring
@@ -163,7 +160,7 @@ theorem Number.operator_add_rounding_bound_same_sign_upward (x y : Number) (resu
             split_ifs <;> decide
           exact absurd h0 hne
       have h_sru : g.shouldRoundUp_upward := (round_upward_eq_one_iff g).mp h_fire1
-      have hf_pos : 0 < f := represents_pos_of_shouldRoundUp_upward g f hf_rep h_sru
+      have hf_pos : 0 < f := represents_t_pos_of_shouldRoundUp_upward hf_rep h_sru
       rw [hzm_q_eq, show ((maxRepNat : ℚ) + 13) * 10 ^ ze' - (((maxRepNat : ℚ) + 3) + f) * 10 ^ ze'
             = (10 - f) * 10 ^ ze' from by ring,
           abs_mul, abs_of_nonneg (by linarith [hf_lt1] : (0 : ℚ) ≤ 10 - f),

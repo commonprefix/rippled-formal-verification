@@ -1,14 +1,13 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.StuckLoan
 import XRPL.Properties.Lending.Ledger.Common.NegativeInterestWitness
 import XRPL.Properties.Lending.Ledger.Common.IsolationDefs
 
 /-! # Reachable payments that pass their checks and fail
 
-Each run breaks exactly one condition of the payment line of `loan_ops_total`: the coarsened vault of loan C (the
-dust guard), the negative interest part of a tiny-rate instalment, and an instalment that is only management fee (the
-C++ test LoanPayFeeOnlyInstalment). Each run is checked by `native_decide`. -/
+Reachable payments that pass their checks and fail, each breaking one condition (FV_M4_21, FV_M4_29, FV_M4_34). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -31,7 +30,7 @@ private def foGenesis : LendingLedger := { vault := foVault, shares := [], broke
 private lemma foGenesis_genesis : foGenesis.Genesis where
   created := ⟨some 0, none, foSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨foVault.wf, foVault.valid⟩⟩
+    exact dite_eq_left ⟨foVault.wf, foVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

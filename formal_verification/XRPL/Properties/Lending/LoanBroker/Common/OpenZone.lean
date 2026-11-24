@@ -151,7 +151,7 @@ lemma LoanBroker.coverDeposit_openZone (lb : LoanBroker) (v : Vault) (amount : S
   constructor
   · -- a nonzero XRP or MPT credit admits offset `0`
     unfold sumRoundAndSubtract at hs
-    rw [if_pos hi] at hs
+    rw [ite_eq_left hi] at hs
     simp only [bind_pure] at hs
     have hr0 : r.mValue ≠ 0 := by
       intro h0

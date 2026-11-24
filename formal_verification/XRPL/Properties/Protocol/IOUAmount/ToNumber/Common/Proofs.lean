@@ -6,9 +6,7 @@ import XRPL.Properties.Protocol.Number.Constructors.FromRepExact
 
 /-! # Proof of the `IOUAmount.toNumber` theorem
 
-`toNumber a mode = Number.from_rep a.mantissa_ a.exponent_ …`, which (under `ToNumberExact`)
-is value-exact via `Number.from_rep_exact`. No rounding, since the `Int64` mantissa scales
-up into `largeRange` exactly. -/
+The `Int64` mantissa scales into the `Number` range exactly, so the conversion never rounds. -/
 
 namespace XRPL.Model.Protocol
 

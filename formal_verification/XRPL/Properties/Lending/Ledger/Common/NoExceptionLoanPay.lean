@@ -4,13 +4,8 @@ import XRPL.Properties.Lending.Ledger.Common.RecheckPay
 
 /-! # A LoanPay never ends in a model error
 
-On a reachable ledger a regular, late or full payment is rejected with a result code or settles, whatever the
-amount paid. A late payment on XRP needs its late interest to be an XRP amount: without that LoanPay ends in an
-error (FV_M4_53, see `LendingLedger.loanPay_late_out_of_range_witness`). On XRP or an MPT the vault total after the
-payment must be an amount of the asset: the vault update stores it and ends in an error otherwise (FV_M4_59, see
-`LendingLedger.loanPay_total_out_of_range_witness`). The other conditions are balances C++ keeps within the asset and
-ranges of this proof. An overpayment is covered only up to the amount due of the next instalment: the
-re-amortization of a larger one is not proven. -/
+A late payment on XRP needs its late interest to fit (FV_M4_53), and on XRP or an MPT the new vault total must fit
+(FV_M4_59). An overpayment is covered only up to the amount due of the next instalment. -/
 
 namespace XRPL.Model.Lending
 
@@ -62,7 +57,7 @@ lemma LendingLedger.loanPay_no_exception_proof (l : LendingLedger) (hr : l.Reach
       unfold Loan.canPay at hc''
       cases hpend : loan.isPending
       · rfl
-      · rw [hpend, if_pos rfl] at hc''; cases hc''
+      · rw [hpend, ite_eq_left rfl] at hc''; cases hc''
     obtain ⟨t, -, hreach⟩ := hr.loanAt_reachable hat
     obtain ⟨-, hntl⟩ := hr.loanAt_scale hat
     have hroom : loan.PayRoom := hr.payRoom hat

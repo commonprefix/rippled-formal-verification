@@ -5,9 +5,8 @@ import XRPL.Properties.Vault.Proofs.WithdrawUpdates
 
 /-! # Holder shares add up to SharesTotal
 
-A deposit adds the shares it mints to the holder and to SharesTotal, a withdrawal or a clawback takes the same
-shares off both, and a burn takes the holding off SharesTotal. While deposits keep SharesTotal within the share MPT
-maximum every amount is a whole number below `2^63`, so nothing rounds. -/
+Every vault transaction moves a holder's shares and SharesTotal by the same whole number of shares, so the holdings
+add up to SharesTotal on a reachable ledger. -/
 
 namespace XRPL.Model.Lending
 
@@ -18,12 +17,6 @@ open XRPL.Model.SingleAssetVault (Vault VaultWithAmounts)
 structure LendingLedger.SharesSum (l : LendingLedger) : Prop where
   sum : (l.shares.map Number.toRat).sum = l.vault.sharesTotal.toRat
   whole : ∀ x ∈ l.shares, x.toRat.den = 1
-
-/-- Every deposit on the ledger keeps SharesTotal plus the shares it mints within the share MPT maximum. -/
-def LendingLedger.MintFits (l : LendingLedger) : Prop :=
-  ∀ (amount : STAmount) (isDonation : Bool) (hpos : 0 < amount.toRat) (r : VaultWithAmounts),
-    (l.vault.deposit amount isDonation l.now hpos).run = .ok (.ok r) →
-    l.vault.sharesTotal.toRat + r.shares.toRat ≤ 2 ^ 63 - 1
 
 /-- A holder's shares are a whole number, zero for a holder the ledger doesn't list. -/
 lemma LendingLedger.SharesSum.sharesOf_whole {l : LendingLedger} (hl : l.SharesSum) (h : Nat) :
@@ -109,25 +102,25 @@ private lemma Vault.deposit_shares_whole (v : Vault) (amount : STAmount) (isDona
   exact ⟨Or.inl (hic.canonical (by rw [hty]; decide)), hic.den_eq_one, h0⟩
 
 /-- The holder's shares as an amount of shares: a canonical MPT amount of at least zero, of the same value. -/
-private lemma LendingLedger.holder_shareBalance (l : LendingLedger) (hr : l.Reachable) (hl : l.SharesSum) (h : Nat)
+private lemma LendingLedger.holder_shareBalance (l : LendingLedger) (hsn : l.SharesNonneg) (hl : l.SharesSum) (h : Nat)
     (hs : STAmount) (hof : STAmount.ofNumber .int64 (l.sharesOf h) .to_nearest = .ok hs) :
     hs.ShareBalance ∧ hs.IntegralCanonical ∧ hs.toRat = (l.sharesOf h).toRat := by
-  obtain ⟨hn, h0⟩ := hr.sharesNonneg.sharesOf h
+  obtain ⟨hn, h0⟩ := hsn.sharesOf h
   obtain ⟨hty, -, hneg, -, hval⟩ := STAmount.ofNumber_int64_shape _ _ _ hn h0 (hl.sharesOf_whole h)
-    (le_trans (hl.sharesOf_le hr.sharesNonneg h) l.vault.sharesTotal_le_maxRep) hof
+    (le_trans (hl.sharesOf_le hsn h) l.vault.sharesTotal_le_maxRep) hof
   have hic := (STAmount.ofNumber_integral_canonical _ _ _ _ (by decide) hof).1
   exact ⟨⟨hty, hic.canonical (by rw [hty]; decide), hneg⟩, hic, hval⟩
 
 /-- Taking `burned` whole shares off the holding and off SharesTotal moves SharesTotal by the change in the
 holding. The new SharesTotal is at least zero, so `burned` is within SharesTotal and nothing rounds. -/
-private lemma LendingLedger.holder_sub_exact (l : LendingLedger) (hr : l.Reachable) (hl : l.SharesSum) (h : Nat)
+private lemma LendingLedger.holder_sub_exact (l : LendingLedger) (hsn : l.SharesNonneg) (hl : l.SharesSum) (h : Nat)
     (burned shares' : Number) (v' : Vault) (hb : burned.isNormalized) (hbd : burned.toRat.den = 1)
     (hb0 : 0 ≤ burned.toRat) (hST : v'.sharesTotal.toRat = l.vault.sharesTotal.toRat - burned.toRat)
     (hsub : (l.sharesOf h).operator_sub burned .to_nearest = .ok shares') :
     shares'.toRat.den = 1 ∧
       v'.sharesTotal.toRat = l.vault.sharesTotal.toRat - (l.sharesOf h).toRat + shares'.toRat := by
-  obtain ⟨hn, h0⟩ := hr.sharesNonneg.sharesOf h
-  have hle := hl.sharesOf_le hr.sharesNonneg h
+  obtain ⟨hn, h0⟩ := hsn.sharesOf h
+  have hle := hl.sharesOf_le hsn h
   have hmax := l.vault.sharesTotal_le_maxRep
   have hd := hl.sharesOf_whole h
   have hv0 := v'.wf.sharesTotal_nonneg
@@ -137,8 +130,9 @@ private lemma LendingLedger.holder_sub_exact (l : LendingLedger) (hr : l.Reachab
 
 open XRPL.Model.SingleAssetVault in
 /-- A vault transaction moves SharesTotal by the change in the holding it writes. -/
-private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Reachable) (hl : l.SharesSum)
-    (tx : LendingTx) (hfit : (∃ h amount isDonation, tx = .vaultDeposit h amount isDonation) → l.MintFits)
+private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Reachable) (hsn : l.SharesNonneg)
+    (hl : l.SharesSum)
+    (tx : LendingTx)
     (hpre : (tx.preflight l).isTesSuccess = true)
     (u : VaultEffect) (hu : (l.applyVault tx).run = .ok (.ok u)) :
     (∀ p ∈ u.holderShares, p.2.toRat.den = 1 ∧
@@ -160,12 +154,12 @@ private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Rea
       obtain ⟨hsc, hsd, hs0⟩ := Vault.deposit_shares_whole _ _ _ _ _ hc _ hdep
       have hmn : (_ : STAmount).toNumber .to_nearest = .ok _ := ‹_›
       obtain ⟨hmv, hmn'⟩ := hsc.toNumber_exact _ hmn
-      have hfit' := hfit ⟨h, amount, isDonation, rfl⟩ amount isDonation hpos _ hdep
       have hcast := RawVault.WF.toExact_sharesTotal _ l.vault.wf
-      have hST := Vault.deposit_exact_sharesTotal _ _ _ _ hpos hc hty _ hdep (by rw [hcast]; exact hfit')
+      have hST := Vault.deposit_exact_sharesTotal _ _ _ _ hpos hc hty _ hdep
       rw [RawVault.WF.toExact_sharesTotal _ (VaultWithAmounts.vault' _).wf, hcast] at hST
-      obtain ⟨hn, h0⟩ := hr.sharesNonneg.sharesOf h
-      have hle := hl.sharesOf_le hr.sharesNonneg h
+      have hfit := Vault.deposit_ok_shareSupply _ _ _ _ hpos _ hdep
+      obtain ⟨hn, h0⟩ := hsn.sharesOf h
+      have hle := hl.sharesOf_le hsn h
       have hd := hl.sharesOf_whole h
       have hmd := hsd
       rw [← hmv] at hmd
@@ -192,7 +186,7 @@ private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Rea
       have hbd := hsc.den_eq_one
       have hb0 := le_of_lt hspos
       rw [← hbv] at hbd hST hb0
-      exact l.holder_sub_exact hr hl h _ _ _ hbn hbd hb0 hST ‹_›
+      exact l.holder_sub_exact hsn hl h _ _ _ hbn hbd hb0 hST ‹_›
     · cases hu
   | vaultClawback h assets =>
     have hc := LendingTx.preflight_vaultClawback_canonical l hr.holdsAsset h assets hpre'
@@ -206,7 +200,7 @@ private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Rea
       simp only [Option.mem_def, Option.some.injEq] at hp
       subst hp
       have hof : STAmount.ofNumber .int64 (l.sharesOf h) .to_nearest = .ok _ := ‹_›
-      obtain ⟨hhs, -, -⟩ := l.holder_shareBalance hr hl h _ hof
+      obtain ⟨hhs, -, -⟩ := l.holder_shareBalance hsn hl h _ hof
       have hcl : (l.vault.clawback assets _ (l.isSoleShareholder h) hnn).run = .ok (.ok _) := ‹_›
       have hST := Vault.clawback_exact_sharesTotal _ _ _ _ hnn hc hhs hmax _ hcl
       rw [RawVault.WF.toExact_sharesTotal _ (VaultWithAmounts.vault' _).wf,
@@ -219,7 +213,7 @@ private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Rea
         (Or.inl (hic.canonical (by rw [h64]; decide))) _ hdes
       have hdd := hic.den_eq_one
       rw [← hdv] at hdd hST h0
-      exact l.holder_sub_exact hr hl h _ _ _ hdn hdd h0 hST ‹_›
+      exact l.holder_sub_exact hsn hl h _ _ _ hdn hdd h0 hST ‹_›
     · cases hu
   | vaultBurnShares h amount =>
     simp only [LendingLedger.applyVault] at hu
@@ -229,10 +223,10 @@ private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Rea
     simp only [Option.mem_def, Option.some.injEq] at hp
     subst hp
     have hof : STAmount.ofNumber .int64 (l.sharesOf h) .to_nearest = .ok _ := ‹_›
-    obtain ⟨hhs, hic, hval⟩ := l.holder_shareBalance hr hl h _ hof
+    obtain ⟨hhs, hic, hval⟩ := l.holder_shareBalance hsn hl h _ hof
     have hb : (l.vault.burnShares _).run = .ok (.ok _) := ‹_›
     have hST := Vault.burnShares_sharesTotal_exact_proof _ _ _ hb hic hhs.nonneg (by
-      rw [hval, RawVault.WF.toExact_sharesTotal _ l.vault.wf]; exact hl.sharesOf_le hr.sharesNonneg h)
+      rw [hval, RawVault.WF.toExact_sharesTotal _ l.vault.wf]; exact hl.sharesOf_le hsn h)
     rw [RawVault.WF.toExact_sharesTotal _ (Vault.wf _), RawVault.WF.toExact_sharesTotal _ l.vault.wf, hval] at hST
     refine ⟨by rw [Number.toRat_zero]; rfl, ?_⟩
     rw [hST, Number.toRat_zero]
@@ -248,14 +242,14 @@ private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Rea
     exact congrArg Number.toRat hraw
   | _ => simp only [LendingLedger.applyVault] at hu; cases hu
 
-/-- Every transaction keeps the holders' shares adding up to SharesTotal, given that a deposit fits. -/
-private lemma LendingLedger.SharesSum.step {l l' : LendingLedger} {tx : LendingTx} (hr : l.Reachable)
-    (hl : l.SharesSum) (hfit : (∃ h amount isDonation, tx = .vaultDeposit h amount isDonation) → l.MintFits)
+/-- Every transaction keeps the holders' shares adding up to SharesTotal. -/
+lemma LendingLedger.SharesSum.step {l l' : LendingLedger} {tx : LendingTx} (hr : l.Reachable)
+    (hsn : l.SharesNonneg) (hl : l.SharesSum)
     (h : (l.apply tx).run = .ok (.ok l')) : l'.SharesSum := by
   by_cases hv : tx.isVault = true
   · have hpre := (LendingLedger.apply_checked h).1
     obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_vault hv h
-    obtain ⟨hsome, hnone⟩ := l.applyVault_sharesSum hr hl tx hfit hpre u hu
+    obtain ⟨hsome, hnone⟩ := l.applyVault_sharesSum hr hsn hl tx hpre u hu
     unfold LendingLedger.commitVault
     cases hs : u.holderShares with
     | none => exact ⟨by rw [hnone hs]; exact hl.sum, hl.whole⟩
@@ -280,12 +274,6 @@ private lemma LendingLedger.SharesSum.step {l l' : LendingLedger} {tx : LendingT
     walk_ok
     exact ⟨hl.sum, hl.whole⟩
 
-/-- A transaction other than a deposit keeps the holders' shares adding up to SharesTotal. -/
-lemma LendingLedger.SharesSum.step_of_not_deposit {l l' : LendingLedger} {tx : LendingTx} (hr : l.Reachable)
-    (hl : l.SharesSum) (hnd : ∀ h amount isDonation, tx ≠ .vaultDeposit h amount isDonation)
-    (h : (l.apply tx).run = .ok (.ok l')) : l'.SharesSum :=
-  hl.step hr (fun ⟨h, amount, isDonation, he⟩ => absurd he (hnd h amount isDonation)) h
-
 /-- While shares exist and the holders' shares add up to SharesTotal, some holder owns some. -/
 lemma LendingLedger.SharesSum.exists_holder {l : LendingLedger} (hl : l.SharesSum)
     (hS : 0 < l.vault.sharesTotal.toRat) : ∃ h, 0 < (l.sharesOf h).toRat := by
@@ -293,12 +281,42 @@ lemma LendingLedger.SharesSum.exists_holder {l : LendingLedger} (hl : l.SharesSu
   by_contra hne
   push Not at hne
   have hle : (l.shares.map Number.toRat).sum ≤ 0 := by
-    refine le_trans (List.sum_le_card_nsmul _ 0 fun q hq => ?_) (by simp)
+    refine le_trans (List.sum_le_length_nsmul _ 0 fun q hq => ?_) (by simp)
     obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hq
     obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hx
     have := hne i
     unfold LendingLedger.sharesOf at this
     rwa [List.getD_eq_getElem _ _ hi] at this
   linarith
+
+/-- On a reachable ledger each holder owns a whole number of shares, at least zero, and they add up to SharesTotal.
+Proven together, since a clawback needs each fact to keep the other. -/
+lemma LendingLedger.Reachable.sharesNonneg_sharesSum {l : LendingLedger} (hr : l.Reachable) :
+    l.SharesNonneg ∧ l.SharesSum := by
+  have h := LendingLedger.Reachable.invariant (Inv := fun l => l.Reachable ∧ l.SharesNonneg ∧ l.SharesSum)
+    (fun g hg => by
+      refine ⟨⟨g, [], hg, .refl, fun _ hm => absurd hm List.not_mem_nil⟩, ?_, ?_, ?_⟩
+      · intro x hx
+        rw [hg.no_holders] at hx
+        cases hx
+      · obtain ⟨scale, m, s, eer, ocb, nt, -, hcreate⟩ := hg.created
+        have hraw := XRPL.Model.SingleAssetVault.Vault.create_ok_toRawVault hcreate
+        rw [hg.no_holders, show g.vault.sharesTotal = g.vault.toRawVault.sharesTotal from rfl, hraw]
+        exact Number.toRat_zero.symm
+      · intro x hx
+        rw [hg.no_holders] at hx
+        cases hx)
+    (fun l l' tx hi ha => ⟨hi.1.apply ha, hi.2.1.step hi.2.2.sharesOf_whole hi.1.holdsAsset ha,
+      hi.2.2.step hi.1 hi.2.1 ha⟩) hr
+  exact h.2
+
+/-- On a reachable ledger every holder's shares are a normalized Number of at least zero. -/
+lemma LendingLedger.Reachable.sharesNonneg {l : LendingLedger} (hr : l.Reachable) : l.SharesNonneg :=
+  hr.sharesNonneg_sharesSum.1
+
+/-- On a reachable ledger the holders' shares add up to SharesTotal and each holder owns a whole number of
+shares. -/
+lemma LendingLedger.Reachable.sharesSum {l : LendingLedger} (hr : l.Reachable) : l.SharesSum :=
+  hr.sharesNonneg_sharesSum.2
 
 end XRPL.Model.Lending

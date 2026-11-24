@@ -126,16 +126,16 @@ lemma LendingLedger.LoansInv.loan_step {l : LendingLedger} {s : VaultSchedule} (
   refine ⟨by rw [← hinv.schedule]; exact hs.schedule, fun j e he => ?_, fun j e he => ?_⟩
   · rw [LendingLedger.loan?_commitLoan] at he
     by_cases hj : j = (if u.loanIndex < l.loans.length then u.loanIndex else l.loans.length)
-    · rw [if_pos hj] at he
+    · rw [ite_eq_left hj] at he
       exact ⟨l.now, UInt32.le_iff_toNat_le.mpr (le_refl _), (hnew e he).1⟩
-    · rw [if_neg hj] at he
+    · rw [ite_eq_right hj] at he
       obtain ⟨t, hle, hr⟩ := hinv.reachable j e he
       exact ⟨t, hle, hr⟩
   · rw [LendingLedger.loan?_commitLoan] at he
     by_cases hj : j = (if u.loanIndex < l.loans.length then u.loanIndex else l.loans.length)
-    · rw [if_pos hj] at he
+    · rw [ite_eq_left hj] at he
       exact (hnew e he).2
-    · rw [if_neg hj] at he
+    · rw [ite_eq_right hj] at he
       exact hinv.mature j e he
 /-- Every transaction keeps the invariant. -/
 lemma LendingLedger.LoansInv.step {l l' : LendingLedger} {s : VaultSchedule} (hinv : l.LoansInv s)

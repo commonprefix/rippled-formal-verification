@@ -1,11 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionLoanPayRoom
 import XRPL.Properties.Lending.Loan.Common.PayExits
 
 /-! # What the instalment loop leaves for an overpayment
 
-The overpayment tail starts from the loan and the sums the instalment loop leaves. The loop keeps its sums
-normalized and within the instalments it paid, keeps PeriodicPayment, and a loan it leaves with payments to make
-still has the room the next instalment needs. -/
+The loop keeps its sums normalized and within the instalments it paid, keeps PeriodicPayment, and leaves a loan with
+payments to make the room its next instalment needs. -/
 
 namespace XRPL.Model.Lending
 

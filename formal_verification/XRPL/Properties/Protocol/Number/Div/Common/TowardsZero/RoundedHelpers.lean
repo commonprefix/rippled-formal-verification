@@ -77,14 +77,14 @@ lemma div_rounded_towards_zero_of_result_zero (x y result : Number)
   change ∃ n' : Number, (if x.toRat / y.toRat ≥ 0 then Number.lower (x.toRat / y.toRat)
     else Number.upper (x.toRat / y.toRat)) = some n' ∧ result.toRat = n'.toRat
   by_cases h_truth_nn : x.toRat / y.toRat ≥ 0
-  · rw [if_pos h_truth_nn]
+  · rw [ite_eq_left h_truth_nn]
     have h_truth_pos : 0 < x.toRat / y.toRat :=
       lt_of_le_of_ne h_truth_nn (Ne.symm h_truth_ne)
     refine ⟨Number.zero, ?_, ?_⟩
     · exact Number.lower_eq_zero_of_pos_small _ h_truth_pos
         (by rwa [abs_of_pos h_truth_pos] at h_small)
     · rw [h_res0, Number.toRat_zero]
-  · rw [if_neg h_truth_nn]
+  · rw [ite_eq_right h_truth_nn]
     push Not at h_truth_nn
     refine ⟨Number.zero, ?_, ?_⟩
     · exact Number.upper_eq_zero_of_neg_small _ h_truth_nn
@@ -108,8 +108,8 @@ theorem Number.operator_div_rounded_towards_zero_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact hyz hmeq
     unfold Number.operator_div at hok
-    rw [if_neg hy_guard,
-        if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
+    rw [ite_eq_right hy_guard,
+        ite_eq_left (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
       (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     have h_truth0 : x.toRat / y.toRat = 0 := by
@@ -117,10 +117,10 @@ theorem Number.operator_div_rounded_towards_zero_proof (x y result : Number)
     rw [h_truth0]
     change ∃ n' : Number, (if (0 : ℚ) ≥ 0 then Number.lower 0 else Number.upper 0)
       = some n' ∧ result.toRat = n'.toRat
-    rw [if_pos (by norm_num : (0 : ℚ) ≥ 0)]
+    rw [ite_eq_left (by norm_num : (0 : ℚ) ≥ 0)]
     refine ⟨Number.zero, ?_, ?_⟩
     · unfold Number.lower
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
     · rw [h_result, hx_zero]
   -- Underflow: flush-to-zero is correct rounding toward zero.
   by_cases hres : result.mantissa_ = 0
@@ -140,7 +140,7 @@ theorem Number.operator_div_rounded_towards_zero_proof (x y result : Number)
   change ∃ n' : Number, (if x.toRat / y.toRat ≥ 0 then Number.lower (x.toRat / y.toRat)
     else Number.upper (x.toRat / y.toRat)) = some n' ∧ result.toRat = n'.toRat
   by_cases h_truth_nn : x.toRat / y.toRat ≥ 0
-  · rw [if_pos h_truth_nn]
+  · rw [ite_eq_left h_truth_nn]
     -- Direction: result ≤ |result| ≤ |truth| = truth.
     have h_round_down : result.toRat ≤ x.toRat / y.toRat := by
       calc result.toRat ≤ |result.toRat| := le_abs_self _
@@ -150,7 +150,7 @@ theorem Number.operator_div_rounded_towards_zero_proof (x y result : Number)
       h_truth_ne h_bound h_truth_top h_round_down
       (Number.operator_div_no_inbetween_below_towards_zero x y result hx hy hxz hyz
         hok hresult h_round_down)
-  · rw [if_neg h_truth_nn]
+  · rw [ite_eq_right h_truth_nn]
     push Not at h_truth_nn
     have h_truth_np : x.toRat / y.toRat ≤ 0 := le_of_lt h_truth_nn
     -- Direction: truth = −|truth| ≤ −|result| ≤ result.

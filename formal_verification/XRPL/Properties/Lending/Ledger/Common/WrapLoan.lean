@@ -1,15 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.WrapBroker
 import XRPL.Properties.Lending.Loan.Common.PayMonotone
 import XRPL.Properties.Lending.Loan.Common.PaySteps
 
 /-! # The loan transactions never wrap around
 
-A loan transaction runs the lending helpers, the vault and broker updates, and a few checked fixed-width
-operations of its own: LoanCount and the first due date at LoanSet, LoanCount at LoanDelete, the end of the grace
-period at a default, and PaymentRemaining and the next due date at each instalment. A lawful loan keeps its due date
-on its schedule, and the schedule with its grace period fits the ledger clock, so the instalment and default
-operations never wrap. LoanSet needs a broker below `2^32 − 1` loans, and LoanDelete a broker that counts the
-loan. The amounts a payment passes from step to step are normalized, so its Number operations never wrap. -/
+The checked fixed-width operations of the loan transactions never wrap on a lawful loan. LoanSet needs a broker below
+`2^32 − 1` loans, and LoanDelete a broker that counts the loan. -/
 
 namespace XRPL.Model.Lending
 
@@ -371,9 +368,8 @@ lemma Loan.pay_ne_wrap (loan : Loan) (v : Vault) (pt : LoanPaymentType) (amount 
     simp only [Loan.pay, Loan.latePayment] at h
     unfold_ter at h
     walk_ok
-    all_goals first
+    all_goals try first
       | exact Loan.unimpairIfImpaired_ne_wrap _ _ ‹_›
-      | skip
     all_goals
       have hu := Loan.unimpairIfImpaired_loan _ _ _ ‹_›
       have hr : loan.unimpaired.paymentRemaining ≠ 0 := by
@@ -393,10 +389,9 @@ lemma Loan.pay_ne_wrap (loan : Loan) (v : Vault) (pt : LoanPaymentType) (amount 
     simp only [Loan.pay, Loan.fullPayment] at h
     unfold_ter at h
     walk_ok
-    all_goals first
+    all_goals try first
       | exact Loan.unimpairIfImpaired_ne_wrap _ _ ‹_›
       | exact Loan.fullComponents_ne_wrap _ _ ‹_›
-      | skip
     have hu := Loan.unimpairIfImpaired_loan _ _ _ ‹_›
     have h2 : 2 ≤ loan.paymentRemaining.toNat := by
       have := ‹¬ loan.paymentRemaining ≤ 1›

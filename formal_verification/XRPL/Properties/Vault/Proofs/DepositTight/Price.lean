@@ -158,7 +158,7 @@ private lemma IOUAmount.normalize_sigdigits16 (M : UInt64) (e : Int) (mode : rou
   have hntr := normalizeToRange_16_exact v mode hvm_lo hvm_hi hmod
     (by omega : minExponent ≤ v.exponent_ + 3) (by omega : v.exponent_ + 3 ≤ maxExponent)
   rw [hvneg] at hntr
-  simp only [Bool.false_eq_true, if_false] at hntr
+  simp only [Bool.false_eq_true, ite_false] at hntr
   have hfn : IOUAmount.fromNumber v mode
       = .ok ⟨(v.mantissa_ / 10 / 10 / 10).toInt64, v.exponent_ + 3⟩ := by
     unfold IOUAmount.fromNumber; rw [hntr]
@@ -168,14 +168,14 @@ private lemma IOUAmount.normalize_sigdigits16 (M : UInt64) (e : Int) (mode : rou
     rw [h, show (0 : Int64).toInt = 0 from by decide] at hMtoInt
     omega
   unfold IOUAmount.normalize at hok
-  rw [if_neg hmant_ne] at hok
+  rw [ite_eq_right hmant_ne] at hok
   rw [show (⟨M.toInt64, e⟩ : IOUAmount).mantissa_ = M.toInt64 from rfl,
       show (⟨M.toInt64, e⟩ : IOUAmount).exponent_ = e from rfl, hfr] at hok
   simp only [] at hok
   rw [hfn] at hok
   simp only [] at hok
-  rw [if_neg (by show ¬ (v.exponent_ + 3 > cMaxOffset); omega),
-      if_neg (by show ¬ (v.exponent_ + 3 < cMinOffset); omega)] at hok
+  rw [ite_eq_right (by show ¬ (v.exponent_ + 3 > cMaxOffset); omega),
+      ite_eq_right (by show ¬ (v.exponent_ + 3 < cMinOffset); omega)] at hok
   have hieq : i = ⟨(v.mantissa_ / 10 / 10 / 10).toInt64, v.exponent_ + 3⟩ := (Except.ok.inj hok).symm
   rw [hieq, IOUAmount.toRat_eq]
   show ((v.mantissa_ / 10 / 10 / 10).toInt64.toInt : ℚ) * (10:ℚ)^(v.exponent_ + 3) = _
@@ -216,10 +216,10 @@ private lemma STAmount.checked_frac_sigdigits_exact (M : UInt64) (e : Int) (mode
     show s0.signedDrops = (M.toNat : ℤ)
     simp [hs0, STAmount.signedDrops, STAmount.unchecked]
   have hiou : s0.iou mode = IOUAmount.normalize ⟨M.toInt64, e⟩ mode := by
-    rw [STAmount.iou_eq mode h_int, hsd_eq]; rfl
+    rw [STAmount.iou_eq mode h_int hfit, hsd_eq]; rfl
   rw [STAmount.checked] at hok
   unfold STAmount.canonicalize at hok
-  rw [if_neg h_int, hiou] at hok
+  rw [ite_eq_right h_int, hiou] at hok
   cases h_norm : IOUAmount.normalize ⟨M.toInt64, e⟩ mode with
   | error err => rw [h_norm] at hok; simp at hok
   | ok i =>
@@ -277,7 +277,7 @@ lemma empty_shares_floor (v : Vault) (amount shares : STAmount) (hc : amount.Can
     deposit_empty_chain_facts v (Vault.scale_toNat_le v) amount shares hc hpos navN hat hmz hok hnz
   have hideal : v.idealSharesDepositAt navN.toRat amount.toRat = n1.toRat := by
     unfold RawVault.idealSharesDepositAt
-    rw [if_pos (Number.toRat_eq_zero_of_mantissa_zero navN hmz), hn1val, zpow_natCast]
+    rw [ite_eq_left (Number.toRat_eq_zero_of_mantissa_zero navN hmz), hn1val, zpow_natCast]
   obtain ⟨hn2val, -⟩ := Number.truncate_floor n1 n2 hn1norm hn1neg hn2
   have hshval : shares.toRat = n2.toRat :=
     STAmount.ofNumber_integral_exact .int64 n2 .to_nearest shares (by decide) hn2norm hn2den hsh
@@ -346,7 +346,7 @@ lemma empty_frac_charge_exact (v : Vault) (amount shares c : STAmount)
   obtain ⟨navN', hat', hsad⟩ := bind_ok_peel _ _ _ hsad
   rw [hat, Except.ok.injEq] at hat'
   subst hat'
-  rw [if_pos hmz] at hsad
+  rw [ite_eq_left hmz] at hsad
   obtain ⟨c', hcx, hlast⟩ := bind_ok_peel _ _ _ hsad
   have hc' : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
   have hexp0 : shares.exponent = 0 := hshc.offset_zero
@@ -360,7 +360,7 @@ lemma empty_frac_charge_exact (v : Vault) (amount shares c : STAmount)
   rw [hcval]
   unfold RawVault.idealChargeDeposit
   have hA0 : v.toExact.assetsTotal = 0 := (Vault.assetsTotal_eq_zero_iff v navN hat).mp hmz
-  rw [if_pos hA0]
+  rw [ite_eq_left hA0]
   have hsheq : shares.toRat = (shares.mValue.toNat : ℚ) := by
     rw [STAmount.toRat_of_nonneg shares hshneg, hshc.offset_zero]; norm_num
   rw [hsheq, show (0 : ℤ) - (v.scale.toNat : ℤ) = -(v.scale.toNat : ℤ) from by ring,
@@ -415,13 +415,13 @@ lemma charge_nonempty (v : Vault) (shares c : STAmount)
     Number.mantissa_ne_zero_of_toRat_ne_zero (by rw [← hST_def]; exact ne_of_gt hST_pos)
   have hideal : v.idealChargeDepositAt navN.toRat s = nav * s / ST := by
     unfold RawVault.idealChargeDepositAt
-    rw [if_neg (ne_of_gt hnav_pos), RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
+    rw [ite_eq_right (ne_of_gt hnav_pos), RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
   have hidpos : 0 < nav * s / ST := div_pos (mul_pos hnav_pos hshpos) hST_pos
   unfold sharesToAssetsDeposit at hsad
   obtain ⟨navN', hat', hsad⟩ := bind_ok_peel _ _ _ hsad
   rw [hat, Except.ok.injEq] at hat'
   subst hat'
-  rw [if_neg hmz] at hsad
+  rw [ite_eq_right hmz] at hsad
   obtain ⟨_, _, hsad⟩ := bind_ok_peel _ _ _ hsad
   obtain ⟨shN, hshN, hsad⟩ := bind_ok_peel _ _ _ hsad
   obtain ⟨P, hP, hsad⟩ := bind_ok_peel _ _ _ hsad

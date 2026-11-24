@@ -44,7 +44,7 @@ theorem doNormalize128_algorithmic_facts_round
     rw [this] at hM_pos; simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
@@ -94,30 +94,30 @@ theorem doNormalize128_algorithmic_facts_round
   have hrep₀ : represents g₀ ftilde₀ := by
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst, if_pos hst]; exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]; exact g0_represents_zero zn
+    · rw [ite_eq_left hst, ite_eq_left hst]; exact represents_sticky_initial128 zn
+    · rw [ite_eq_right hst, ite_eq_right hst]; exact g0_represents_zero zn
   have h_g0_sbit : g₀.sbit_ = zn := by
     rw [hg₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst]
+    · rw [ite_eq_left hst]
       by_cases hz : zn
-      · rw [if_pos hz, hz]; rfl
-      · rw [if_neg hz]; rw [Bool.not_eq_true] at hz; rw [hz]; rfl
-    · rw [if_neg hst]
+      · rw [ite_eq_left hz, hz]; rfl
+      · rw [ite_eq_right hz]; rw [Bool.not_eq_true] at hz; rw [hz]; rfl
+    · rw [ite_eq_right hst]
       by_cases hz : zn
-      · rw [if_pos hz, hz]; rfl
-      · rw [if_neg hz]; rw [Bool.not_eq_true] at hz; rw [hz]; rfl
+      · rw [ite_eq_left hz, hz]; rfl
+      · rw [ite_eq_right hz]; rw [Bool.not_eq_true] at hz; rw [hz]; rfl
   -- === value-invariant setup for g₀ ===
   have hg0_digits : g₀.digits_ = 0 := by
     rw [hg₀_def]; by_cases hst : sticky = true
-    · rw [if_pos hst]; cases zn <;> rfl
-    · rw [if_neg hst]; cases zn <;> rfl
+    · rw [ite_eq_left hst]; cases zn <;> rfl
+    · rw [ite_eq_right hst]; cases zn <;> rfl
   have hg0_dv : decimalValue g₀.digits_ = 0 := by rw [hg0_digits, decimalValue_zero]
   have hg0_all : allNibblesAtMost9 g₀.digits_ := by rw [hg0_digits]; exact allNibblesAtMost9_zero
   have hg0_xbit : g₀.xbit_ = sticky := by
     rw [hg₀_def]; by_cases hst : sticky = true
-    · rw [if_pos hst, hst]; cases zn <;> rfl
-    · rw [if_neg hst]; rw [Bool.not_eq_true] at hst; rw [hst]; cases zn <;> rfl
+    · rw [ite_eq_left hst, hst]; cases zn <;> rfl
+    · rw [ite_eq_right hst]; rw [Bool.not_eq_true] at hst; rw [hst]; cases zn <;> rfl
   have hg0_xbit_iff : g₀.xbit_ = true ↔ 0 < δ₁ := by
     rw [hg0_xbit]; constructor
     · intro h; exact hδ₁_pos h
@@ -144,10 +144,10 @@ theorem doNormalize128_algorithmic_facts_round
       doNormalize_scaleDown128_valueInv largeRange.max M₁ e₁ g₀ hmaxM_v δ₁ δ₁ 0
         hδ₁_nn hvxlt0 hvval0 hg0_xbit_iff hg0_all hvdvd0 hvsize0 hvcouple0 sd hsd
     by_cases hund : (sd.2.1 < minExponent || sd.1 < toUInt128 largeRange.min) = true
-    · rw [if_pos hund] at hok
+    · rw [ite_eq_left hund] at hok
       exfalso; apply hres
       have h := Except.ok.inj hok; rw [← h]; rfl
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by

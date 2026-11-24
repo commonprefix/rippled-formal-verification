@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FullPaymentSize
 import XRPL.Properties.Lending.Loan.Common.PayPrincipal
 
@@ -58,11 +59,11 @@ lemma STAmount.roundToNumericType_to_nearest_le (nt : NumericType) (x T : Number
       simp only at hok
       have hty := STAmount.ofNumber_mNumericType _ _ _ st hst
       have hint : st.integral = false := by unfold STAmount.integral; rw [hty]; rfl
-      rw [if_neg (by rw [hint]; decide)] at hok
+      rw [ite_eq_right (by rw [hint]; decide)] at hok
       have hre : STAmount.roundToExponent st s .to_nearest = .ok st := by
         unfold STAmount.roundToExponent
-        rw [if_neg (by rw [hint]; decide), if_neg (by unfold STAmount.isZero; simpa using hmv),
-          if_pos (le_of_lt hlt)]
+        rw [ite_eq_right (by rw [hint]; decide), ite_eq_right (by unfold STAmount.isZero; simpa using hmv),
+          ite_eq_left (le_of_lt hlt)]
       rw [hre] at hok
       simp only at hok
       have hc := STAmount.ofNumber_exactCanonical _ _ _ st hx h0 hst hmv
@@ -96,7 +97,7 @@ private lemma loanPeriodicRate_le_cap (ir : TenthBips32) (interval : UInt32) (ra
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
   have heq : loanPeriodicRate ir interval =
-      (tenthBipsOfValue (Number.ofInt64 interval.toInt64) ir .to_nearest) >>=
+      (tenthBipsOfValue (Number.ofInt64 interval.toInt64 .to_nearest) ir .to_nearest) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨tb, htb, h⟩ := bind_ok_peel _ _ _ h
@@ -104,7 +105,7 @@ private lemma loanPeriodicRate_le_cap (ir : TenthBips32) (interval : UInt32) (ra
   have hiv := Number.ofInt64_count interval
   obtain ⟨htbN, htb0, htble⟩ := tenthBipsOfValue_le_share _ _ _ hin (by rw [hiv]; positivity) htb
   obtain ⟨hyn, hyv⟩ := TenthBips32.toNumber_facts (31536000 : UInt32)
-  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) := rfl
+  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) .to_nearest := rfl
   rw [hy] at h
   have hyv' : ((31536000 : UInt32).toNat : ℚ) = 31536000 := rfl
   refine ⟨Number.operator_div_isNormalized _ _ _ _ htbN hyn h,
@@ -236,9 +237,8 @@ private lemma UnsettledPayment.applyOverpayment_interest_le (payment p' : Unsett
   unfold UnsettledPayment.applyOverpayment at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | nlinarith
-    | skip
   rename_i _ a' ha' hcond _ un hun _ ov hov hovp _ opc hopc hpd _ _ re hre _ am ham _ l' hl'
   have ha'N := STAmount.roundToNumericType_isNormalized _ _ _ _ _ ha'
   have hlt : payment.totalPaid.toRat < a'.toRat := by

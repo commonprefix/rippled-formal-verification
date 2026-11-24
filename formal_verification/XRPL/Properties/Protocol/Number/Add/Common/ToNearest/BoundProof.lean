@@ -12,10 +12,10 @@ theorem Number.operator_add_rounding_bound_same_sign_to_nearest (x y : Number) (
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
     (hok : Number.operator_add x y .to_nearest = .ok result) :
     |result.toRat - (x.toRat + y.toRat)| ≤ |x.toRat + y.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) := by
-  obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le_maxRep, _hf_nn, _hf_lt, h_floor_constraint,
-          habs_xy_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, _, _, _⟩ :=
-    Number.operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
-      h_same_sign h_not_zero hok
+  obtain ⟨zm, ze', f, g, res_pos, hzm_succ, hzm_le_maxRep, hf_nn, hf_lt, habs_xy_eq, h_rup_pos, h_result_abs,
+      hres_pos_mant_ne, h_sign, hrl⟩ :=
+    Number.operator_add_same_sign_nearest_facts x y result hx hy hx_mant_ne hy_mant_ne h_same_sign h_not_zero hok
+  have hfloor : mantissaFloor < mantissaFloorSucc := by decide
   -- For same-sign add, x.toRat + y.toRat has the same sign as both x.toRat and y.toRat.
   -- And result.negative_ = x.negative_ from `h_sign`. So `result.toRat` aligns with `x+y`.
   have h_abs_diff_eq : |result.toRat - (x.toRat + y.toRat)|
@@ -38,8 +38,8 @@ theorem Number.operator_add_rounding_bound_same_sign_to_nearest (x y : Number) (
   rw [h_abs_diff_eq, h_result_abs, habs_xy_eq]
   have h_bound_eq : ((2 ^ 63 + 7 : ℕ) : ℚ) = (2 ^ 63 + 7 : ℚ) := by norm_num
   rw [← h_bound_eq]
-  exact doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp g zm ze' f hf_rep hzm_ge hzm_le_maxRep
-    h_floor_constraint .overflow res_pos h_rup_pos hres_pos_mant_ne
+  exact doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp_of_roundsLike g zm ze' f hrl hf_nn hf_lt (by omega)
+    hzm_le_maxRep (fun h => absurd h (by omega)) .normalize2 res_pos h_rup_pos hres_pos_mant_ne
 /-- For nonzero operands that do not cancel, `to_nearest` addition with a nonzero result has relative error at most
 `6/(2^63 - 3)`. The same-sign bound `5/(2^63 + 7)` is smaller. -/
 theorem Number.operator_add_rounding_bound_to_nearest_tight (x y result : Number)

@@ -3,9 +3,8 @@ import XRPL.Properties.Lending.Ledger.Common.BrokerSteps
 
 /-! # What a successful loan transaction did to the ledger
 
-Each lemma turns a successful `l.apply` of a loan transaction into the model operation it ran. The operation reads
-the ledger before (`l.LoanAt i loan`, `l.vault`, `l.now`), and the ledger after holds its result (`l'.LoanAt i loan'`,
-`l'.vault`). Headline theorems state loan transactions through `l.apply` and reach the operation with these. -/
+Each lemma turns a successful `l.apply` of a loan transaction into the model operation it ran, so headline theorems
+stated through `l.apply` can reach that operation. -/
 
 namespace XRPL.Model.Lending
 
@@ -15,7 +14,7 @@ open XRPL.Model.SingleAssetVault (Vault)
 /-- A loan read with its own broker is itself. -/
 lemma Loan.withBroker_self (loan : Loan) : loan.withBroker loan.broker = .ok loan := by
   unfold Loan.withBroker RawLoan.to_lawful
-  rw [dif_pos ⟨loan.wf, loan.valid⟩]
+  rw [dite_eq_left ⟨loan.wf, loan.valid⟩]
 
 /-- The ledger reads at most one loan at `i`. -/
 lemma LendingLedger.LoanAt.eq {l : LendingLedger} {i : Nat} {a b : Loan} (ha : l.LoanAt i a) (hb : l.LoanAt i b) :
@@ -150,9 +149,8 @@ lemma LendingLedger.loanDelete_ok {l l' : LendingLedger} {i : Nat}
   · intro j
     rw [LendingLedger.broker?_commitLoan l _ b hb]
 
-/-- A successful LoanSet on broker `j`: the schedule its fields build fits, the broker and the vault passed
-`canCreate`, and `Loan.create` returned `r`. The ledger after holds the vault of `r`, the new loan at the end of the
-loan list, and the broker of `r` at `j`. -/
+/-- A successful LoanSet on broker `j` passed `canCreate` and `Loan.create` returned `r`. The ledger after holds the
+vault and broker of `r` and the new loan at the end of the loan list. -/
 lemma LendingLedger.loanSet_ok {l l' : LendingLedger} {j : Nat} {principal : Number} {rates : LoanRates}
     {fees : LoanFees} {paymentInterval paymentTotal gracePeriod : Option UInt32} {startDate : UInt32}
     {twoStep allowsOverpayment : Bool}
@@ -184,7 +182,7 @@ lemma LendingLedger.loanSet_ok {l l' : LendingLedger} {j : Nat} {principal : Num
     | ok t =>
       dsimp only at hu
       cases ht : t.isTesSuccess
-      · rw [ht, if_pos (by decide)] at hu
+      · rw [ht, ite_eq_left (by decide)] at hu
         cases hu
       · exact congrArg Except.ok ((TER.isTesSuccess_iff t).mp ht)
   obtain ⟨broker, r, hb, hc, hcr, rfl⟩ := l.applyLoanSet_inv u j principal rates fees _ twoStep allowsOverpayment hu

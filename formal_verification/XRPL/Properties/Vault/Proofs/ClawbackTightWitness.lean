@@ -3,16 +3,10 @@ import XRPL.Properties.Vault.Common.ClawbackDefs
 
 /-! # Witnesses for the clawback share count and recovery
 
-Each run's result is computed by the model and checked by `native_decide`. Every vault comes from a
-reachable history: a create, a deposit, then a donation.
+Clawbacks on reachable vaults that destroy fewer shares than the ideal, more shares than the ideal, and recover more
+than the destroyed shares' worth. -/
 
-* Truncation: `4577096644444257` assets and shares, claw back `5005`: ideal `5005` shares, destroyed
-  `5004`.
-* Sharp share overshoot: a scale-1 vault of `100000000500000` assets and `100001000500005` shares,
-  claw back `10000000098999.01`: the clawback destroys more shares than the ideal.
-* Recovery overshoot: 3 assets and 2 shares, claw back `2`: one share, worth `1.5`, recovered `2`. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.ClawTightWit
 

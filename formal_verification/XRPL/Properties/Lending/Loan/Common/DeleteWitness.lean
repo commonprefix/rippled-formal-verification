@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 On the coarsened vault of `CoarsenedVault.lean` a pending delete can credit AssetsAvailable other than the
 principal: deleting a pending loan of 0.6 credits 1. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

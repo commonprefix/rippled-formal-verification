@@ -7,9 +7,8 @@ import XRPL.Properties.Lending.Common.PoolBalances
 
 /-! # Which errors the pricing of a withdrawal returns
 
-The pricing of a withdrawal or a clawback runs inside a `try` that turns an overflow error into `tecPATH_DRY`. On an
-IOU or MPT vault every error of the pricing is an overflow error or a wrap. On an XRP vault the price of the shares
-is built as an XRP amount, which fails with `outOfRange` above `10^17` drops (FV_M2_25). -/
+The pricing of a withdrawal or a clawback runs in a `try` that turns an overflow error into `tecPATH_DRY`. Its other
+errors are a wrap, and on XRP `outOfRange` above `10^17` drops (FV_M2_25). -/
 
 namespace XRPL.Model.SingleAssetVault.VaultWithdrawErrors
 
@@ -108,12 +107,11 @@ lemma sharesToAssets_native_error {v : Vault} {sh : STAmount} {w : Bool} {e : Er
     (h : v.sharesToAssetsWithdraw sh w = .error e) : isOverflow e = true ∨ e = .wrap := by
   simp only [Vault.sharesToAssetsWithdraw, bind, Except.bind, pure, Except.pure] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact nav_error ‹_›
     | exact toNumber_error ‹_›
     | exact number_mul_error ‹_›
     | exact number_div_error ‹_›
-    | skip
   -- the price converts into an XRP amount
   have hnav : v.assetsTotalForWithdrawal w = .ok _ := ‹_›
   have hof : STAmount.ofNumber v.numericType _ .to_nearest = .error e := ‹_›

@@ -272,7 +272,7 @@ lemma LendingLedger.cover_step (l l' : LendingLedger) (tx : LendingTx) (hr : l.R
     unfold LendingLedger.brokerCover
     rw [LendingLedger.broker?_commitBroker]
     by_cases hj : j = (if u.index < l.brokers.length then u.index else l.brokers.length)
-    · rw [if_pos hj]
+    · rw [ite_eq_left hj]
       cases hub : u.broker with
       | none => exact hO'
       | some b' =>
@@ -288,7 +288,7 @@ lemma LendingLedger.cover_step (l l' : LendingLedger) (tx : LendingTx) (hr : l.R
             unfold LendingLedger.brokerCover; rw [h1, h2]
         rw [hidx] at hc
         exact hc
-    · rw [if_neg hj]; exact le_max_left _ _
+    · rw [ite_eq_right hj]; exact le_max_left _ _
   by_cases hl : tx.isLoan = true
   · obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_loan hl h
     obtain ⟨b, hbk, hcu⟩ := l.applyLoan_cover hr hnc tx (fun i pt amount h' => hpay i pt amount h') u hu

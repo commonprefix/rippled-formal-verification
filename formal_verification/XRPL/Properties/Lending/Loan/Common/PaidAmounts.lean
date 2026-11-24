@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayPrincipal
 import XRPL.Properties.Lending.Loan.Common.YieldGrid
 
@@ -163,9 +164,8 @@ private lemma Loan.tryOverpayment_onGrid (l : Loan) (opc : PaymentComponents) (r
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   exact hopc
 
@@ -176,9 +176,8 @@ private lemma UnsettledPayment.applyOverpayment_onGrid (payment p' : UnsettledPa
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact hp
-    | skip
   subst hls
   have hsb := Loan.loanScale_bounds payment.loan
   have hopc := Loan.overpaymentComponents_onGrid _ _ _ hr ‹Loan.overpaymentComponents _ _ = _›
@@ -303,9 +302,8 @@ private lemma Loan.tryOverpayment_fee_onGrid (l : Loan) (opc : PaymentComponents
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   exact Number.OnGrid.add g1 g2 hs ‹_›
 
@@ -316,9 +314,8 @@ private lemma UnsettledPayment.applyOverpayment_fee_onGrid (payment p' : Unsettl
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact hp
-    | skip
   subst hls
   have hsb := Loan.loanScale_bounds payment.loan
   obtain ⟨g1, g2⟩ := Loan.overpaymentComponents_fee_onGrid _ _ _ hr ‹Loan.overpaymentComponents _ _ = _›

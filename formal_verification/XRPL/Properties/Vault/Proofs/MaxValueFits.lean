@@ -20,9 +20,8 @@ import XRPL.Properties.Protocol.Number.Signum.Signum
 
 /-! # The asset of a reachable vault with shares fits an `int64` amount
 
-A vault's asset never changes along a history, and every vault with shares took a deposit of a
-canonical amount in that asset, which bounds an integral asset's maximum by `maxRep`. A reachable
-vault without shares holds no cash. -/
+Every vault with shares took a canonical deposit of its asset, which bounds an integral asset's maximum by `maxRep`.
+A reachable vault without shares holds no cash. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -104,7 +103,7 @@ private lemma Vault.Reachable.clawback_no_shares_names_holder (v : Vault) (t0 : 
       exfalso
       have h : assetsToSharesWithdraw v assets true waive = .ok shares := ‹_›
       simp only [assetsToSharesWithdraw, hnav, bind, Except.bind, pure, Except.pure,
-        show (Number.zero.mantissa_ == 0) = true from rfl, if_true, Except.ok.injEq] at h
+        show (Number.zero.mantissa_ == 0) = true from rfl, ite_true, Except.ok.injEq] at h
       subst h
       exact (STAmount.isZero_eq_false_iff _).mp hsz (STAmount.zero_mValue _)
   obtain ⟨recovered, -, hpr, -, -, -⟩ :=
@@ -180,7 +179,7 @@ lemma Vault.Reachable.maxValue_fits (v : Vault) (t : UInt32) (hr : Vault.Reachab
     have hST : w.sharesTotal = Number.zero := (congrArg RawVault.sharesTotal (Vault.create_ok_toRawVault hcr)).trans rfl
     rw [RawVault.WF.toExact_sharesTotal w.toRawVault w.wf, hST, Number.toRat_zero] at hs
     exact absurd hs (lt_irrefl 0)
-  | deposit u _ _ _ _ r _ _ hc hty _ hok _ _ =>
+  | deposit u _ _ _ _ r _ _ hc hty _ hok _ =>
     intro _
     obtain ⟨_, _, hv⟩ := Vault.deposit_frame u _ _ _ _ r hok
     have hnt : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
@@ -192,7 +191,7 @@ lemma Vault.Reachable.maxValue_fits (v : Vault) (t : UInt32) (hr : Vault.Reachab
     have hnt : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     rw [hnt]
     exact ih (Vault.withdraw_sharesTotal_pos u amount _ _ hpos hc hty r hok)
-  | clawback u _ _ assets holderShares waive r hru _ _ _ hhs _ hnn hok _ ih =>
+  | clawback u _ _ assets holderShares waive r hru _ _ _ hhs _ hnn hok ih =>
     intro _
     obtain ⟨_, _, hv⟩ := Vault.clawback_frame u _ _ _ _ r hok
     have hnt : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl

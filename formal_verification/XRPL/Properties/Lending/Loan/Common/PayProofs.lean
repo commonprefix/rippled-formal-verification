@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaySteps
 
 /-! # Proof bodies for the LoanPay theorems -/
@@ -200,7 +201,7 @@ private lemma Loan.doPayment_decreases (pc : PaymentComponents) (l' : Loan) (hr 
   cases hf : pc.isFinal
   · rw [(Loan.doPayment_notFinal _ _ _ hf hdo).1]
     have hpr : loan.unimpaired.paymentRemaining = loan.paymentRemaining := rfl
-    rw [hpr, UInt32.toNat_sub_of_le _ _ (by rw [UInt32.le_iff_toNat_le]; simpa using hpos)]
+    rw [hpr, UInt32.toNat_sub_of_le _ _ (by rw [UInt32.le_iff_toNat_le]; simpa using! hpos)]
     simp; omega
   · rw [Loan.doPayment_final _ _ _ hf hdo]
     simpa using hpos

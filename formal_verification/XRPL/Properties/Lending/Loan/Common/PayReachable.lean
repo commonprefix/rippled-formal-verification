@@ -316,7 +316,8 @@ private lemma Loan.pay_yieldDelta (l : LendingLedger) (hr : l.Reachable) (i : Na
   have hB := NumericType.mantissaBound_le loan.toExact.numericType
   have hac : -2 ^ 63 < a - c ∧ a - c < 2 ^ 63 := by
     cases hi : loan.broker.numericType.isIntegral
-    · have hfr : loan.toExact.numericType = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using hi)
+    · have hfr : loan.toExact.numericType = .fractional :=
+        NumericType.eq_fractional_of_not_integral (by simpa using! hi)
       rw [hnt, hfr] at haB
       rw [hfr] at hcB
       simp only [NumericType.mantissaBound] at haB hcB

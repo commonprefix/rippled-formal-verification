@@ -111,7 +111,7 @@ lemma Number.operator_mul_underflow_truth_small_proof (x y result : Number) (mod
   have hy_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hy_mant_ne
   rw [Number.operator_mul_eq_spec] at hok
   unfold Number.operator_mulSpec at hok
-  simp only [hx_ne_zero, hy_ne_zero, Bool.false_eq_true, if_false] at hok
+  simp only [hx_ne_zero, hy_ne_zero, Bool.false_eq_true, ite_false] at hok
   set zn : Bool := x.negative_ != y.negative_ with hzn_def
   set zm128 : UInt128 := toUInt128 x.mantissa_ * toUInt128 y.mantissa_ with hzm128_def
   set ze : Int := x.exponent_ + y.exponent_ with hze_def

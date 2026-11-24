@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.InterestDue
 
 /-! # A re-amortization keeps interestDue at least zero on XRP and MPT loans
@@ -28,7 +29,7 @@ private lemma STAmount.roundToNumericType_int_amount (nt : NumericType) (hnt : n
     have hT : st.toNumber mode = .ok T := by
       cases s with
       | none => exact hok
-      | some s => simp only [hint, if_true] at hok; exact hok
+      | some s => simp only [hint, ite_true] at hok; exact hok
     have hic := (STAmount.ofNumber_integral_canonical nt x mode st hnt hof).1
     have hsz : st.mValue.toNat ≤ 2 ^ 63 - 1 := by
       have h1 := hic.in_range
@@ -344,9 +345,8 @@ lemma Loan.tryOverpayment_interestDue_nonneg_int (l : Loan) (opc : PaymentCompon
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   exact Loan.reamortized_interestDue_nonneg_int l opc hint hmax hls0 hT hi hpd ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
     ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›

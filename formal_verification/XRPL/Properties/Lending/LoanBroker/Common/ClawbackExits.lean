@@ -30,7 +30,7 @@ private lemma LoanBroker.roundedCoverClawback_run (lb : LoanBroker) (pool : α) 
   rw [hmin]
   simp only
   rw [hsub]
-  simp only [hp, if_false]
+  simp only [hp, ite_false]
   cases amount with
   | none =>
     simp only [LoanBroker.clawRequest, Except.pure, Except.ok.injEq] at hreq
@@ -42,15 +42,15 @@ private lemma LoanBroker.roundedCoverClawback_run (lb : LoanBroker) (pool : α) 
   | some a =>
     unfold LoanBroker.clawRequest at hreq
     by_cases ha : a.isZero = true
-    · simp only [ha, if_true, Except.pure, Except.ok.injEq] at hreq
+    · simp only [ha, ite_true, Except.pure, Except.ok.injEq] at hreq
       subst hreq
       dsimp only
-      rw [if_pos ha, hof]
+      rw [ite_eq_left ha, hof]
       dsimp only
       cases clampToSumExponent lb.coverAvailable claw'.operator_neg (AssetPool.baseExponent pool) <;> rfl
-    · simp only [ha, Bool.false_eq_true, if_false] at hreq
+    · simp only [ha, Bool.false_eq_true, ite_false] at hreq
       dsimp only
-      rw [if_neg ha]
+      rw [ite_eq_right ha]
       cases hn : a.toNumber .to_nearest with
       | error e => rw [hn] at hreq; cases hreq
       | ok m =>
@@ -74,7 +74,7 @@ lemma LoanBroker.roundedCoverClawback_no_excess_proof (lb : LoanBroker) (pool : 
   rw [hmin]
   simp only
   rw [hsub]
-  simp only [hle, if_true]
+  simp only [hle, ite_true]
 
 /-- Proof body of the precision-loss exit of `LoanBroker.roundedCoverClawback_exits`. -/
 lemma LoanBroker.roundedCoverClawback_precision_loss_proof (lb : LoanBroker) (pool : α)

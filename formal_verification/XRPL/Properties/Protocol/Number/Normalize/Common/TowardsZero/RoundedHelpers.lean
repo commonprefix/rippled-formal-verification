@@ -11,9 +11,8 @@ namespace XRPL.Model.Protocol
 
 /-! # `Number.normalize` is correctly rounded under `.towards_zero`
 
-`.towards_zero` always truncates, so the result is `Number.lower` of the input value for nonnegative inputs and
-`Number.upper` for negative ones. No nonzero hypothesis is needed: a zero input gives zero, and an underflow flushes
-to zero, which is itself correct rounding toward zero. -/
+`.towards_zero` truncates, so the result is `Number.lower` of a non-negative input and `Number.upper` of a negative
+one. An underflow gives zero, which is also a correct rounding toward zero. -/
 
 /-- No normalized Number lies above `result.toRat` and at or below `n.toRat` when `result.toRat ≤ n.toRat`. -/
 theorem Number.normalize_no_inbetween_below_towards_zero (n result : Number)
@@ -71,13 +70,13 @@ lemma Number.normalize_rounded_towards_zero_of_result_zero (n result : Number)
   change ∃ n' : Number, (if n.toRat ≥ 0 then Number.lower n.toRat else Number.upper n.toRat)
     = some n' ∧ result.toRat = n'.toRat
   by_cases h_truth_nn : n.toRat ≥ 0
-  · rw [if_pos h_truth_nn]
+  · rw [ite_eq_left h_truth_nn]
     have h_truth_pos : 0 < n.toRat := lt_of_le_of_ne h_truth_nn (Ne.symm h_truth_ne)
     refine ⟨Number.zero, ?_, ?_⟩
     · exact Number.lower_eq_zero_of_pos_small _ h_truth_pos
         (by rwa [abs_of_pos h_truth_pos] at h_small)
     · rw [h_res0, Number.toRat_zero]
-  · rw [if_neg h_truth_nn]
+  · rw [ite_eq_right h_truth_nn]
     push Not at h_truth_nn
     refine ⟨Number.zero, ?_, ?_⟩
     · exact Number.upper_eq_zero_of_neg_small _ h_truth_nn
@@ -96,15 +95,15 @@ theorem Number.normalize_rounded_towards_zero_proof (n result : Number)
     unfold Number.normalize at hok
     replace hok := doNormalize_ok_spec hok
     unfold doNormalizeSpec at hok
-    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr hnz, if_pos rfl] at hok
+    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr hnz, ite_eq_left rfl] at hok
     have h_result : result = Number.zero := (Except.ok.inj hok).symm
     rw [h_truth0]
     change ∃ n' : Number, (if (0 : ℚ) ≥ 0 then Number.lower 0 else Number.upper 0)
       = some n' ∧ result.toRat = n'.toRat
-    rw [if_pos (by norm_num : (0 : ℚ) ≥ 0)]
+    rw [ite_eq_left (by norm_num : (0 : ℚ) ≥ 0)]
     refine ⟨Number.zero, ?_, ?_⟩
     · unfold Number.lower
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
     · rw [h_result]
   -- Underflow: flush-to-zero is correct rounding toward zero.
   by_cases hres : result.mantissa_ = 0
@@ -141,7 +140,7 @@ theorem Number.normalize_rounded_towards_zero_proof (n result : Number)
   change ∃ n' : Number, (if n.toRat ≥ 0 then Number.lower n.toRat else Number.upper n.toRat)
     = some n' ∧ result.toRat = n'.toRat
   by_cases h_truth_nn : n.toRat ≥ 0
-  · rw [if_pos h_truth_nn]
+  · rw [ite_eq_left h_truth_nn]
     -- Direction: result ≤ |result| ≤ |truth| = truth.
     have h_round_down : result.toRat ≤ n.toRat := by
       calc result.toRat ≤ |result.toRat| := le_abs_self _
@@ -150,7 +149,7 @@ theorem Number.normalize_rounded_towards_zero_proof (n result : Number)
     exact closest_lower_of_no_inbetween result n.toRat h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_round_down
       (Number.normalize_no_inbetween_below_towards_zero n result hnz hok hresult h_round_down)
-  · rw [if_neg h_truth_nn]
+  · rw [ite_eq_right h_truth_nn]
     push Not at h_truth_nn
     have h_truth_np : n.toRat ≤ 0 := le_of_lt h_truth_nn
     -- Direction: truth = −|truth| ≤ −|result| ≤ result.

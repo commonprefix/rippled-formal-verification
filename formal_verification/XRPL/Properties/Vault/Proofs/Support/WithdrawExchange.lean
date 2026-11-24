@@ -92,10 +92,10 @@ lemma assetsToSharesWithdraw_pos (v : Vault) (amount shares : STAmount) (waive :
   dsimp only at hok
   by_cases hmz : navN.mantissa_ = 0
   · -- a zero net asset value burns no shares
-    rw [if_pos (by simp [hmz])] at hok
+    rw [ite_eq_left (by simp [hmz])] at hok
     obtain rfl := Except.ok.inj hok
     exact absurd hnz (by decide)
-  rw [if_neg (by simp [hmz])] at hok
+  rw [ite_eq_right (by simp [hmz])] at hok
   obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨amountN, hamN, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨P, hP, hok⟩ := bind_ok_peel _ _ _ hok

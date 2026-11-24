@@ -2,13 +2,10 @@ import Mathlib.Tactic
 
 import XRPL.Model.Protocol.Number
 
-/-!
-Every amount type (`Number`, `STAmount`...) maps to an
-exact rational. `RatValued A` packages that map as `toRat : A → ℚ`, and `RoundsWithin`
-uses it to state what it means for a computed `result` to be a correct rounding
-of an exact rational `truth` in a given rounding `mode`
-within relative error `ε`.
--/
+/-! # Rounding within a relative error
+
+`RatValued` maps each amount type to its exact rational value. `RoundsWithin` states that a result is a correct
+rounding of an exact value in a given mode, within a relative error. -/
 
 namespace XRPL.Model.Protocol
 

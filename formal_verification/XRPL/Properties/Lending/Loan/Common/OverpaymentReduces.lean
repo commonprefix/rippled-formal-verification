@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FactorBound
 import XRPL.Properties.Lending.Loan.Common.PayBounds
 import XRPL.Properties.Lending.Loan.Common.ValueDecrease
@@ -168,7 +169,7 @@ private lemma Loan.reamortized_periodic_lt (l : Loan) (opc : PaymentComponents) 
     split at hrp
     · rw [hzz] at hrp; cases hrp
     · rename_i hlt
-      refine ⟨by rw [if_neg hlt], ?_⟩
+      refine ⟨by rw [ite_eq_right hlt], ?_⟩
       have h0 := (Number.operator_lt_eq_false_iff _ _ hv18N Number.zero_isNormalized).mp (by simpa using hlt)
       have hne : v18.toRat ≠ 0 := fun h0' => by
         rw [(Number.operator_eq_iff _ _ hv18N Number.zero_isNormalized).mpr (by rw [h0', Number.toRat_zero])] at hrp
@@ -193,7 +194,7 @@ private lemma Loan.reamortized_periodic_lt (l : Loan) (opc : PaymentComponents) 
   split at htpo
   · -- no interest: `n` payments of principal
     rename_i hrz
-    rw [if_pos hrz] at hpp'
+    rw [ite_eq_left hrz] at hpp'
     have htle := (Number.mul_near _ _ _ hppN hN htpo).le (by rw [hNv]; positivity)
     rw [hNv] at htle
     have hple := (Number.div_near _ _ _ hv18N hN hpp').le (by rw [hNv]; positivity)
@@ -208,7 +209,7 @@ private lemma Loan.reamortized_periodic_lt (l : Loan) (opc : PaymentComponents) 
       nlinarith
   · -- the payment factor of the periodic rate, at least `1/(3·n)`
     rename_i hrz
-    rw [if_neg hrz] at hpp'
+    rw [ite_eq_right hrz] at hpp'
     obtain ⟨f, hf, htpo⟩ := bind_ok_peel _ _ _ htpo
     obtain ⟨f', hf', hpp'⟩ := bind_ok_peel _ _ _ hpp'
     rw [hf, Except.ok.injEq] at hf'
@@ -235,9 +236,8 @@ private lemma Loan.tryOverpayment_periodic_lt (l : Loan) (opc : PaymentComponent
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   have hpos : ∀ a b c : Int, ¬(decide (a ≤ 0) || decide (b ≤ 0) || decide (c < 0)) = true → 0 < a := by
     intro a b c h
@@ -293,7 +293,7 @@ private lemma UnsettledPayment.applyOverpayment_periodic_lt (p p' : UnsettledPay
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first | exact absurd rfl hne | skip
+  all_goals try exact absurd rfl hne
   rename_i _ a' ha' hcond _ un hun _ ov hov hovp _ opc hopc hpd _ _ re hre _ am ham _ l' hl'
   have hpr : p.loan.paymentRemaining ≠ 0 := by
     intro h0

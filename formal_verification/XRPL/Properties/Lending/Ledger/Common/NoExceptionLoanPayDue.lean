@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.PaymentTotal
 import XRPL.Properties.Lending.Loan.Common.NextPayment
 import XRPL.Properties.Lending.Loan.Common.FactorGapLoan
@@ -7,8 +8,7 @@ import XRPL.Properties.Lending.Ledger.Common.NoExceptionLoanPayRoom
 /-! # The first instalment of a LoanPay computes
 
 On a reachable ledger every payment type computes its first instalment and amount due, whatever the amount paid.
-On XRP a late instalment needs its late interest to be an XRP amount: LoanPay rounds it to the asset before it
-compares the amount due with the payment (the exception C++ throws above `10^17` drops). -/
+On XRP a late instalment needs its late interest to be an XRP amount (FV_M4_53). -/
 
 namespace XRPL.Model.Lending
 

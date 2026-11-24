@@ -72,7 +72,7 @@ private lemma LendingTx.preflight_coverWithdraw' (l : LendingLedger) (i : Nat) (
   simp only [LendingTx.preflight] at hpre
   split at hpre
   · rename_i hc
-    simp only [Bool.and_eq_true, isCanonicalAmount, hint, if_true, beq_iff_eq, decide_eq_true_eq] at hc
+    simp only [Bool.and_eq_true, isCanonicalAmount, hint, ite_true, beq_iff_eq, decide_eq_true_eq] at hc
     obtain ⟨⟨hty, hoff, hval⟩, -⟩ := hc
     refine Or.inl ⟨fun _ => ⟨⟨by rw [hty]; exact hint, hoff, by rw [hty]; exact hval⟩, by rw [hty]; exact hmax⟩,
       fun hfr => ?_⟩
@@ -229,10 +229,10 @@ private lemma LendingLedger.IntegralCover.step {l l' : LendingLedger} (hr : l.Re
   · obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_broker hb h
     rw [LendingLedger.broker?_commitBroker] at hb'
     by_cases hj : j = (if u.index < l.brokers.length then u.index else l.brokers.length)
-    · rw [if_pos hj] at hb'
+    · rw [ite_eq_left hj] at hb'
       exact l.applyBroker_coverOnGrid' hr.scaleInv tx hpre u hu hint' (hmax hint') b' hb'
         (fun b hb => hinv hint' _ b hb)
-    · rw [if_neg hj] at hb'; exact hinv hint' j b' hb'
+    · rw [ite_eq_right hj] at hb'; exact hinv hint' j b' hb'
   by_cases hl : tx.isLoan = true
   · obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_loan hl h
     have hs := l.applyLoan_keepsSettings tx u hu

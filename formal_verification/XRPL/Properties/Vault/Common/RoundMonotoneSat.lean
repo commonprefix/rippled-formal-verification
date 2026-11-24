@@ -91,7 +91,7 @@ private lemma push6_round_one (g : Guard) : (g.push 6).round .to_nearest = 1 := 
     intro hz
     have hz0 : (g.push 6).digits_.toNat = 0 := by rw [hz]; rfl
     rw [hd, h260] at hz0; omega
-  rw [round_to_nearest_def hne, if_pos hgt]
+  rw [round_to_nearest_def hne, ite_eq_left hgt]
 
 /-- In the strict cusp `maxRep < zm < maxRepUp`, a decision to round down to `maxRep` forces `zm = maxRep + 1` and
 `f < 1/2`. At `zm = maxRep + 2` the overflow digit `6` always rounds up. -/
@@ -111,12 +111,12 @@ private lemma cusp_interior_down_forces (g : Guard) (zm : UInt64) (f : ℚ)
         g.pushOverflowSpec zm .to_nearest = g.push 6 := by
       intro hr
       rw [hzeq]; unfold Guard.pushOverflowSpec
-      rw [if_pos (by decide : maxRep ≤ (9223372036854775808 : UInt64) ∧
+      rw [ite_eq_left (by decide : maxRep ≤ (9223372036854775808 : UInt64) ∧
         (9223372036854775808 : UInt64) < maxRepUp)]
-      simp only [show ((9223372036854775808 : UInt64) % 10 < 9) = true from by decide, if_true,
+      simp only [show ((9223372036854775808 : UInt64) % 10 < 9) = true from by decide, ite_true,
         show (maxRep + (maxRepUp - maxRep) / 2) = (9223372036854775808 : UInt64) from by decide,
         show ((9223372036854775808 : UInt64) == 9223372036854775808) = true from by decide,
-        Bool.and_true, if_pos hr,
+        Bool.and_true, ite_eq_left hr,
         show ((9223372036854775808 : UInt64) + 1 - maxRep) * 10 / (maxRepUp - maxRep) = 6 from by decide]
     have hnobump : ¬ ((g.round .to_nearest == 1 || g.round .to_nearest == 0) = true) := by
       intro hr
@@ -136,10 +136,10 @@ private lemma cusp_interior_down_forces (g : Guard) (zm : UInt64) (f : ℚ)
     have hpo : g.pushOverflowSpec zm .to_nearest = g.push 6 := by
       rw [hzeq]
       unfold Guard.pushOverflowSpec
-      rw [if_pos (by decide : maxRep ≤ (9223372036854775809 : UInt64) ∧
+      rw [ite_eq_left (by decide : maxRep ≤ (9223372036854775809 : UInt64) ∧
         (9223372036854775809 : UInt64) < maxRepUp)]
       simp only [show ((9223372036854775809 : UInt64) % 10 < 9) = false from by decide,
-        Bool.false_eq_true, if_false]
+        Bool.false_eq_true, ite_false]
       rw [show ((9223372036854775809 : UInt64) - maxRep) * 10 / (maxRepUp - maxRep) = 6 from by decide]
     rw [hpo, push6_round_one] at hdec
     simp only [beq_self_eq_true, Bool.true_or] at hdec

@@ -31,10 +31,10 @@ lemma charge_empty_integral (v : Vault) (shares c : STAmount)
   have hshexp : shares.exponent = 0 := hshc.offset_zero
   have hideal : v.idealChargeDeposit shares.toRat = shares.toRat := by
     unfold RawVault.idealChargeDeposit
-    rw [if_pos hA0, hscale]
+    rw [ite_eq_left hA0, hscale]
     show shares.toRat / (10 : ℚ) ^ (0 : UInt8).toNat = shares.toRat
     norm_num
-  rw [if_pos hmz] at hsad
+  rw [ite_eq_left hmz] at hsad
   obtain ⟨c', hc, hlast⟩ := bind_ok_peel _ _ _ hsad
   have hceq : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
   rw [hceq] at hc
@@ -70,8 +70,8 @@ private lemma empty_charge_at (v : Vault) (navN : Number) (hat : v.assetsTotal =
     (hmz : navN.mantissa_ = 0) (shares : ℚ) :
     v.idealChargeDepositAt navN.toRat shares = v.idealChargeDeposit shares := by
   unfold RawVault.idealChargeDepositAt RawVault.idealChargeDeposit
-  rw [if_pos (Number.toRat_eq_zero_of_mantissa_zero navN hmz),
-    if_pos ((Vault.assetsTotal_eq_zero_iff v navN hat).mp hmz)]
+  rw [ite_eq_left (Number.toRat_eq_zero_of_mantissa_zero navN hmz),
+    ite_eq_left ((Vault.assetsTotal_eq_zero_iff v navN hat).mp hmz)]
 
 /-- The deposit grid is the post-sum exponent of the computed total and the requested amount. -/
 private lemma Vault.depositExponent_reduces (v : Vault) (amountDeposit : STAmount) (e : Int)
@@ -346,7 +346,7 @@ lemma Vault.deposit_charge_at_proof (v : Vault) (amountDeposit : STAmount) (t : 
         nlinarith
       · have hz' : priced.toRat = 0 :=
           (STAmount.toRat_eq_zero_iff priced).mpr (beq_iff_eq.mp (by simpa [STAmount.isZero] using hz))
-        rw [if_pos hint]
+        rw [ite_eq_left hint]
         nlinarith
       · rw [hpexp, zpow_zero]
         linarith
@@ -367,7 +367,7 @@ lemma Vault.deposit_charge_at_proof (v : Vault) (amountDeposit : STAmount) (t : 
       · have h1 := hge1 e he
         rw [hp0]
         nlinarith
-      · rw [if_pos hint]
+      · rw [ite_eq_left hint]
         nlinarith
       · rw [hp0]
         have : (0 : ℚ) < 10 ^ priced.exponent := zpow_pos (by norm_num) _

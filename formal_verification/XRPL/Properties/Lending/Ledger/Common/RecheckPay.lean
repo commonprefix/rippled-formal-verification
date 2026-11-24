@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.RecheckApply
 import XRPL.Properties.Lending.Ledger.Common.ManageReachable
 import XRPL.Properties.Lending.Ledger.Common.ManageTotal
@@ -9,10 +10,8 @@ import XRPL.Properties.Lending.Loan.Common.CreatedSize
 
 /-! # A payment on a reachable ledger passes its re-checks
 
-LoanPay builds the loan again after each instalment, re-checks the broker and the vault after settling, and
-re-checks the vault and the loan in the unimpair before it pays. On a reachable ledger none of these re-checks
-fails: the loan keeps its interest at least zero, its principal is within DebtTotal and AssetsDeployed, and the
-vault keeps AssetsDeployed a whole number of base units below `10^16` of them. -/
+LoanPay re-checks the loan after each instalment, the broker and the vault after settling, and the vault and the
+loan in the unimpair before it pays. On a reachable ledger none of these re-checks fails. -/
 
 namespace XRPL.Model.Lending
 
@@ -252,7 +251,7 @@ lemma LendingLedger.pay_ne_notLawful (l : LendingLedger) (hr : l.Reachable) (i :
       unfold Loan.canPay at hc'
       cases hpend : loan.isPending
       · rfl
-      · rw [hpend, if_pos rfl] at hc'; cases hc'
+      · rw [hpend, ite_eq_left rfl] at hc'; cases hc'
     exact LendingLedger.Reachable.pay_ne_notLawful_at hr hat hnp pt amount
       (by simp only [ExceptT.run]; exact hpay)
 

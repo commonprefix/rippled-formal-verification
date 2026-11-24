@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.RecheckLoanSet
 import XRPL.Properties.Lending.Ledger.Common.VaultScaleProofs
 import XRPL.Properties.Lending.Ledger.Common.YieldSum

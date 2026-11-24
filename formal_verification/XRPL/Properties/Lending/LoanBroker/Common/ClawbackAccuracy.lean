@@ -53,7 +53,7 @@ lemma LoanBroker.roundedCoverClawback_capped_proof (lb : LoanBroker) (v : Vault)
       (⌊min a.toRat (lb.toExact.coverAvailable - m.toRat) / 10 ^ v.baseExponent⌋ : ℚ) * 10 ^ v.baseExponent := by
   have hfl := LoanBroker.coverClawback_floor lb v (some a) res m hf hnt hmax
     (fun a' ha' => by cases ha'; exact hreq) hm hok
-  simpa only [LoanBroker.clawTarget, hnz, Bool.false_eq_true, if_false] using hfl
+  simpa only [LoanBroker.clawTarget, hnz, Bool.false_eq_true, ite_false] using hfl
 
 /-- Proof body of the clawback line of `cover_keeps_minimum`. -/
 lemma LoanBroker.coverClawback_keeps_minimum_proof (lb : LoanBroker) (v : Vault) (amount : Option STAmount)
@@ -137,7 +137,7 @@ lemma LoanBroker.coverClawback_monotone_proof (lb : LoanBroker) (v : Vault) (m :
     (fun a' ha' => by cases ha'; exact ha) hm hoka
   have hfb := LoanBroker.coverClawback_floor lb v (some b) rb _ hf hnt hmax
     (fun a' ha' => by cases ha'; exact hb) hm hokb
-  simp only [LoanBroker.clawTarget, hza, hzb, Bool.false_eq_true, if_false] at hfa hfb
+  simp only [LoanBroker.clawTarget, hza, hzb, Bool.false_eq_true, ite_false] at hfa hfb
   rw [hfa, hfb]
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
   have hle : min a.toRat (lb.toExact.coverAvailable - m.toRat) ≤

@@ -80,21 +80,21 @@ lemma LendingLedger.redemption_no_new_debt_proof (l l' : LendingLedger) (tx : Le
     refine ⟨fun j b b' hb hb' => ?_, le_refl _⟩
     rw [LendingLedger.broker?_commitBroker] at hb'
     by_cases hj : j = (if u.index < l.brokers.length then u.index else l.brokers.length)
-    · rw [if_pos hj] at hb'
+    · rw [ite_eq_left hj] at hb'
       have hlt : u.index < l.brokers.length := by
         by_contra hge
-        rw [if_neg hge] at hj
+        rw [ite_eq_right hge] at hj
         subst hj
         unfold LendingLedger.broker? at hb
         rw [List.getElem?_eq_none (le_refl _)] at hb
         cases hb
-      rw [if_pos hlt] at hj
+      rw [ite_eq_left hlt] at hj
       subst hj
       rcases LendingLedger.applyBroker_debt l tx u hu b' hb' with h0 | ⟨b0, hb0, hd⟩
       · rw [h0, Number.toRat_zero]
         exact (b.exact.debtTotal_nonneg : 0 ≤ b.debtTotal.toRat)
       · rw [hb0] at hb; cases hb; rw [hd]
-    · rw [if_neg hj] at hb'; rw [hb'] at hb; cases hb; exact le_refl _
+    · rw [ite_eq_right hj] at hb'; rw [hb'] at hb; cases hb; exact le_refl _
   by_cases hl : tx.isLoan = true
   · obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_loan hl h
     obtain ⟨b0, hb0, hd, har⟩ := l.applyLoan_redemption_debt tx u hred hu

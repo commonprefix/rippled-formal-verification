@@ -33,7 +33,7 @@ lemma sumRoundAndSubtract_credit_ok (A c : Number) (b : Int) (nt : NumericType) 
       have hmr : nt.maxValue.toNat ≤ maxRep.toNat := by rcases hnt with rfl | rfl <;> decide
       have hst' := hst
       unfold sumRoundAndSubtract at hst'
-      rw [if_pos hint] at hst'
+      rw [ite_eq_left hint] at hst'
       obtain ⟨x, hx, hst'⟩ := bind_ok_peel _ _ _ hst'
       obtain rfl : x = st := Except.ok.inj hst'
       obtain ⟨hcan, hxnt⟩ := STAmount.ofNumber_integral_canonical nt c .downward x hint hx

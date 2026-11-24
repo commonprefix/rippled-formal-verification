@@ -1,14 +1,13 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.AssetFlowDefs
 import XRPL.Properties.Lending.Ledger.Common.IsolationWitness
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequenceDefs
 
 /-! # Witness for the transactions of one loan
 
-On the coarsened vault of `CoarsenedVault.lean`, a VaultWithdraw takes AssetsAvailable below `10^16` base units,
-and a late payment of 0.1 on loan C then passes. In the loan's own transactions the VaultWithdraw is left out, the
-payment rounds to no credit and is rejected. -/
+A late payment of 0.1 that passes in the full run is rejected in the loan's own transactions (FV_M4_21). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

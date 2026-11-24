@@ -55,7 +55,6 @@ lemma doRoundUpSpec_mantissa_le {g : Guard} {neg : Bool} {m : UInt64} {e : Int} 
     rw [UInt64.toNat_add, hdiv, h1, Nat.mod_eq_of_lt (by omega)]
   have hadd : (m + 1).toNat = m.toNat + 1 := by rw [UInt64.toNat_add, h1, Nat.mod_eq_of_lt (by omega)]
   split_ifs <;> first
-    | exact absurd ‹maxRep < m ∧ m < maxRepUp› hnc
     | exact bringIntoRangeSpec_mantissa_toNat_le hB
         (by have := UInt64.lt_iff_toNat_lt.mp ‹m < maxM ∧ m < maxRep›.1; omega) (fun _ => by omega)
     | exact bringIntoRangeSpec_mantissa_toNat_le hB (by omega) (fun _ => by omega)
@@ -65,11 +64,11 @@ lemma doNormalize_scaleDown_le {maxM m m' : UInt64} {e e' : Int} {g g' : Guard}
     (h : doNormalize_scaleDown maxM m e g = .ok (m', e', g')) : m' ≤ maxM := by
   induction m, e, g using doNormalize_scaleDown.induct maxM with
   | case1 m e g hm he =>
-    rw [doNormalize_scaleDown, dif_pos hm, if_pos he] at h; cases h
+    rw [doNormalize_scaleDown, dite_eq_left hm, ite_eq_left he] at h; cases h
   | case2 m e g hm he ih =>
-    rw [doNormalize_scaleDown, dif_pos hm, if_neg he] at h; exact ih h
+    rw [doNormalize_scaleDown, dite_eq_left hm, ite_eq_right he] at h; exact ih h
   | case3 m e g hm =>
-    rw [doNormalize_scaleDown, dif_neg hm] at h
+    rw [doNormalize_scaleDown, dite_eq_right hm] at h
     cases h
     exact UInt64.not_lt.mp hm
 
@@ -94,7 +93,7 @@ lemma doNormalize_mantissa_le {neg : Bool} {m : UInt64} {e : Int} {minM maxM : U
     exact UInt64.le_iff_toNat_le.mp (UInt64.not_lt.mp this)
   have hcap : doNormalize_capAtMaxRep m2 e2 g2 = .ok (m2, e2, g2) := by
     unfold doNormalize_capAtMaxRep
-    rw [if_neg (fun h' => by
+    rw [ite_eq_right (fun h' => by
       have := UInt64.lt_iff_toNat_lt.mp h'
       have : maxRepUp.toNat = 2 ^ 63 + 2 := by decide
       have : maxRep.toNat = 2 ^ 63 - 1 := by decide

@@ -43,7 +43,7 @@ private lemma impair_sums_nonneg (loan : Loan) (v : Vault) (aa' ad' lu' ar' yu' 
 private lemma toRat_nonneg_of_signum (n : Number) (hn : n.isNormalized) (h : 0 ≤ n.signum) : 0 ≤ n.toRat := by
   by_contra hlt
   push Not at hlt
-  rw [Number.signum_eq n hn, if_neg (by linarith), if_pos hlt] at h
+  rw [Number.signum_eq n hn, ite_eq_right (by linarith), ite_eq_left hlt] at h
   omega
 
 /-- An update that only moves LossUnrealized leaves a lawful vault once it succeeds. -/

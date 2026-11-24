@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 A loan at a tiny rate, paid one instalment at a time. The third instalment takes more principal than its amount,
 so its interest part is negative and LoanPay rejects its amount due with tecLIMIT_EXCEEDED (C++ LoanPay.cpp:479). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -26,7 +26,7 @@ private def niGenesis : LendingLedger := { vault := niVault, shares := [], broke
 private lemma niGenesis_genesis : niGenesis.Genesis where
   created := ⟨some 2, none, niSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨niVault.wf, niVault.valid⟩⟩
+    exact dite_eq_left ⟨niVault.wf, niVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

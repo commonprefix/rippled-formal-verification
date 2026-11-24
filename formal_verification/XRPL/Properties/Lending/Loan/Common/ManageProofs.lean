@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.ManageExits
 
 /-! # Proof bodies for the impair, unimpair and default updates

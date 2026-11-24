@@ -32,20 +32,20 @@ lemma STAmount.checked_ok_iff_integral (mv : UInt64) (mo : Int) (ms msh : UInt64
         (STAmount.unchecked (.integral mv mo ms msh) m e neg).toRat := by
   have h63 : maxRep.toNat = 9223372036854775807 := by decide
   rw [STAmount.roundsInRange_integral_iff, STAmount.unchecked_toRat, STAmount.checked]
-  dsimp only [STAmount.unchecked, STAmount.canonicalize, STAmount.integral, NumericType.isIntegral,
+  dsimp +instances only [STAmount.unchecked, STAmount.canonicalize, STAmount.integral, NumericType.isIntegral,
     NumericType.maxOffset, NumericType.maxValue, IntAmount.ofNumber]
-  rw [if_pos rfl]
+  rw [ite_eq_left rfl]
   have hmq : (0 : ℚ) ≤ (m.toNat : ℚ) := Nat.cast_nonneg _
   have hmvq : (1 : ℚ) ≤ (mv.toNat : ℚ) := by exact_mod_cast hmv1
   by_cases hz : m = 0
   · -- a zero mantissa gives the zero amount
-    rw [if_pos (by rw [hz]; rfl)]
+    rw [ite_eq_left (by rw [hz]; rfl)]
     refine iff_of_true ⟨_, rfl⟩ (roundsWithinUnits_of_abs_le mode _ 1 _ one_pos ?_)
     rw [hz]
     simp
   by_cases hsmall : e ≤ -20
   · -- an exponent of -20 or less gives the zero amount, and the value is below one
-    rw [if_pos (by simp [hsmall])]
+    rw [ite_eq_left (by simp [hsmall])]
     refine iff_of_true ⟨_, rfl⟩ (roundsWithinUnits_of_abs_le mode _ 1 _ one_pos ?_)
     rw [abs_sign_mul_eq, abs_of_nonneg (mul_nonneg hmq (zpow_nonneg (by norm_num) _)), mul_one]
     have hpow : (10 : ℚ) ^ e ≤ (10 : ℚ) ^ (-20 : ℤ) := zpow_le_zpow_right₀ (by norm_num) hsmall
@@ -54,19 +54,19 @@ lemma STAmount.checked_ok_iff_integral (mv : UInt64) (mo : Int) (ms msh : UInt64
     have h20 : (10 : ℚ) ^ (-20 : ℤ) = 1 / 100000000000000000000 := by norm_num
     rw [h20] at hpow
     nlinarith
-  rw [if_neg (by simp [hz, hsmall])]
+  rw [ite_eq_right (by simp [hz, hsmall])]
   have hm1 : (1 : ℚ) ≤ (m.toNat : ℚ) := by
     have : m.toNat ≠ 0 := fun h => hz (UInt64.toNat_inj.mp (by rw [h]; rfl))
     exact_mod_cast Nat.one_le_iff_ne_zero.mpr this
   by_cases hbig : e > mo
   · -- an exponent above `maxOffset` fails, and the value is above the largest amount
-    rw [if_pos hbig]
+    rw [ite_eq_left hbig]
     refine iff_of_false (by simp) (not_roundsWithinUnits_of_le_abs mode _ 1 _ one_pos ?_)
     rw [abs_sign_mul_eq, abs_of_nonneg (mul_nonneg hmq (zpow_nonneg (by norm_num) _)), mul_one]
     have hpow : (10 : ℚ) ^ (mo + 1) ≤ (10 : ℚ) ^ e := zpow_le_zpow_right₀ (by norm_num) (by omega)
     have hpow_pos : (0 : ℚ) < (10 : ℚ) ^ e := zpow_pos (by norm_num) _
     nlinarith
-  rw [if_neg hbig]
+  rw [ite_eq_right hbig]
   -- the mantissa and exponent are rounded to a whole number by `to_rep`
   obtain ⟨q, f, up, hq, hf0, hf1, hval, hup, hok, herr⟩ :=
     Number.to_rep_unchecked_eq neg m e mode (by rw [h63]; exact hm)
@@ -80,15 +80,15 @@ lemma STAmount.checked_ok_iff_integral (mv : UInt64) (mo : Int) (ms msh : UInt64
     have hmag : (r.magnitude.toNat : ℤ) = q + (if up = true then 1 else 0) := by
       rw [Int64.toNat_magnitude, hrv]
       cases neg
-      · simp only [Bool.false_eq_true, if_false, one_mul]
+      · simp only [Bool.false_eq_true, ite_false, one_mul]
         exact Int.natAbs_of_nonneg hc0
-      · simp only [if_true, neg_one_mul, Int.natAbs_neg]
+      · simp only [ite_true, neg_one_mul, Int.natAbs_neg]
         exact Int.natAbs_of_nonneg hc0
     by_cases hrng : r.magnitude > mv
-    · rw [if_pos hrng]
+    · rw [ite_eq_left hrng]
       have := UInt64.lt_iff_toNat_lt.mp hrng
       exact iff_of_false (by simp) (by omega)
-    · rw [if_neg hrng]
+    · rw [ite_eq_right hrng]
       have := UInt64.le_iff_toNat_le.mp (UInt64.not_lt.mp hrng)
       exact iff_of_true ⟨_, rfl⟩ (by omega)
   · obtain ⟨err, herr'⟩ := herr (by omega)

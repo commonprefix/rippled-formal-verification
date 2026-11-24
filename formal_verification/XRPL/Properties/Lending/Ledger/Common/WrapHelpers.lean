@@ -8,9 +8,8 @@ import XRPL.Properties.Vault.Proofs.Support.Wrap
 
 /-! # The lending helpers never wrap around
 
-The interest, amortization and state helpers run the Protocol operations and a few checked fixed-width ones:
-the overdue seconds behind a check that the payment is late, a payment count below `2^32`, and the count of
-the instalments left after the next one. Only the last needs a hypothesis, a count other than zero. -/
+The interest, amortization and state helpers use only a few checked fixed-width operations. Only the count of the
+instalments left after the next one needs a hypothesis, a count other than zero. -/
 
 namespace XRPL.Model.Lending
 

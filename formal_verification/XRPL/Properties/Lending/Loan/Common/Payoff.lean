@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayoffSettle
 import XRPL.Properties.Lending.Loan.Common.PaySize
 import XRPL.Properties.Lending.Loan.Common.PaymentFactor
@@ -228,7 +229,7 @@ lemma Loan.regularPayoff_ok {loan : Loan} {t : UInt32} (hre : loan.Reachable t) 
       linarith [show (10 : ℚ) ^ 80 + (10 ^ 17 + 10 ^ 80) * 2 < 10 ^ 89 by norm_num]
     · have h1 := (h.supply_cash hint).1
       have hb0 : v.baseExponent = 0 := by
-        unfold Vault.baseExponent NumericType.baseExponent; rw [if_pos hint]
+        unfold Vault.baseExponent NumericType.baseExponent; rw [ite_eq_left hint]
       have hgM : Number.OnGrid v.baseExponent loan.managementFeeOutstanding := ⟨hm.norm, mf, by
         rw [hm.val, h.loanScale]⟩
       have hmax := (h.asset.integral hint).2
@@ -330,7 +331,7 @@ lemma Loan.fullPayoff_ok {loan : Loan} {t : UInt32} (hre : loan.Reachable t) (v 
     rw [h.numericType] at hint
     rw [hls]
     unfold Vault.baseExponent NumericType.baseExponent
-    rw [if_pos hint]
+    rw [ite_eq_left hint]
   have hcfv := STAmount.roundToNumericType_of_representable _ _ _ _ loan.wf.closePaymentFee_norm hF0
     ⟨by omega, by omega⟩ hint0 hstcf hgcf hcf
   have hcf0 : 0 ≤ cf.toRat := by rw [hcfv]; exact hF0

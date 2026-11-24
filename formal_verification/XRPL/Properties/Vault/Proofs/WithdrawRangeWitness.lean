@@ -2,13 +2,10 @@ import XRPL.Properties.Vault.Proofs.Support.ReachableHistory
 
 /-! # Witness for a withdrawal above the XRP range
 
-The run's result is computed by the model and checked by `native_decide`. The vault comes from a reachable
-history: a create, then one deposit.
+A withdrawal worth one drop above the largest XRP amount ends in a pricing error before the holder's shares are
+checked. -/
 
-An XRP vault of 100 drops and 100 shares. A withdrawal of `10^17 + 1` shares is worth `10^17 + 1` drops, one drop
-above the largest XRP amount, so pricing it ends in an error before the holder's shares are checked. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.WithdrawRangeWit
 

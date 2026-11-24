@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.RoundingError
 import XRPL.Properties.Lending.Loan.Common.SetLawful
 
@@ -22,7 +23,7 @@ private lemma eps_le : ε ≤ 1 / 10 ^ 18 := Number.nearestError_le
 /-- A power by squaring is at most the exact power, times `(1 + ε)^(2k)` over `1 + ε`. Each squaring
 doubles the error of the half power and adds one rounding, each multiplication by the base adds one. -/
 private lemma Number.power_le (base : Number) (hb : base.isNormalized) (h1 : 1 ≤ base.toRat) :
-    ∀ (k : Nat) (r : Number), 1 ≤ k → base.power k = .ok r →
+    ∀ (k : Nat) (r : Number), 1 ≤ k → base.power k .to_nearest = .ok r →
       r.toRat * (1 + ε) ≤ base.toRat ^ k * (1 + ε) ^ (2 * k) := by
   have he := eps_pos
   intro k
@@ -90,7 +91,7 @@ private lemma Number.power_le (base : Number) (hb : base.isNormalized) (h1 : 1 �
         exact hsq'
 
 /-- A count below `2^63` converts to a `Number` of the same value. -/
-private lemma Number.ofInt64_nat (k : ℕ) (hk : k < 2 ^ 63) : (Number.ofInt64 k.toInt64).toRat = k := by
+private lemma Number.ofInt64_nat (k : ℕ) (hk : k < 2 ^ 63) : (Number.ofInt64 k.toInt64 .to_nearest).toRat = k := by
   have hv : (k.toInt64).toInt = k := Int64.toInt_ofNat_of_lt hk
   have hne : k.toInt64 ≠ Int64.minValue := by
     intro h
@@ -208,7 +209,7 @@ private lemma powerMinusOneLoop_le (rate : Number) (hrate : rate.isNormalized) (
 loses at most `12·n·ε` to rounding, which is small next to `n·rate` at or above `10^-9`. -/
 private lemma computePowerMinusOneHybrid_le (rate : Number) (pr : UInt32) (pm : Number)
     (hrate : rate.isNormalized) (hr0 : 0 ≤ rate.toRat) (hsmall : (pr.toNat : ℚ) * rate.toRat ≤ 1 / 2)
-    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toInt64) pr = .ok pm) :
+    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toInt64 .to_nearest) pr = .ok pm) :
     pm.toRat ≤ 64 * pr.toNat * rate.toRat := by
   have he := eps_pos
   have he' := eps_le
@@ -358,7 +359,7 @@ private lemma Number.eq_zero_of_toRat {x : Number} (hx : x.isNormalized) (h : x.
 private lemma Number.div_zero_error {x y r : Number} (hy : y = Number.zero)
     (h : x.operator_div y .to_nearest = .ok r) : False := by
   unfold Number.operator_div at h
-  rw [if_pos (by rw [hy]; decide)] at h
+  rw [ite_eq_left (by rw [hy]; decide)] at h
   cases h
 
 /-- A quotient of zero is zero. -/
@@ -369,14 +370,14 @@ private lemma Number.zero_div_eq {x y r : Number} (hy : y ≠ Number.zero) (hx :
     cases hb : y.operator_eq Number.zero
     · rfl
     · exact absurd ((Number.operator_eq_iff_eq _ _).mp hb) hy
-  rw [if_neg (by rw [hy']; decide), if_pos (by rw [hx]; decide)] at h
+  rw [ite_eq_right (by rw [hy']; decide), ite_eq_left (by rw [hx]; decide)] at h
   rw [hx] at h
   exact (Except.ok.inj h).symm
 
 /-- A nonzero payment factor of a positive rate is at least the rate, and at least `1 / (64·n)` while `n` times the
 rate is at most one half, each less three roundings. -/
 private lemma computePaymentFactor_ge (rate : Number) (pr : UInt32) (f : Number) (hrate : rate.isNormalized)
-    (hr0 : 0 < rate.toRat) (h : computePaymentFactor rate (Number.ofInt64 pr.toInt64) pr = .ok f)
+    (hr0 : 0 < rate.toRat) (h : computePaymentFactor rate (Number.ofInt64 pr.toInt64 .to_nearest) pr = .ok f)
     (hf : f.toRat ≠ 0) :
     rate.toRat * (1 - ε) ^ 3 ≤ f.toRat ∧
       ((pr.toNat : ℚ) * rate.toRat ≤ 1 / 2 → (1 - ε) ^ 3 / (64 * pr.toNat) ≤ f.toRat) := by

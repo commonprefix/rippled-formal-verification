@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.RoundToNearest
 import XRPL.Properties.Lending.Loan.Common.SetInterest
 import XRPL.Properties.Lending.Loan.Common.SetScale
@@ -43,10 +44,10 @@ open private STAmount.isNormalized_of_isRounded_false Loan.create_principal_pos
 exponent. -/
 lemma operator_div_unity_le (y q : Number) (hy : y.isNormalized) (hy0 : 0 ≤ y.toRat)
     (hexp : y.mantissa_ ≠ 0 → minExponent + 5 ≤ y.exponent_)
-    (hq : y.operator_div kTenthBipsPerUnity.toNumber .to_nearest = .ok q) :
+    (hq : y.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest = .ok q) :
     q.toRat ≤ y.toRat / 100000 := by
   have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toInt64
-  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64).toRat = 100000 := by
+  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64 .to_nearest).toRat = 100000 := by
     rw [Number.ofInt64_count]; rfl
   have hR := Number.operator_div_rounded_to_nearest _ _ q hy hU hq
   rw [hUv] at hR
@@ -161,14 +162,14 @@ lemma Loan.create_managementFee_upper_bound_proof (broker : LoanBroker) (v : Vau
 
   -- the fee is the product, over `10^5`, rounded down at LoanScale
   have heq : computeManagementFee broker.numericType ti broker.managementFeeRate ls =
-      (ti.operator_mul broker.managementFeeRate.toTenthBips32.toNumber .to_nearest >>=
-        (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
+      (ti.operator_mul (broker.managementFeeRate.toTenthBips32.toNumber .to_nearest) .to_nearest >>=
+        (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest)) >>=
         (fun raw => STAmount.roundToNumericType broker.numericType raw .downward (some ls)) := rfl
   rw [heq] at hmfo
   obtain ⟨raw, hraw, hmfo⟩ := bind_ok_peel _ _ _ hmfo
   obtain ⟨y, hy, hraw⟩ := bind_ok_peel _ _ _ hraw
   have hRB := Number.ofInt64_isNormalized broker.managementFeeRate.toTenthBips32.toInt64
-  have hRBv : (Number.ofInt64 broker.managementFeeRate.toTenthBips32.toInt64).toRat = (R : ℚ) := by
+  have hRBv : (Number.ofInt64 broker.managementFeeRate.toTenthBips32.toInt64 .to_nearest).toRat = (R : ℚ) := by
     rw [Number.ofInt64_count]
     show ((broker.managementFeeRate.toUInt32.toNat : ℕ) : ℚ) = _
     rw [UInt16.toNat_toUInt32]
@@ -219,7 +220,7 @@ lemma Loan.create_managementFee_upper_bound_proof (broker : LoanBroker) (v : Vau
 
   -- rounding down at LoanScale never raises the quotient
   have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toInt64
-  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64).toRat = 100000 := by
+  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64 .to_nearest).toRat = 100000 := by
     rw [Number.ofInt64_count]; rfl
   have hrawN := Number.operator_div_isNormalized _ _ raw _ hyN hU hraw
   have hraw0 : 0 ≤ raw.toRat := by

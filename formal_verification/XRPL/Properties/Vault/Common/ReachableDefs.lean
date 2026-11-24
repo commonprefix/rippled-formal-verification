@@ -8,10 +8,8 @@ import XRPL.Model.Vault.VaultSet
 
 /-! # Reachability inductives
 
-`Vault.Reachable` collects the states reachable from a `Vault.create` under the vault transactions,
-with the parent ledger close time of the last one. Each step assumes only facts C++ guarantees: canonical
-amounts of the right asset, canonical share balances, minting within the MPT maximum, a holder redeeming
-at most its own shares, and only the sole shareholder waiving the unrealized loss. -/
+`Vault.Reachable` collects the states reachable from `Vault.create` by vault transactions, with the close time of the
+last one. Each step assumes only facts C++ guarantees, such as canonical amounts of the vault's asset. -/
 
 namespace XRPL.Model.Protocol
 
@@ -60,7 +58,6 @@ inductive Vault.Reachable : Vault → UInt32 → Prop where
       Vault.Reachable v t → t ≤ t' →
       amount.Canonical → amount.mNumericType = v.numericType →
       (hpos : 0 < amount.toRat) → (v.deposit amount isDonation t' hpos).run = .ok (.ok r) →
-      (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 → -- the MPT maximum
       Vault.Reachable r.vault' t'
   | withdraw (v : Vault) (t t' : UInt32) (amount : WithdrawAmount) (holderShares : STAmount)
       (waive : Bool) (r : VaultWithAmounts) :
@@ -76,7 +73,6 @@ inductive Vault.Reachable : Vault → UInt32 → Prop where
       assets.CanonicalOrZero → assets.mNumericType = v.numericType → holderShares.ShareBalance →
       (waive = true ↔ v.IsSoleShareholder holderShares) →
       (hnn : 0 ≤ assets.toRat) → (v.clawback assets holderShares waive hnn).run = .ok (.ok r) →
-      r.shares.toRat ≤ holderShares.toRat →
       Vault.Reachable r.vault' t'
   | burnShares (v : Vault) (t t' : UInt32) (amount holderShares sharesTotalAmount : STAmount)
       (v' : Vault) :
@@ -101,7 +97,6 @@ inductive Vault.ReachableFromIn (whole : Bool) : Vault → UInt32 → Vault → 
       Vault.ReachableFromIn whole w t u n → t ≤ t' →
       amount.Canonical → amount.mNumericType = u.numericType →
       (hpos : 0 < amount.toRat) → (u.deposit amount isDonation t' hpos).run = .ok (.ok r) →
-      (u.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 → -- the MPT maximum
       (whole = true → ∃ k : ℤ, u.idealChargeDeposit r.shares.toRat = k * 10 ^ u.baseExponent) →
       Vault.ReachableFromIn whole w t' r.vault' (n + 1)
   | withdraw (w u : Vault) (t t' : UInt32) (n : ℕ) (amount : WithdrawAmount)
@@ -120,7 +115,6 @@ inductive Vault.ReachableFromIn (whole : Bool) : Vault → UInt32 → Vault → 
       assets.CanonicalOrZero → assets.mNumericType = u.numericType → holderShares.ShareBalance →
       (waive = true ↔ u.IsSoleShareholder holderShares) →
       (hnn : 0 ≤ assets.toRat) → (u.clawback assets holderShares waive hnn).run = .ok (.ok r) →
-      r.shares.toRat ≤ holderShares.toRat →
       r.shares.toRat < (u.toExact.sharesTotal : ℚ) → -- shares remain
       (whole = true → ∃ k : ℤ, u.idealAssetsWithdraw waive r.shares.toRat = k * 10 ^ u.baseExponent) →
       Vault.ReachableFromIn whole w t' r.vault' (n + 1)

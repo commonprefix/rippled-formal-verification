@@ -10,9 +10,8 @@ import XRPL.Properties.Vault.Proofs.Support.STAmountFacts
 
 /-! # The early-exit fee and the payout after it
 
-A withdrawal charges the early-exit fee with `tenthBipsOfValue`, rounding up twice, and rounds
-the payout left after it down into the asset. The fee exceeds the exact share of the priced amount
-by at most two upward `Number` steps, and a downward IOU conversion floors onto the 16-digit grid. -/
+The fee, rounded up twice, exceeds the exact share of the priced amount by at most two upward `Number` steps. The
+payout after it is rounded down into the asset. -/
 
 namespace XRPL.Model.Protocol
 
@@ -23,11 +22,11 @@ lemma tenthBipsOfValue_upward_bounds (d : Number) (rate : TenthBips32) (fee : Nu
     (hok : tenthBipsOfValue d rate .upward = .ok fee) :
     d.toRat * rate.toNat / 100000 ≤ fee.toRat ∧
       fee.toRat ≤ d.toRat * rate.toNat / 100000 * (1 + 3 / 10 ^ 18) := by
-  obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts rate
-  obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
+  obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts rate .upward
+  obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity .upward
   have hu : ((kTenthBipsPerUnity.toNat : ℕ) : ℚ) = 100000 := by rfl
   rw [hu] at huv
-  have hun0 : ¬ kTenthBipsPerUnity.toNumber.operator_eq Number.zero = true := by
+  have hun0 : ¬ (kTenthBipsPerUnity.toNumber .upward).operator_eq Number.zero = true := by
     intro h
     have := (Number.operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
     rw [huv, Number.toRat_zero] at this
@@ -66,19 +65,19 @@ lemma tenthBipsOfValue_upward_bounds (d : Number) (rate : TenthBips32) (fee : Nu
   have h1005 : (10 : ℚ) ^ (-1005 : ℤ) < 10 ^ (-1000 : ℤ) := zpow_lt_zpow_right₀ (by norm_num) (by norm_num)
   have hdm : d.mantissa_ ≠ 0 := fun h => by
     rw [Number.toRat_eq_zero_of_mantissa_zero d h] at hdpos; exact lt_irrefl _ hdpos
-  have hrm : rate.toNumber.mantissa_ ≠ 0 := fun h => by
+  have hrm : (rate.toNumber .upward).mantissa_ ≠ 0 := fun h => by
     rw [Number.toRat_eq_zero_of_mantissa_zero _ h] at hrv; rw [← hrv] at hrpos; exact lt_irrefl _ hrpos
   have hpm : p.mantissa_ ≠ 0 := by
     intro hpm
-    have h := Number.operator_mul_underflow_truth_small d rate.toNumber p .upward hd hrn hdm hrm hp hpm
+    have h := Number.operator_mul_underflow_truth_small d (rate.toNumber .upward) p .upward hd hrn hdm hrm hp hpm
     rw [hrv, abs_of_pos (mul_pos hdpos hrpos)] at h
     linarith
-  obtain ⟨hplo, hphi⟩ := Number.operator_mul_rounds_upward d rate.toNumber p hd hrn hp hpm
-  change d.toRat * rate.toNumber.toRat ≤ p.toRat at hplo
-  change p.toRat - d.toRat * rate.toNumber.toRat ≤ |d.toRat * rate.toNumber.toRat| * _ at hphi
+  obtain ⟨hplo, hphi⟩ := Number.operator_mul_rounds_upward d (rate.toNumber .upward) p hd hrn hp hpm
+  change d.toRat * (rate.toNumber .upward).toRat ≤ p.toRat at hplo
+  change p.toRat - d.toRat * (rate.toNumber .upward).toRat ≤ |d.toRat * (rate.toNumber .upward).toRat| * _ at hphi
   rw [hrv] at hplo hphi
   rw [abs_of_pos (mul_pos hdpos hrpos)] at hphi
-  have hum : kTenthBipsPerUnity.toNumber.mantissa_ ≠ 0 := fun h => by
+  have hum : (kTenthBipsPerUnity.toNumber .upward).mantissa_ ≠ 0 := fun h => by
     rw [Number.toRat_eq_zero_of_mantissa_zero _ h] at huv; norm_num at huv
   have hfm : fee.mantissa_ ≠ 0 := by
     intro hfm
@@ -91,9 +90,9 @@ lemma tenthBipsOfValue_upward_bounds (d : Number) (rate : TenthBips32) (fee : Nu
       linarith
     linarith
   obtain ⟨hflo, hfhi⟩ := Number.operator_div_rounds_upward p _ fee hpn hun hok hfm
-  change p.toRat / kTenthBipsPerUnity.toNumber.toRat ≤ fee.toRat at hflo
-  change fee.toRat - p.toRat / kTenthBipsPerUnity.toNumber.toRat ≤
-    |p.toRat / kTenthBipsPerUnity.toNumber.toRat| * _ at hfhi
+  change p.toRat / (kTenthBipsPerUnity.toNumber .upward).toRat ≤ fee.toRat at hflo
+  change fee.toRat - p.toRat / (kTenthBipsPerUnity.toNumber .upward).toRat ≤
+    |p.toRat / (kTenthBipsPerUnity.toNumber .upward).toRat| * _ at hfhi
   rw [huv] at hflo hfhi
   have hp0 : 0 < p.toRat := by linarith [mul_pos hdpos hrpos]
   rw [abs_of_pos (div_pos hp0 (by norm_num))] at hfhi

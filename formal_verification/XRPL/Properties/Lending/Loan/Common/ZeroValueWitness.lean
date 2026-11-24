@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Loan.Common.PayDefs
 A loan of 6 at 14.5% in 16 yearly instalments with a 10% management fee, on a Scale 0 vault. After four instalments
 the targets of the fifth equal the loan's amounts, so its late payment pays only late interest. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -27,7 +27,7 @@ private def zvGenesis : LendingLedger := { vault := zvVault, shares := [], broke
 private lemma zvGenesis_genesis : zvGenesis.Genesis where
   created := ⟨some 0, none, zvSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨zvVault.wf, zvVault.valid⟩⟩
+    exact dite_eq_left ⟨zvVault.wf, zvVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

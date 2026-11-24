@@ -21,7 +21,7 @@ lemma STAmount.ofNumber_integral_toRat (nt : NumericType) (n : Number)
     (hok : STAmount.ofNumber nt n mode = .ok result) :
     ∃ intValue : Int64, n.to_rep mode = .ok intValue ∧ result.toRat = (intValue.toInt : ℚ) := by
   unfold STAmount.ofNumber at hok
-  simp only [Number.signum_neg_decide, hneg, Bool.false_eq_true, if_false, if_pos hnt] at hok
+  simp only [Number.signum_neg_decide, hneg, Bool.false_eq_true, ite_false, ite_eq_left hnt] at hok
   cases hr : n.to_rep mode with
   | error e => rw [hr] at hok; exact absurd hok (by simp)
   | ok intValue =>
@@ -65,7 +65,7 @@ lemma STAmount.ofNumber_integral_within_half (nt : NumericType) (n : Number) (re
 /-- The `Number.mantissa` accessor of a zero-mantissa record is zero. -/
 lemma Number.mantissa_acc_zero {n : Number} (h : n.mantissa_ = 0) : n.mantissa = 0 := by
   unfold Number.mantissa
-  rw [h, if_neg (by decide : ¬ ((0 : UInt64) > maxRep))]
+  rw [h, ite_eq_right (by decide : ¬ ((0 : UInt64) > maxRep))]
   split <;> decide
 
 /-- A nonzero integral `ofNumber` result forces a nonzero source mantissa. -/
@@ -80,21 +80,21 @@ lemma STAmount.ofNumber_integral_source_ne_zero (nt : NumericType) (n : Number)
     rw [hw]
     split
     · unfold Number.operator_neg
-      rw [if_pos (by rw [h0]; rfl)]
+      rw [ite_eq_left (by rw [h0]; rfl)]
       rfl
     · exact h0
   have hrep : w.to_rep mode = .ok 0 := by
     unfold Number.to_rep
-    rw [if_pos (show (w.mantissa == 0) = true from by
+    rw [ite_eq_left (show (w.mantissa == 0) = true from by
       rw [Number.mantissa_acc_zero hwm]; decide)]
   unfold STAmount.ofNumber at hok
-  rw [if_pos hnt, ← hw, hrep] at hok
+  rw [ite_eq_left hnt, ← hw, hrep] at hok
   simp only [] at hok
   rw [Int64.toUInt64Checked_of_nonneg (by decide), ok_bind] at hok
   rw [show ((0 : rep).toUInt64) = (0 : UInt64) from by decide] at hok
   rw [STAmount.checked, STAmount.canonicalize,
-    if_pos (show (STAmount.unchecked nt 0 0 (decide (n.signum < 0))).integral = true from hnt),
-    if_pos (show ((STAmount.unchecked nt 0 0 (decide (n.signum < 0))).mValue == 0
+    ite_eq_left (show (STAmount.unchecked nt 0 0 (decide (n.signum < 0))).integral = true from hnt),
+    ite_eq_left (show ((STAmount.unchecked nt 0 0 (decide (n.signum < 0))).mValue == 0
       || decide ((STAmount.unchecked nt 0 0 (decide (n.signum < 0))).mOffset ≤ -20)) = true
       from rfl)] at hok
   apply ha
@@ -116,35 +116,35 @@ lemma STAmount.ofNumber_integral_exact (nt : NumericType) (n : Number)
     rw [hn0, STAmount.toRat_signed, ha0]
     simp
   unfold STAmount.ofNumber at hok
-  rw [if_pos hnt] at hok
+  rw [ite_eq_left hnt] at hok
   set w : Number := if decide (n.signum < 0) = true then n.operator_neg else n with hw
   have hwn : w = if n.negative_ = true then n.operator_neg else n := by
     rw [hw, Number.signum_neg_decide]
   have hw_norm : w.isNormalized := by
     rw [hwn]
     rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true]; exact hn
-    · rw [if_pos rfl]; exact Number.operator_neg_isNormalized n hn
+    · rw [ite_eq_right Bool.false_ne_true]; exact hn
+    · rw [ite_eq_left rfl]; exact Number.operator_neg_isNormalized n hn
   have hneg_rec : n.operator_neg = { n with negative_ := !n.negative_ } := by
     unfold Number.operator_neg
-    rw [if_neg (by simpa using hm)]
+    rw [ite_eq_right (by simpa using hm)]
   have hw_exp : w.exponent_ = n.exponent_ := by
     rw [hwn]
     rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true]
-    · rw [if_pos rfl, hneg_rec]
+    · rw [ite_eq_right Bool.false_ne_true]
+    · rw [ite_eq_left rfl, hneg_rec]
   have hw_neg : w.negative_ = false := by
     rw [hwn]
     rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true]; exact hb
-    · rw [if_pos rfl, hneg_rec]
+    · rw [ite_eq_right Bool.false_ne_true]; exact hb
+    · rw [ite_eq_left rfl, hneg_rec]
       simp [hb]
   have hw_val : w.toRat = (if n.negative_ = true then (-1 : ℚ) else 1) * n.toRat := by
     rw [hwn]
     rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true, if_neg Bool.false_ne_true]
+    · rw [ite_eq_right Bool.false_ne_true, ite_eq_right Bool.false_ne_true]
       ring
-    · rw [if_pos rfl, if_pos rfl, Number.toRat_neg]; ring
+    · rw [ite_eq_left rfl, ite_eq_left rfl, Number.toRat_neg]; ring
   cases hrep : w.to_rep mode with
   | error e => rw [hrep] at hok; exact absurd hok (by simp)
   | ok intValue =>
@@ -157,7 +157,7 @@ lemma STAmount.ofNumber_integral_exact (nt : NumericType) (n : Number)
       rw [hw_val]
       rcases hb : n.negative_ with _ | _
       · simpa using hden
-      · rw [if_pos rfl, neg_one_mul, Rat.neg_den]
+      · rw [ite_eq_left rfl, neg_one_mul, Rat.neg_den]
         exact hden
     have hkey : (intValue.toInt : ℚ) = w.toRat := by
       have hone := Number.to_rep_within_one w mode intValue hw_norm hrep
@@ -193,11 +193,11 @@ lemma STAmount.ofNumber_integral_exact (nt : NumericType) (n : Number)
       else (intValue.toUInt64.toNat : ℤ) : ℤ) : ℚ) = n.toRat
     rw [Number.signum_neg_decide]
     rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true]
+    · rw [ite_eq_right Bool.false_ne_true]
       have : ((intValue.toUInt64.toNat : ℤ) : ℚ) = n.toRat := by
         rw [htu, hkey, hw_val, hb]; simp
       exact_mod_cast this
-    · rw [if_pos rfl]
+    · rw [ite_eq_left rfl]
       have h1 : ((intValue.toUInt64.toNat : ℤ) : ℚ) = -n.toRat := by
         rw [htu, hkey, hw_val, hb]; simp
       push_cast
@@ -244,12 +244,12 @@ lemma STAmount.ofNumber_fractional_of_trailing_zeros (n : Number) (mode : roundi
   -- the dropped digits are zero, so the 16-digit rounding is exact in every mode
   have hnorm := normalizeToRange_16_exact n mode hlo' hhi' hmod
     (by unfold minExponent; omega) (by unfold maxExponent; omega)
-  rw [hneg, if_neg (by decide)] at hnorm
+  rw [hneg, ite_eq_right (by decide)] at hnorm
   have hsig : decide (n.signum < 0) = false := by
     unfold Number.signum; simp [hneg, hm0]
   unfold STAmount.ofNumber
-  simp only [hsig, Bool.false_eq_true, if_false]
-  rw [if_neg (by decide)]
+  simp only [hsig, Bool.false_eq_true, ite_false]
+  rw [ite_eq_right (by decide)]
   rw [show n.normalizeToRange kMinValue kMaxValue mode =
     n.normalizeToRange cMinValue cMaxValue mode from rfl, hnorm]
   simp only
@@ -474,9 +474,9 @@ lemma numberExponent_range (n : Number) (exponent : Int) (nt : NumericType) (e :
     e = exponent ∨ e = -100 ∨ ((-96 : ℤ) ≤ e ∧ e ≤ 80) := by
   unfold numberExponent at hok
   by_cases hz : n.operator_eq Number.zero = true
-  · simp only [hz, if_true, pure, Except.pure, Except.ok.injEq] at hok
+  · simp only [hz, ite_true, pure, Except.pure, Except.ok.injEq] at hok
     exact Or.inl hok.symm
-  · simp only [hz, Bool.false_eq_true, if_false] at hok
+  · simp only [hz, Bool.false_eq_true, ite_false] at hok
     cases ha : STAmount.ofNumber nt n .downward with
     | error err => rw [ha] at hok; simp [bind, Except.bind, pure, Except.pure] at hok
     | ok a =>
@@ -650,16 +650,16 @@ lemma STAmount.ofNumber_iou_ne_zero_of_exponent (n : Number) (mode : rounding_mo
   have hw_exp : working.exponent_ = n.exponent_ := by
     rw [hw_def]; rcases neg with _ | _
     · simp
-    · simp only [if_true]; unfold Number.operator_neg; rw [if_neg (by simpa using hn0)]
+    · simp only [ite_true]; unfold Number.operator_neg; rw [ite_eq_right (by simpa using hn0)]
   have hw_neg : working.negative_ = false := by
     rw [hw_def, hneg_eq]
     by_cases hrn : n.negative_ = true
-    · rw [if_pos hrn, Number.operator_neg_negative_of_ne n hn0]; simp [hrn]
-    · rw [if_neg hrn]; simpa using hrn
+    · rw [ite_eq_left hrn, Number.operator_neg_negative_of_ne n hn0]; simp [hrn]
+    · rw [ite_eq_right hrn]; simpa using hrn
   have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hb.1
   have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hb.2
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
+  rw [ite_eq_right (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -718,7 +718,6 @@ lemma STAmount.ofNumber_ne_zero_of_canonical (nt : NumericType) (n : Number)
     rcases ha with hiou | ⟨hic, _⟩
     swap
     · have := hic.is_integral
-      unfold STAmount.integral at this
       rw [hat] at this
       exact absurd this (by decide)
     have hb := mantissaBounds_nat_of (hn.mantissaBounds hn0)
@@ -946,9 +945,9 @@ lemma STAmount.eq_of_exactCanonical (a b : STAmount) (ha : a.ExactCanonical)
     have hp : (0 : ℚ) < 10 ^ s.mOffset := zpow_pos (by norm_num) _
     rw [STAmount.toRat_signed]
     rcases s.mIsNegative with _ | _
-    · simp only [Bool.false_eq_true, if_false, one_mul, iff_false, not_lt]
+    · simp only [Bool.false_eq_true, ite_false, one_mul, iff_false, not_lt]
       positivity
-    · simp only [if_true, iff_true]
+    · simp only [ite_true, iff_true]
       nlinarith [mul_pos hm hp]
   have hsign : a.mIsNegative = b.mIsNegative := by
     have ha' := hneg_iff a ha0

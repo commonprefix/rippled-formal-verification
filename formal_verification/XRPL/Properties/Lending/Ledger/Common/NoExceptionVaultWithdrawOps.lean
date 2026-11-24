@@ -4,9 +4,8 @@ import XRPL.Properties.Vault.Proofs.Support.ComputeClawback
 
 /-! # Which errors a withdrawal, a clawback and a burn of shares return
 
-Outside the `try` of its pricing a vault operation converts amounts the vault stores or just priced, compares
-them and updates the cash. On a lawful vault none of these steps fails, so the operation ends in an error only
-through the pricing (a wrap, or `outOfRange` on an XRP vault) or the final lawfulness re-check. -/
+On a lawful vault every step outside the pricing computes, so the operation ends in an error only through the pricing
+or the final lawfulness re-check. -/
 
 namespace XRPL.Model.SingleAssetVault.VaultWithdrawErrors
 
@@ -72,7 +71,7 @@ lemma native_payout_ok {a : STAmount} {aN fee pN : Number} {rate : TenthBips32} 
     nlinarith
   refine ⟨by norm_num; linarith, by norm_num; linarith⟩
 
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 3200000 in
 -- the walk splits the 51 failing paths of the withdrawal and closes each with a list of candidates
 /-- A withdrawal that checks the holder's shares ends in an error only as `notLawful` or a wrap. On an XRP vault a
 withdrawal by shares needs the shares to be worth at most `10^17` drops at the computed net asset value. -/

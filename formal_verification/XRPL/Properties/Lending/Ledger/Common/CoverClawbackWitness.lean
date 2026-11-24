@@ -1,12 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.CoverWitness
 
 /-! # A full clawback that leaves CoverAvailable below the minimum cover
 
-The run of `CoverWitness.lean` takes broker 0's cover to `2000001` at the scale `10^-10`, past `10^16` base units,
-with a LoanServiceFee. With a minimum cover of `500.1000000001`, a full clawback rounds `1999500.8999999999` up to
-`1999500.9` and leaves `500.1`. -/
+A full cover clawback past `10^16` base units rounds up and leaves CoverAvailable below the minimum cover (FV_M3_2). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

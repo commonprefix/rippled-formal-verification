@@ -3,21 +3,10 @@ import XRPL.Properties.Vault.Common.WithdrawDefs
 
 /-! # Witnesses for isolation
 
-Each run's result is computed by the model and checked by `native_decide`. Each vault comes from a reachable history:
-the create of a closed-ended vault with an early-exit fee, then a deposit and a donation at time 0, in the subscription
-phase. Both runs then happen at time 200, in the investment phase.
+Two clawbacks in the investment phase, one worth a fraction of a base unit and one worth whole base units, after
+which a withdrawal that paid 1 under the early-exit fee pays nothing (FV_M2_3). -/
 
-* Clawback worth a fraction of a base unit: an IOU vault at scale 0 with `1000000000000008` assets and
-  `750000000000006` shares, each worth `4/3`. A withdrawal of 3 shares, worth exactly 4, pays 1 after a 75% fee.
-  Clawing back `750000000000002` shares, worth `1000000000000002.67`, recovers `1000000000000003` and leaves 5 assets
-  for 4 shares. The 3 shares are then worth `3.75`, and the `0.9375` left after the fee pays nothing.
-* Clawback worth whole base units: an MPT vault with `18181·j` assets and `18178·j` shares, `j = 60515300031`. A
-  withdrawal of 9089 shares, worth `9090.5`, prices at 9091 because the 19-digit product of the cash and the shares
-  rounds up past the tie, and pays 1 after a 99.989% fee. Clawing back all but 18178 shares, worth exactly
-  `18181·(j - 1)`, leaves 18181 assets for 18178 shares, the same per-share value. The product is now exact, the tie
-  rounds to the even 9090, and the `0.9999` left after the fee pays nothing. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.IsoWit
 

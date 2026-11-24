@@ -66,7 +66,7 @@ def LoanState.buildTheoretical (periodicPayment periodicRate : Number) (paymentR
       managementFeeDue := Number.zero
     }
 
-  let paymentCount := Number.ofInt64 paymentRemaining.toInt64
+  let paymentCount := Number.ofInt64 paymentRemaining.toInt64 .to_nearest
   let valueOutstanding ← periodicPayment.operator_mul paymentCount .to_nearest
   let principalOutstanding ← loanPrincipalFromPeriodicPayment periodicPayment periodicRate paymentRemaining
 

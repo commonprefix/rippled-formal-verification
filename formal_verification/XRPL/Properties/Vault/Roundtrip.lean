@@ -7,6 +7,7 @@ import XRPL.Properties.Vault.Proofs.RoundtripWitness
 import XRPL.Properties.Vault.Proofs.DepositTight.Charge
 import XRPL.Properties.Vault.Proofs.Support.VaultBalances
 import XRPL.Properties.Vault.Proofs.ShareWorth
+import XRPL.Properties.Vault.Proofs.DepositRunWitness
 
 /-! # Depositing and redeeming returns the taken amount
 
@@ -31,8 +32,7 @@ theorem Vault.deposit_withdraw_roundtrip (v : Vault) (amountDeposit : STAmount) 
     r₂.assets.toRat ≤ r₁.assets.toRat ∧
       r₁.assets.toRat - r₂.assets.toRat ≤ (10 : ℚ) ^ v.baseExponent :=
   Vault.deposit_withdraw_roundtrip_proof v amountDeposit waiveUnrealizedLoss t t0 hpos hr ht hcanon hty
-    (Vault.maxValue_fits_of_canonical v amountDeposit hcanon hty) r₁ hok₁
-    (Vault.Reachable.deposit_mint_fits_proof v t0 hr amountDeposit false t hpos hcanon hty r₁ hok₁) hpos₂ r₂ hok₂
+    (Vault.maxValue_fits_of_canonical v amountDeposit hcanon hty) r₁ hok₁ hpos₂ r₂ hok₂
 
 /-- Witness for the loss side of `deposit_withdraw_roundtrip`: on a reachable vault the redemption
 pays back exactly one step of the base grid less than the charge. -/
@@ -48,7 +48,7 @@ theorem Vault.deposit_withdraw_roundtrip_loss_attained :
       (r₁.vault'.withdraw (.vaultShares r₁.shares) waiveUnrealizedLoss t hpos₂).run = .ok (.ok r₂) ∧
       r₁.assets.toRat - r₂.assets.toRat = (10 : ℚ) ^ v.baseExponent := by
   obtain ⟨v, amountDeposit, waiveUnrealizedLoss, t, t0, hpos, r₁, hpos₂, r₂, hr, ht, hcanon, hty, -,
-    hok₁, -, hok₂, heq⟩ := Vault.deposit_withdraw_roundtrip_loss_witness
+    hok₁, hok₂, heq⟩ := Vault.deposit_withdraw_roundtrip_loss_witness
   exact ⟨v, amountDeposit, waiveUnrealizedLoss, t, t0, hpos, r₁, hpos₂, r₂, hr, ht, hcanon, hty,
     hok₁, hok₂, heq⟩
 
@@ -67,8 +67,21 @@ theorem Vault.deposit_withdraw_roundtrip_gain_attained :
       0 < (v.toExact.sharesTotal : ℚ) ∧
       r₂.assets.toRat = r₁.assets.toRat := by
   obtain ⟨v, amountDeposit, waiveUnrealizedLoss, t, t0, hpos, r₁, hpos₂, r₂, hr, ht, hcanon, hty, -,
-    hok₁, -, hok₂, hS, heq⟩ := Vault.deposit_withdraw_roundtrip_gain_witness
+    hok₁, hok₂, hS, heq⟩ := Vault.deposit_withdraw_roundtrip_gain_witness
   exact ⟨v, amountDeposit, waiveUnrealizedLoss, t, t0, hpos, r₁, hpos₂, r₂, hr, ht, hcanon, hty,
     hok₁, hok₂, hS, heq⟩
+
+/-- Witness that `n` deposits then a withdrawal of their shares can pay back more than was charged: 100 deposits of
+0.03 on an IOU vault are charged 2, each charge rounded down to the vault scale, and their 200 shares pay 2.83. -/
+theorem Vault.deposits_withdraw_roundtrip_attained :
+    ∃ (v w : Vault) (t0 t : UInt32) (n : ℕ) (charged : ℚ) (shares : STAmount)
+      (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat) (r : VaultWithAmounts),
+      Vault.Reachable v t0 ∧
+      t0 ≤ t ∧
+      Vault.DepositRun v t w charged shares.toRat n ∧
+      1 < n ∧
+      (w.withdraw (.vaultShares shares) false t hpos).run = .ok (.ok r) ∧
+      charged < r.assets.toRat :=
+  Vault.deposits_withdraw_roundtrip_witness
 
 end XRPL.Model.SingleAssetVault

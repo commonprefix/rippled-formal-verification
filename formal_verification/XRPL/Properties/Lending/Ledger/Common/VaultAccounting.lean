@@ -7,9 +7,8 @@ import XRPL.Properties.Lending.Loan.Common.SetLedger
 
 /-! # The vault's balances over a sequence of transactions
 
-AssetsDeployed, AssetsReserved, LossUnrealized and YieldUnrealized move by exactly what each transaction lends, pays,
-accepts, deletes, defaults, impairs and books. AssetsTotal moves by exactly the assets that go in and out while the
-vault is not coarsened, and AssetsAvailable is AssetsTotal less AssetsDeployed. -/
+AssetsDeployed, AssetsReserved, LossUnrealized and YieldUnrealized move by exactly what each transaction books.
+AssetsTotal moves by exactly the assets that go in and out while the vault is not coarsened. -/
 
 namespace XRPL.Model.Lending
 
@@ -132,13 +131,13 @@ private lemma LendingLedger.lending_step {l l' : LendingLedger} {tx : LendingTx}
           l.principalSum (·.isPending) + LoanEntry.principalIf (·.isPending) none := by
         rw [hl']; exact l.principalSum_commitLoan _ _
       rw [he₀] at hcD hcR
-      simp only [LoanEntry.principalIf, hpe, if_true, add_zero] at hcD hcR
+      simp only [LoanEntry.principalIf, hpe, ite_true, add_zero] at hcD hcR
       have hD := hr.debtInv.deployed
       have hD' := hr'.debtInv.deployed
       have hR := hr.reservedInv.sum
       have hR' := hr'.reservedInv.sum
       rw [hPO]
-      exact ⟨by simp only [if_true]; linarith, by simp only [if_true]; linarith, by ring, by ring⟩
+      exact ⟨by simp only [ite_true]; linarith, by simp only [ite_true]; linarith, by ring, by ring⟩
   | loanManage i action =>
     cases action with
     | impair =>
@@ -181,7 +180,7 @@ private lemma LendingLedger.lending_step {l l' : LendingLedger} {tx : LendingTx}
           if loan.isImpaired then loan.principalOutstanding.toRat else 0 := by
         cases himp : loan.isImpaired
         · have h0 := (Loan.manageDefault_lossStep loan l.vault r hdef).1
-          rw [himp, if_neg Bool.false_ne_true, Number.operator_add_zero_right, Except.ok.injEq] at h0
+          rw [himp, ite_eq_right Bool.false_ne_true, Number.operator_add_zero_right, Except.ok.injEq] at h0
           rw [hv, ← h0]; simp
         · rw [LendingLedger.manageDefault_loss_proof hr h hat himp]; simp
       simp only [LendingLedger.lentOf, LendingLedger.principalPaidOf, LendingLedger.defaultedOf,
@@ -204,7 +203,7 @@ private lemma LendingLedger.lending_step {l l' : LendingLedger} {tx : LendingTx}
       · rw [hv, (Loan.pay_lossStep loan l.vault pt amount l.now r hok).2.1 himp]; simp
       · rw [show l'.vault.lossUnrealized.toRat = _ from
           LendingLedger.payment_unimpairs_proof l hr l' i pt amount h loan hat himp]
-        simp only [if_true]; rfl
+        simp only [ite_true]; rfl
     simp only [LendingLedger.lentOf, LendingLedger.principalPaidOf, LendingLedger.defaultedOf,
       LendingLedger.deletedPendingOf, LendingLedger.lentPendingOf, LendingLedger.acceptedOf,
       LendingLedger.impairedOf, LendingLedger.unimpairedOf, LendingLedger.interestBookedOf,
@@ -328,16 +327,16 @@ lemma LendingLedger.vault_accounting_proof {start l : LendingLedger} {txs : List
     fun _ _ _ _ _ _ _ => trivial
   have hAD := LendingLedger.Reaches.runSum_eq (F := fun l₀ => l₀.vault.assetsDeployed.toRat)
     (d := fun l₀ tx => l₀.lentOf tx - l₀.principalPaidOf tx - l₀.defaultedOf tx - l₀.deletedPendingOf tx)
-    (fun _ _ _ hr₁ hok _ => by beta_reduce; rw [(LendingLedger.lending_step hr₁ hok).1]; ring) hr hrun hall
+    (fun _ _ _ hr₁ hok _ => by rw [(LendingLedger.lending_step hr₁ hok).1]; ring) hr hrun hall
   have hAR := LendingLedger.Reaches.runSum_eq (F := fun l₀ => l₀.vault.assetsReserved.toRat)
     (d := fun l₀ tx => l₀.lentPendingOf tx - l₀.acceptedOf tx - l₀.deletedPendingOf tx)
-    (fun _ _ _ hr₁ hok _ => by beta_reduce; rw [(LendingLedger.lending_step hr₁ hok).2.1]; ring) hr hrun hall
+    (fun _ _ _ hr₁ hok _ => by rw [(LendingLedger.lending_step hr₁ hok).2.1]; ring) hr hrun hall
   have hLU := LendingLedger.Reaches.runSum_eq (F := fun l₀ => l₀.vault.lossUnrealized.toRat)
     (d := fun l₀ tx => l₀.impairedOf tx - l₀.unimpairedOf tx)
-    (fun _ _ _ hr₁ hok _ => by beta_reduce; rw [(LendingLedger.lending_step hr₁ hok).2.2.1]; ring) hr hrun hall
+    (fun _ _ _ hr₁ hok _ => by rw [(LendingLedger.lending_step hr₁ hok).2.2.1]; ring) hr hrun hall
   have hYU := LendingLedger.Reaches.runSum_eq (F := fun l₀ => l₀.vault.yieldUnrealized.toRat)
     (d := fun l₀ tx => l₀.interestBookedOf tx - l₀.interestRemovedOf tx - l₀.interestDefaultedOf tx)
-    (fun _ _ _ hr₁ hok _ => by beta_reduce; rw [(LendingLedger.lending_step hr₁ hok).2.2.2]; ring) hr hrun hall
+    (fun _ _ _ hr₁ hok _ => by rw [(LendingLedger.lending_step hr₁ hok).2.2.2]; ring) hr hrun hall
   beta_reduce at hAD hAR hLU hYU
   rw [LendingLedger.runSum_sub, LendingLedger.runSum_sub, LendingLedger.runSum_sub] at hAD
   rw [LendingLedger.runSum_sub, LendingLedger.runSum_sub] at hAR hYU

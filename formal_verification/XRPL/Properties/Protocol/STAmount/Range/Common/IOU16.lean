@@ -39,7 +39,7 @@ lemma normalizeToRange_16_shape (n : Number) (mode : rounding_mode)
       have hcompute : n.normalizeToRange cMinValue cMaxValue mode
           = .ok (if n.negative_ then -cMinValue.toInt64 else cMinValue.toInt64, (n.exponent_ + 3) + 1) := by
         unfold Number.normalizeToRange
-        rw [h_red, hcusp, hcusp_eq, if_neg (by omega)]
+        rw [h_red, hcusp, hcusp_eq, ite_eq_right (by omega)]
         ntr_tail
       have hq : n.mantissa_.toNat / 1000 = 10 ^ 16 - 1 := by rw [← hm3, hcusp, hcMax]
       refine ⟨true, _, _, ⟨fun _ => hround.mp hb, fun _ => rfl⟩, hcompute, Or.inr (by ring), ?_⟩
@@ -62,7 +62,7 @@ lemma normalizeToRange_16_shape (n : Number) (mode : rounding_mode)
         ntr_tail
       refine ⟨true, _, _, ⟨fun _ => hround.mp hb, fun _ => rfl⟩, hcompute, Or.inl rfl, ?_⟩
       rw [hcMax, hm3] at hlt
-      simp only [if_true, true_iff]
+      simp only [ite_true, true_iff]
       omega
   · -- the 16 digits are kept
     have hcompute : n.normalizeToRange cMinValue cMaxValue mode
@@ -75,7 +75,7 @@ lemma normalizeToRange_16_shape (n : Number) (mode : rounding_mode)
       ntr_tail
     refine ⟨false, _, _, ⟨fun h => absurd h (by decide), fun h => absurd (hround.mpr h) hb⟩, hcompute,
       Or.inl rfl, ?_⟩
-    simp only [Bool.false_eq_true, if_false, add_zero, true_iff]
+    simp only [Bool.false_eq_true, ite_false, add_zero, true_iff]
     omega
 
 /-- Once the 16-digit rounding has a result, `IOUAmount.ofNumber` only checks that the exponent is at most 80. -/
@@ -86,9 +86,9 @@ lemma IOUAmount.ofNumber_ok_iff_of_norm (n : Number) (mode : rounding_mode) (man
   rw [h]
   dsimp only
   by_cases hhi : exp > cMaxOffset
-  · rw [if_pos hhi]
+  · rw [ite_eq_left hhi]
     exact iff_of_false (by simp) (by omega)
-  · rw [if_neg hhi]
+  · rw [ite_eq_right hhi]
     refine iff_of_true ?_ (by omega)
     split <;> exact ⟨_, rfl⟩
 
@@ -106,10 +106,10 @@ lemma Number.toRat_eq_units16 (n : Number) :
   rw [hpow, Int.cast_natCast]
   rcases hb : n.negative_ with _ | _
   · rw [Number.toRat_of_nonneg n hb, hdm]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     ring
   · rw [Number.toRat_of_neg n hb, hdm]
-    simp only [if_true]
+    simp only [ite_true]
     ring
 
 /-- The size of a 19-digit Number is between `10^15` and `10^16` units of `10 ^ (exponent + 3)`. -/
@@ -156,7 +156,7 @@ lemma IOUAmount.ofNumber_ok_iff (n : Number) (mode : rounding_mode) (hn : n.isNo
         have hexp3 := normalizeToRange_iou_exp_hi n mode mant exp h_lo h_hi hnorm
         obtain ⟨-, ⟨hexp_lo, -⟩, -⟩ :=
           normalizeToRange_iou_ok_facts n mode mant exp h_lo h_hi (by omega) hexp3 hnorm
-        rw [if_pos (by unfold cMaxOffset; omega)] at hr
+        rw [ite_eq_left (by unfold cMaxOffset; omega)] at hr
         exact absurd hr (by simp)
     · have hpow : (10 : ℚ) ^ (81 : ℤ) ≤ (10 : ℚ) ^ (n.exponent_ + 3) :=
         zpow_le_zpow_right₀ (by norm_num) (by omega)

@@ -5,9 +5,8 @@ import XRPL.Model.Vault.VaultClawback
 
 /-! # Shared `DecidableEq` derivations for the vault witness leaves
 
-The `native_decide` witness files compare concrete vault states and operation results, so they need `DecidableEq`
-for `RawVault`, `VaultAmounts`, `VaultWithAmounts`, and `Except`. Deriving these in one shared module emits each
-generated `decEq` helper once, so the witness files load together under the `Properties` aggregator. -/
+The `native_decide` witness files compare vault states and results. Deriving `DecidableEq` once here lets them load
+together under the `Properties` aggregator. -/
 
 namespace XRPL.Model.SingleAssetVault
 

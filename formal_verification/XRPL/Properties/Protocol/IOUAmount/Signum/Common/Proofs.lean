@@ -21,14 +21,14 @@ private lemma IOUAmount.signum_eq_int (a : IOUAmount) :
     · intro h hh; exact h (by rw [hh, hz])
   unfold IOUAmount.signum
   by_cases h1 : a.mantissa_ < 0
-  · rw [if_pos h1, if_pos (hneg.mp h1)]
-  · rw [if_neg h1, if_neg (fun h => h1 (hneg.mpr h))]
+  · rw [ite_eq_left h1, ite_eq_left (hneg.mp h1)]
+  · rw [ite_eq_right h1, ite_eq_right (fun h => h1 (hneg.mpr h))]
     have h1' : ¬ a.mantissa_.toInt < 0 := fun h => h1 (hneg.mpr h)
     by_cases h2 : (a.mantissa_ != 0) = true
-    · rw [if_pos h2, if_pos (by have := hne.mp h2; omega)]
-    · rw [if_neg h2]
+    · rw [ite_eq_left h2, ite_eq_left (by have := hne.mp h2; omega)]
+    · rw [ite_eq_right h2]
       have hzero : a.mantissa_.toInt = 0 := by by_contra hh; exact h2 (hne.mpr hh)
-      rw [if_neg (by omega)]
+      rw [ite_eq_right (by omega)]
 
 /-- `toRat < 0` exactly when the mantissa is negative (`10^exponent > 0`). -/
 private lemma IOUAmount.toRat_neg_iff (a : IOUAmount) : a.toRat < 0 ↔ a.mantissa_.toInt < 0 := by
@@ -51,11 +51,11 @@ theorem IOUAmount.signum_eq_proof (a : IOUAmount) :
   have hnegR := IOUAmount.toRat_neg_iff a
   rw [IOUAmount.signum_eq_int]
   by_cases h1 : a.mantissa_.toInt < 0
-  · rw [if_pos h1, if_neg (fun h => absurd (hpos.mp h) (by omega)), if_pos (hnegR.mpr h1)]
-  · rw [if_neg h1]
+  · rw [ite_eq_left h1, ite_eq_right (fun h => absurd (hpos.mp h) (by omega)), ite_eq_left (hnegR.mpr h1)]
+  · rw [ite_eq_right h1]
     by_cases h2 : 0 < a.mantissa_.toInt
-    · rw [if_pos h2, if_pos (hpos.mpr h2)]
-    · rw [if_neg h2, if_neg (fun h => h2 (hpos.mp h)), if_neg (fun h => h1 (hnegR.mp h))]
+    · rw [ite_eq_left h2, ite_eq_left (hpos.mpr h2)]
+    · rw [ite_eq_right h2, ite_eq_right (fun h => h2 (hpos.mp h)), ite_eq_right (fun h => h1 (hnegR.mp h))]
 
 /-- `signum = 1 ↔ value is positive`. -/
 theorem IOUAmount.signum_eq_one_iff_proof (a : IOUAmount) : a.signum = 1 ↔ 0 < a.toRat := by

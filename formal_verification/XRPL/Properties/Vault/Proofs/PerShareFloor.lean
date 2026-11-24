@@ -1,7 +1,9 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Vault.Proofs.PerShareValue
 import XRPL.Properties.Vault.Proofs.ClawbackShareFloor
 import XRPL.Properties.Vault.Proofs.WithdrawUpdates
 import XRPL.Properties.Vault.Proofs.DepositChargeFloor
+import XRPL.Properties.Vault.Proofs.Support.ShareSupply
 
 /-! # Withdrawals and clawbacks that keep the per-share value
 
@@ -117,7 +119,7 @@ lemma Vault.deposit_charge_mul_of_ge (v : Vault) (amountDeposit : STAmount) (t :
   have hI : v.idealChargeDepositAt navN.toRat r.shares.toRat =
       navN.toRat * r.shares.toRat / (v.toExact.sharesTotal : ℚ) := by
     unfold RawVault.idealChargeDepositAt
-    rw [if_neg (ne_of_gt hnpos)]
+    rw [ite_eq_right (ne_of_gt hnpos)]
   rw [hI, div_le_iff₀ hSpos] at hge
   exact hge
 
@@ -189,11 +191,10 @@ lemma Vault.OpenZone.deposit_keeps_perShare {v : Vault} (hz : v.OpenZone) (amoun
     (t : UInt32) (hpos : 0 < amountDeposit.toRat) (hcanon : amountDeposit.Canonical)
     (hty : amountDeposit.mNumericType = v.numericType)
     (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1)
     (hworth : ∃ k : ℤ, v.idealChargeDeposit r.shares.toRat = k * 10 ^ v.baseExponent) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
   obtain ⟨hAA', hz'⟩ := Vault.deposit_openZone v amountDeposit false t hpos hcanon hty hz r hok
-  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit false t hpos hcanon hty r hok hSsz
+  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit false t hpos hcanon hty r hok
   have hI : v.idealChargeDepositAt v.assetsAvailable.toRat r.shares.toRat = v.idealChargeDeposit r.shares.toRat := by
     rw [← hz.depositNav_eq, RawVault.idealChargeDepositAt_depositNav]
   have h2 := (Vault.deposit_charge_at_proof v amountDeposit t hcanon hpos v.assetsAvailable hz.assetsTotal_eq r
@@ -236,11 +237,10 @@ lemma Vault.Reachable.deposit_no_dilution_intended_proof (v : Vault) (amountDepo
     (hpos : 0 < amountDeposit.toRat) (hr : Vault.Reachable v t0) (hcanon : amountDeposit.Canonical)
     (hty : amountDeposit.mNumericType = v.numericType)
     (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1)
     (hworth : ∃ k : ℤ, v.idealChargeDeposit r.shares.toRat = k * 10 ^ v.baseExponent) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   have hz := Vault.Reachable.openZone_proof v t0 hr (Vault.maxValue_fits_of_canonical v amountDeposit hcanon hty)
-  hz.deposit_keeps_perShare amountDeposit t hpos hcanon hty r hok hSsz hworth
+  hz.deposit_keeps_perShare amountDeposit t hpos hcanon hty r hok hworth
 
 /-- A cross-multiplied bound is a per-share one, on positive share totals. -/
 private lemma perShare_of_cross (N N' S S' : ℚ) (hS : 0 < S) (hS' : 0 < S') (h : N' * S ≥ N * S') :
@@ -261,7 +261,7 @@ lemma Vault.ReachableFromIn.no_dilution_intended_proof (v : Vault) (t0 : UInt32)
       w.withdrawNav / (w.toExact.sharesTotal : ℚ) ≥ v.withdrawNav / (v.toExact.sharesTotal : ℚ) from H.2.2
   induction h with
   | refl => exact ⟨hz0, rfl, le_refl _⟩
-  | deposit u _ t' n amount isDonation r _ _ hc hty hpos hok hSsz hwhole ih =>
+  | deposit u _ t' n amount isDonation r _ _ hc hty hpos hok hwhole ih =>
     obtain ⟨hz, hnt, hP⟩ := ih
     obtain ⟨_, _, hv⟩ := Vault.deposit_frame u _ _ _ _ r hok
     have hnt' : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
@@ -279,14 +279,14 @@ lemma Vault.ReachableFromIn.no_dilution_intended_proof (v : Vault) (t0 : UInt32)
       linarith
     cases isDonation with
     | false =>
-      have hST' := Vault.deposit_exact_sharesTotal u amount false t' hpos hc hty r hok hSsz
+      have hST' := Vault.deposit_exact_sharesTotal u amount false t' hpos hc hty r hok
       have hs0 : 0 ≤ r.shares.toRat := by
         obtain ⟨-, -, -, -, -, -, -, -, -, -, hshpos, -⟩ :=
           DepAcc.Vault.deposit_success_reduces u amount t' hpos hc r hok
         exact hshpos.le
       have hS'pos : 0 < (r.vault'.toExact.sharesTotal : ℚ) := by rw [hST']; linarith
       exact perShare_of_cross _ _ _ _ hSpos hS'pos
-        (hz.deposit_keeps_perShare amount t' hpos hc hty r hok hSsz (hwhole rfl))
+        (hz.deposit_keeps_perShare amount t' hpos hc hty r hok (hwhole rfl))
     | true =>
       obtain ⟨hlt, hSe⟩ := hz.deposit_donation_no_dilution amount t' hpos hc hty r hok
       rw [hSe]
@@ -306,7 +306,7 @@ lemma Vault.ReachableFromIn.no_dilution_intended_proof (v : Vault) (t0 : UInt32)
     have := perShare_of_cross u.withdrawNav r.vault'.withdrawNav (u.toExact.sharesTotal : ℚ)
       (r.vault'.toExact.sharesTotal : ℚ) hSpos hS'pos hd
     linarith
-  | clawback u _ t' n assets holderShares waive r _ _ hc _ hhs _ hnn hok _ hlt hwhole ih =>
+  | clawback u _ t' n assets holderShares waive r _ _ hc _ hhs _ hnn hok hlt hwhole ih =>
     obtain ⟨hz, hnt, hP⟩ := ih
     have hmax' : u.numericType.isIntegral = true → u.numericType.maxValue.toNat ≤ maxRep.toNat := hnt ▸ hmax
     obtain ⟨_, _, hv⟩ := Vault.clawback_frame u _ _ _ _ r hok

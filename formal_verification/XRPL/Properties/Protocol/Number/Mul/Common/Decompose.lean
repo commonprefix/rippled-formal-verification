@@ -44,7 +44,7 @@ lemma Number.operator_mulSpec_scaled (x y : Number) (mode : rounding_mode)
   have hx_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hx_mant_ne
   have hy_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hy_mant_ne
   unfold Number.operator_mulSpec at hok
-  simp only [hx_ne_zero, hy_ne_zero, Bool.false_eq_true, if_false] at hok
+  simp only [hx_ne_zero, hy_ne_zero, Bool.false_eq_true, ite_false] at hok
   set zn : Bool := x.negative_ != y.negative_ with hzn_def
   set zm128 : UInt128 := toUInt128 x.mantissa_ * toUInt128 y.mantissa_ with hzm128_def
   set ze : Int := x.exponent_ + y.exponent_ with hze_def
@@ -127,8 +127,8 @@ lemma Number.operator_mulSpec_scaled (x y : Number) (mode : rounding_mode)
     have h_g_eq : g = (scaleDown128Spec zm128 ze g0).2.2 := by rw [hg_def, hsd_def]
     rw [h_g_eq, scaleDown128_sbit_preserved, hg0_def]
     by_cases hzn : zn
-    · rw [if_pos hzn]; exact hzn.symm
-    · rw [if_neg hzn]; exact (Bool.not_eq_true _ |>.mp hzn).symm
+    · rw [ite_eq_left hzn]; exact hzn.symm
+    · rw [ite_eq_right hzn]; exact (Bool.not_eq_true _ |>.mp hzn).symm
   exact ⟨zm, ze', f, g, hzm_succ, hzm_le_maxRep, hf_nn, hf_lt, h_floor_constraint, habs_xy_eq2, hf_rep,
     h_g_sbit, hok.symm⟩
 
@@ -242,7 +242,7 @@ theorem Number.operator_mul_operands_ne_zero {x y result : Number} {mode : round
   · have hx_zero : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxz
     rw [Number.operator_mul_eq_spec] at hok
     unfold Number.operator_mulSpec at hok
-    rw [if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
+    rw [ite_eq_left (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
       (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     apply hresult
@@ -251,15 +251,15 @@ theorem Number.operator_mul_operands_ne_zero {x y result : Number} {mode : round
   · have hy_zero : y = Number.zero := Number.eq_zero_of_mantissa_zero y hy hyz
     by_cases hxg : x.operator_eq Number.zero = true
     · unfold Number.operator_mul at hok
-      rw [if_pos hxg] at hok
+      rw [ite_eq_left hxg] at hok
       have h_result : result = x :=
         (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
       apply hresult
       rw [h_result]
       exact Number.mantissa_eq_zero_of_operator_eq_zero hxg
     · unfold Number.operator_mul at hok
-      rw [if_neg hxg,
-          if_pos (show y.operator_eq Number.zero = true from by rw [hy_zero]; decide)] at hok
+      rw [ite_eq_right hxg,
+          ite_eq_left (show y.operator_eq Number.zero = true from by rw [hy_zero]; decide)] at hok
       have h_result : result = y :=
         (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
       apply hresult

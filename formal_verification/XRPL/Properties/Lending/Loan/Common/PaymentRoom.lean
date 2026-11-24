@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.CreatedSize
 import XRPL.Properties.Lending.Loan.Common.Outstanding
 import XRPL.Properties.Lending.Loan.Common.RoundToNearest
@@ -59,9 +60,8 @@ private lemma Loan.tryOverpayment_periodic (l : Loan) (opc : PaymentComponents) 
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   rename_i _ g hg hgs _ _ _ hsig _ _ _ _ _ _ _ _ _
   obtain ⟨hb1, -, -⟩ := LoanState.build_fields _ _ _ _ ‹LoanState.build _ _ _ = _›
@@ -197,9 +197,8 @@ private lemma UnsettledPayment.applyOverpayment_room {T0 : ℚ} (payment p' : Un
   unfold UnsettledPayment.applyOverpayment at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact hroom
-    | skip
   rename_i re hre _ _ _ _ loan' hl
   obtain ⟨he, -, -⟩ := RawLoan.to_lawful_ok hl
   have hn : loan'.paymentRemaining = payment.loan.paymentRemaining := by

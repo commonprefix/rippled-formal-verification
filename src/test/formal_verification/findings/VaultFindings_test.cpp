@@ -4,11 +4,11 @@
 #include <test/jtx/Env.h>
 #include <test/jtx/TestHelpers.h>
 #include <test/jtx/amount.h>
-#include <test/jtx/fee.h>
+#include <test/jtx/escrow.h>
 #include <test/jtx/mpt.h>
 #include <test/jtx/pay.h>
-#include <test/jtx/sig.h>
 #include <test/jtx/ter.h>
+#include <test/jtx/trust.h>
 #include <test/jtx/vault.h>
 
 #include <xrpl/basics/Number.h>
@@ -19,6 +19,7 @@
 #include <xrpl/ledger/ApplyView.h>
 #include <xrpl/ledger/OpenView.h>
 #include <xrpl/ledger/Sandbox.h>
+#include <xrpl/ledger/helpers/VaultHelpers.h>
 #include <xrpl/protocol/Asset.h>
 #include <xrpl/protocol/Feature.h>
 #include <xrpl/protocol/Indexes.h>
@@ -43,12 +44,11 @@
 
 namespace xrpl {
 
-// One failing test per open bug in STAmount and in the vault transactions.
-// A test is enabled by uncommenting its call in run().
+// One failing test per open bug in STAmount, in the vault transactions and in other transactions
+// on vault shares. A test is enabled by uncommenting its call in run().
 class VaultFindings_test : public LoanManageFixedPrecisionBase
 {
-    // Funds the issuer, owner and depositor. Creates an MPT that the issuer can claw back and
-    // pays the depositor.
+    // Funds the accounts and pays the depositor an MPT that the issuer can claw back.
     static AssetAccounts
     setupClawbackMpt(test::jtx::Env& env, Number const& depositorFunds)
     {
@@ -125,8 +125,8 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         };
     }
 
-    // A closed-ended vault that lent the whole deposit to the depositor as loan A, at
-    // LateInterestRate 100%. Loan A was paid two years late, so AssetsTotal is past 10^18.
+    // A closed-ended vault that lent its deposit as loan A at LateInterestRate 100%. Loan A was
+    // paid two years late, so AssetsTotal is past 10^18.
     static Keylet
     setupLateInterestVault(
         test::jtx::Env& env,
@@ -141,15 +141,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         auto const fixture = setupLendingVault(
             env, accounts.owner, accounts.depositor, accounts.asset, deposit, 24h);
         std::uint32_t const paymentTotal = 150;
-        Keylet const loanA = keylet::loan(fixture.brokerKeylet.key, SeqProxy::rawSequence(1));
-        env(loan::set(accounts.depositor, fixture.brokerKeylet.key, deposit),
-            loan::kLateInterestRate(percentageToTenthBips(100)),
-            loan::kGracePeriod(60),
-            loan::kPaymentInterval(60),
-            loan::kPaymentTotal(paymentTotal),
-            Sig(sfCounterpartySignature, accounts.owner),
-            Fee(env.current()->fees().base * 2));
-        env.close();
+        Keylet const loanA = openLoanWithLateInterest(env, fixture, deposit, paymentTotal, 60);
 
         env.close(Tp{D{env.le(loanA)->at(sfStartDate)}} + 2 * 365 * 24h);
         // More than any installment with its late interest.
@@ -162,8 +154,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         return fixture.vaultKeylet;
     }
 
-    // The vault's share. Registers the pseudo-account, which issues the shares, so that
-    // env.balance can read share balances.
+    // The vault's share. Registers its issuer, the pseudo-account, so env.balance can read shares.
     static Asset
     shareOf(test::jtx::Env& env, Keylet const& vaultKeylet)
     {
@@ -200,8 +191,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         }));
     }
 
-    // FV_M2_2: multiply() rounds a negative result Upward in Downward mode and Downward in Upward
-    // mode. An IOU divide() can return a negative result 1 ULP further from zero.
+    // FV_M2_2: multiply() and divide() round a negative result in the wrong direction.
     void
     testMulDivRoundNegative()
     {
@@ -266,8 +256,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         }
     }
 
-    // FV_M2_3: a VaultDeposit is charged less than its new shares are worth, so the shares that
-    // existed before it lose value.
+    // FV_M2_3: a VaultDeposit is charged less than its new shares are worth.
     void
     testVaultDepositOvervaluedShares()
     {
@@ -303,8 +292,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
                 to_string(valueAfter));
     }
 
-    // FV_M2_3: a VaultWithdraw pays the shares' worth rounded to nearest, so four withdrawals of
-    // 1 share take 4 drops for shares worth 3 and the other holder loses value.
+    // FV_M2_3: a VaultWithdraw pays shares' worth rounded to nearest, at the other holders' cost.
     void
     testVaultWithdrawOvervaluedShares()
     {
@@ -341,8 +329,73 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
                 to_string(valueAfter));
     }
 
-    // FV_M2_20: on a vault at 1 unit per share a deposit, withdrawal or clawback of 5,005 moves
-    // 5,004. A clawback of more than the vault holds leaves the holder 1 share.
+    // FV_M2_3: an IOU VaultDeposit is charged its shares' worth rounded down to the vault scale.
+    void
+    testVaultDepositChargeFloored()
+    {
+        testcase("FV_M2_3 VaultDepositChargeFloored");
+        using namespace test::jtx;
+
+        Env env{*this, all_ | featureLendingProtocolV1_1};
+        auto const accounts = setupIou(env, {.ownerFunds = Number{30}});
+        Account const holder{"holder"};
+        fundIouHolder(env, holder, accounts, Number{1'000}, Number{70});
+
+        // 1. A Scale 2 vault, base unit 0.01 USD. The holder's 70 USD mint 7,000 shares and the
+        //    owner donates 30 USD, so a share is worth 0.0143 USD.
+        auto const [vault, vaultKeylet] = createScaledVault(env, accounts.owner, accounts.asset, 2);
+        env(vault.deposit(
+            {.depositor = holder, .id = vaultKeylet.key, .amount = accounts.asset(70)}));
+        env(vault.deposit(
+            {.depositor = accounts.owner,
+             .id = vaultKeylet.key,
+             .amount = accounts.asset(30),
+             .flags = tfVaultDonate}));
+        env.close();
+        Number const holderValueBefore = shareValue(env, vaultKeylet, holder);
+        BEAST_EXPECT(holderValueBefore == Number{100});
+
+        // 2. The depositor deposits 0.03 USD and gets 2 shares worth 0.0286 USD.
+        STAmount const deposit = accounts.asset(Number{3, -2});
+        Number const fundsBefore = env.balance(accounts.depositor, accounts.asset).value();
+        env(vault.deposit(
+            {.depositor = accounts.depositor, .id = vaultKeylet.key, .amount = deposit}));
+        env.close();
+        Number const charged =
+            fundsBefore - env.balance(accounts.depositor, accounts.asset).value();
+        Number const sharesWorth = shareValue(env, vaultKeylet, accounts.depositor);
+        // BUG: the deposit is charged 0.02 USD.
+        BEAST_EXPECTS(
+            charged >= sharesWorth,
+            "charged " + to_string(charged) + " for shares worth " + to_string(sharesWorth));
+
+        // 3. The depositor deposits 0.03 USD 99 more times and then withdraws all its shares.
+        for (int count = 1; count < 100; ++count)
+        {
+            env(vault.deposit(
+                {.depositor = accounts.depositor, .id = vaultKeylet.key, .amount = deposit}));
+            env.close();
+        }
+        env(vault.withdraw(
+            {.depositor = accounts.depositor,
+             .id = vaultKeylet.key,
+             .amount = env.balance(accounts.depositor, shareOf(env, vaultKeylet)).value()}));
+        env.close();
+
+        Number const fundsAfter = env.balance(accounts.depositor, accounts.asset).value();
+        // BUG: the depositor ends 0.83 USD up.
+        BEAST_EXPECTS(
+            fundsAfter <= fundsBefore,
+            "the depositor went from " + to_string(fundsBefore) + " to " + to_string(fundsAfter));
+        Number const holderValueAfter = shareValue(env, vaultKeylet, holder);
+        // BUG: the holder's shares are worth 99.17 USD.
+        BEAST_EXPECTS(
+            holderValueAfter >= holderValueBefore,
+            "the holder's shares went from " + to_string(holderValueBefore) + " to " +
+                to_string(holderValueAfter));
+    }
+
+    // FV_M2_20: at 1 unit per share a deposit, withdrawal or clawback of 5,005 moves 5,004.
     void
     testVaultShareCountRounding()
     {
@@ -429,8 +482,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         }
     }
 
-    // FV_M2_21: an IOU VaultDeposit of 10^15 base units or more is charged up to half a base unit
-    // more than the minted shares are worth.
+    // FV_M2_21: an IOU VaultDeposit of 10^15 base units is charged more than its shares are worth.
     void
     testVaultDepositOvercharge()
     {
@@ -449,8 +501,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
              .depositorFunds = firstDeposit + deposit,
              .ownerFunds = donation});
 
-        // 1. An IOU vault at Scale 0 takes the first deposit and the donation. A share is
-        // worth 1.5.
+        // 1. An IOU vault at Scale 0 takes a first deposit and a donation. A share is worth 1.5.
         auto const [vault, vaultKeylet] = createScaledVault(env, accounts.owner, accounts.asset, 0);
         env(vault.deposit(
             {.depositor = accounts.depositor,
@@ -480,8 +531,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
             "the deposit was charged " + to_string(charged));
     }
 
-    // FV_M2_22: an MPT VaultDeposit far above the Open limit returns tecINTERNAL instead of
-    // tecLIMIT_EXCEEDED.
+    // FV_M2_22: an MPT VaultDeposit far above the Open limit returns tecINTERNAL.
     void
     testVaultDepositInternalError()
     {
@@ -506,8 +556,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         env.close();
     }
 
-    // FV_M2_23: an IOU VaultDeposit far above the Open limit returns tecPATH_DRY instead of
-    // tecLIMIT_EXCEEDED.
+    // FV_M2_23: an IOU VaultDeposit far above the Open limit returns tecPATH_DRY.
     void
     testVaultDepositPathDry()
     {
@@ -541,8 +590,51 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         env.close();
     }
 
-    // FV_M2_25: a VaultWithdraw by shares on an XRP vault returns tefEXCEPTION when the shares are
-    // worth more than 10^17 drops. Preclaim prices them before it checks the account's shares.
+    // FV_M2_24: a VaultDeposit that takes SharesTotal past 2^63 - 1 returns tecPATH_DRY.
+    void
+    testVaultDepositSharesOverflow()
+    {
+        testcase("FV_M2_24 VaultDepositSharesOverflow");
+        using namespace test::jtx;
+
+        Env env{
+            *this,
+            (all_ | featureLendingProtocolV1_1) - featureLendingProtocolV1_2 - fixCleanup3_4_0};
+        Number const deposit{5};
+        auto const accounts = setupIou(env);
+
+        // 1. An IOU vault at Scale 18, created without LendingProtocolV1_2 and fixCleanup3_4_0.
+        //    It is not a fixed precision vault and has no Open limit.
+        auto const [vault, vaultKeylet] =
+            createScaledVault(env, accounts.owner, accounts.asset, 18);
+        BEAST_EXPECT(getVaultVersion(env.le(vaultKeylet)) != VaultVersion::FixedPrecision);
+
+        // 2. A deposit of 5 mints 5 * 10^18 shares.
+        env(vault.deposit(
+            {.depositor = accounts.depositor,
+             .id = vaultKeylet.key,
+             .amount = accounts.asset(deposit)}));
+        env.close();
+        Number const minted = env.balance(accounts.depositor, shareOf(env, vaultKeylet)).value();
+        BEAST_EXPECT(minted == (Number{5, 18}));
+
+        // 3. LendingProtocolV1_2 and fixCleanup3_4_0 are enabled.
+        env.enableFeature(featureLendingProtocolV1_2);
+        env.enableFeature(fixCleanup3_4_0);
+        env.close();
+        BEAST_EXPECT(env.enabled(featureLendingProtocolV1_2) && env.enabled(fixCleanup3_4_0));
+
+        // 4. A second deposit of 5 takes SharesTotal to 10^19, above 2^63 - 1.
+        // BUG: the deposit returns tecPATH_DRY.
+        env(vault.deposit(
+                {.depositor = accounts.depositor,
+                 .id = vaultKeylet.key,
+                 .amount = accounts.asset(deposit)}),
+            Ter(tecLIMIT_EXCEEDED));
+        env.close();
+    }
+
+    // FV_M2_25: an XRP VaultWithdraw of shares worth over 10^17 drops returns tefEXCEPTION.
     void
     testVaultWithdrawXRPRange()
     {
@@ -577,8 +669,306 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         env.close();
     }
 
-    // FV_M4_24: two holders whose shares are each worth less than one base unit can never redeem
-    // them, and VaultDelete fails with tecHAS_OBLIGATIONS.
+    // FV_M2_26: vault shares can be escrowed when the vault's MPT asset has no CanEscrow.
+    void
+    testShareEscrowAssetForbidsEscrow()
+    {
+        testcase("FV_M2_26 ShareEscrowAssetForbidsEscrow");
+        using namespace test::jtx;
+        using namespace std::chrono_literals;
+
+        Env env{*this, all_ | featureLendingProtocolV1_1};
+        Number const deposit{100};
+        Account const recipient{"recipient"};
+        auto const accounts = setupClawbackMpt(env, deposit);
+        env.fund(XRP(1'000'000), recipient);
+        env.close();
+
+        // 1. A vault of an MPT with CanClawback and no CanEscrow takes 100 and mints 100 shares.
+        Keylet const vaultKeylet = createVaultWithDeposit(env, accounts, deposit);
+        Asset const share = shareOf(env, vaultKeylet);
+
+        // 2. The depositor escrows 60 shares for the recipient.
+        // BUG: EscrowCreate returns tesSUCCESS.
+        env(escrow::create(accounts.depositor, recipient, STAmount{share, Number{60}}),
+            escrow::kFinishTime(env.now() + 1'000s),
+            Ter(tecNO_PERMISSION));
+        env.close();
+
+        // 3. The issuer claws back all shares of the depositor. The owner deletes the vault.
+        env(Vault::clawback(
+            {.issuer = accounts.issuer, .id = vaultKeylet.key, .holder = accounts.depositor}));
+        env.close();
+        // BUG: VaultDelete returns tecHAS_OBLIGATIONS. The 60 escrowed shares remain.
+        env(Vault::del({.owner = accounts.owner, .id = vaultKeylet.key}), Ter(tesSUCCESS));
+        env.close();
+    }
+
+    // FV_M2_27: a holder that deleted its MPToken escapes a lock and withdraws to a third party.
+    void
+    testWithdrawAfterHolderDeletesMPToken()
+    {
+        testcase("FV_M2_27 WithdrawAfterHolderDeletesMPToken");
+        using namespace test::jtx;
+
+        Env env{*this, all_ | featureLendingProtocolV1_1};
+        Number const deposit{100};
+        AssetAccounts accounts;
+        Account const thirdParty{"thirdParty"};
+        env.fund(XRP(1'000'000), accounts.issuer, accounts.owner, accounts.depositor, thirdParty);
+        env.close();
+
+        // 1. An MPT with CanLock. The depositor holds 100 and the third party an empty MPToken.
+        MPTTester mpt{env, accounts.issuer, kMptInitNoFund};
+        mpt.create({.flags = tfMPTCanLock | tfMPTCanTransfer});
+        accounts.asset = mpt.issuanceID();
+        mpt.authorize({.account = accounts.depositor});
+        mpt.authorize({.account = thirdParty});
+        env(pay(accounts.issuer, accounts.depositor, accounts.asset(deposit)));
+        env.close();
+
+        // 2. A vault takes the depositor's whole balance.
+        Keylet const vaultKeylet = createVaultWithDeposit(env, accounts, deposit);
+
+        // 3. The depositor deletes its MPToken of the asset.
+        mpt.authorize({.account = accounts.depositor, .flags = tfMPTUnauthorize});
+        env.close();
+
+        // 4. The issuer locks the depositor. There is no MPToken to lock.
+        mpt.set(
+            {.account = accounts.issuer,
+             .holder = accounts.depositor,
+             .flags = tfMPTLock,
+             .err = tecOBJECT_NOT_FOUND});
+        env.close();
+
+        // 5. The depositor withdraws the 100 to the third party.
+        json::Value withdraw = Vault::withdraw(
+            {.depositor = accounts.depositor,
+             .id = vaultKeylet.key,
+             .amount = accounts.asset(deposit)});
+        withdraw[sfDestination] = thirdParty.human();
+        // BUG: VaultWithdraw returns tesSUCCESS.
+        env(withdraw, Ter(tecLOCKED));
+        env.close();
+    }
+
+    // FV_M2_28: without MPTokensV2 a share Payment between NoRipple holders returns terNO_RIPPLE.
+    void
+    testSharePaymentNoRipple()
+    {
+        testcase("FV_M2_28 SharePaymentNoRipple");
+        using namespace test::jtx;
+
+        Env env{*this, (all_ | featureLendingProtocolV1_1) - featureMPTokensV2};
+        Number const deposit{100};
+        Account const recipient{"recipient"};
+        auto const accounts = setupIou(env, {.depositorFunds = deposit});
+        env.fund(XRP(1'000'000), recipient);
+        env.close();
+        env(trust(recipient, accounts.asset(1'000)));
+        env.close();
+
+        // 1. An IOU vault takes the depositor's 100. The recipient creates its share MPToken.
+        Keylet const vaultKeylet = createVaultWithDeposit(env, accounts, deposit);
+        Asset const share = shareOf(env, vaultKeylet);
+        env(MPTTester::authorizeJV(
+            {.account = recipient, .id = env.le(vaultKeylet)->at(sfShareMPTID)}));
+        env.close();
+
+        // 2. The issuer disables rippling on its trust lines with the depositor and the recipient.
+        env(trust(accounts.issuer, accounts.depositor["USD"](0), tfSetNoRipple));
+        env(trust(accounts.issuer, recipient["USD"](0), tfSetNoRipple));
+        env.close();
+
+        // 3. The depositor pays 10 shares to the recipient.
+        env(pay(accounts.depositor, recipient, STAmount{share, Number{10}}), Ter(std::ignore));
+        // BUG: the Payment returns terNO_RIPPLE.
+        BEAST_EXPECTS(isTecClaim(env.ter()), "the Payment returned " + transToken(env.ter()));
+    }
+
+    // FV_M2_31: an unauthorized MPT holder still withdraws its deposit to a third party.
+    void
+    testWithdrawByUnauthorizedHolder()
+    {
+        testcase("FV_M2_31 WithdrawByUnauthorizedHolder");
+        using namespace test::jtx;
+
+        Env env{*this, all_ | featureLendingProtocolV1_1};
+        AssetAccounts accounts;
+        Account const thirdParty{"thirdParty"};
+        env.fund(XRP(1'000'000), accounts.issuer, accounts.owner, accounts.depositor, thirdParty);
+        env.close();
+
+        // 1. An MPT with RequireAuth. The issuer authorizes the depositor and the third party.
+        MPTTester mpt{env, accounts.issuer, kMptInitNoFund};
+        mpt.create(
+            {.authorize = Holders{accounts.depositor, thirdParty},
+             .pay = {{Holders{accounts.depositor}, 1'000}},
+             .flags = tfMPTCanTransfer | tfMPTRequireAuth,
+             .authHolder = true});
+        accounts.asset = mpt.issuanceID();
+
+        // 2. The depositor puts its 1,000 in a vault.
+        Keylet const vaultKeylet = createVaultWithDeposit(env, accounts, Number{1'000});
+
+        // 3. The issuer unauthorizes the depositor. A withdrawal to itself is refused.
+        mpt.authorize({.holder = accounts.depositor, .flags = tfMPTUnauthorize});
+        env(Vault::withdraw(
+                {.depositor = accounts.depositor,
+                 .id = vaultKeylet.key,
+                 .amount = accounts.asset(100)}),
+            Ter(tecNO_AUTH));
+        env.close();
+
+        // 4. The depositor withdraws 100 to the third party.
+        json::Value withdraw = Vault::withdraw(
+            {.depositor = accounts.depositor,
+             .id = vaultKeylet.key,
+             .amount = accounts.asset(100)});
+        withdraw[sfDestination] = thirdParty.human();
+        // BUG: VaultWithdraw returns tesSUCCESS and the third party receives 100.
+        env(withdraw, Ter(tecNO_AUTH));
+        env.close();
+    }
+
+    // FV_M2_31: an unauthorized MPT broker owner still withdraws its cover to a third party.
+    void
+    testCoverWithdrawByUnauthorizedOwner()
+    {
+        testcase("FV_M2_31 CoverWithdrawByUnauthorizedOwner");
+        using namespace test::jtx;
+
+        Env env{*this, all_ | featureLendingProtocolV1_1};
+        AssetAccounts accounts;
+        Account const thirdParty{"thirdParty"};
+        env.fund(XRP(1'000'000), accounts.issuer, accounts.owner, accounts.depositor, thirdParty);
+        env.close();
+
+        // 1. An MPT with RequireAuth. The owner, the depositor and the third party are authorized.
+        MPTTester mpt{env, accounts.issuer, kMptInitNoFund};
+        mpt.create(
+            {.authorize = Holders{accounts.owner, accounts.depositor, thirdParty},
+             .pay = {{Holders{accounts.owner, accounts.depositor}, 1'000}},
+             .flags = tfMPTCanTransfer | tfMPTRequireAuth,
+             .authHolder = true});
+        accounts.asset = mpt.issuanceID();
+
+        // 2. A lending vault with the depositor's 1,000. The owner's 1,000 is the broker's cover.
+        auto const fixture = setupLendingVault(
+            env, accounts.owner, accounts.depositor, accounts.asset, Number{1'000});
+        env(loan_broker::coverDeposit(
+            accounts.owner, fixture.brokerKeylet.key, accounts.asset(1'000).value()));
+        env.close();
+
+        // 3. The issuer unauthorizes the owner. A withdrawal of the cover to itself is refused.
+        mpt.authorize({.holder = accounts.owner, .flags = tfMPTUnauthorize});
+        env(loan_broker::coverWithdraw(
+                accounts.owner, fixture.brokerKeylet.key, accounts.asset(1'000).value()),
+            Ter(tecNO_AUTH));
+        env.close();
+
+        // 4. The owner withdraws the whole cover to the third party.
+        // BUG: LoanBrokerCoverWithdraw returns tesSUCCESS and the third party receives 1,000.
+        env(loan_broker::coverWithdraw(
+                accounts.owner, fixture.brokerKeylet.key, accounts.asset(1'000).value()),
+            loan_broker::kDestination(thirdParty),
+            Ter(tecNO_AUTH));
+        env.close();
+    }
+
+    // FV_M2_32: a VaultWithdraw to another account fails on its limit though the payout fits.
+    void
+    testVaultWithdrawDestinationLimit()
+    {
+        testcase("FV_M2_32 VaultWithdrawDestinationLimit");
+        using namespace test::jtx;
+        using namespace std::chrono_literals;
+
+        Env env{*this, all_ | featureLendingProtocolV1_1};
+        auto const [issuer, owner, depositor, asset] = setupIou(env, {.ownerFunds = Number{100}});
+        Account const carol{"carol"};
+        Account const dave{"dave"};
+        env.fund(XRP(1'000'000), carol, dave);
+        env.close();
+        env(trust(carol, asset(Number{15, -1})));
+        env(trust(dave, asset(Number{15, -1})));
+        env.close();
+
+        // 1. A closed-ended vault with Scale 1. The depositor gets 40 shares for 4 USD and the
+        //    owner donates 2 USD, so one share is worth 0.15 USD.
+        Vault const vault{env};
+        auto [tx, vaultKeylet, subscriptionDate] =
+            vault.createClosedEnded({.owner = owner, .asset = asset, .investmentWindow = 1000s});
+        tx[sfScale] = 1;
+        env(tx);
+        env.close();
+        env(vault.deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = asset(4)}));
+        env(vault.deposit(
+            {.depositor = owner,
+             .id = vaultKeylet.key,
+             .amount = asset(2),
+             .flags = tfVaultDonate}));
+        env.close();
+        MPTIssue const share{env.le(vaultKeylet)->at(sfShareMPTID)};
+        vault.closePastSubscription(subscriptionDate);
+        env.close(subscriptionDate + 1000s + 1s);
+
+        // 2. 10 shares to carol, whose limit is 1.5 USD, pay her 1.5 USD.
+        json::Value toCarol = Vault::withdraw(
+            {.depositor = depositor, .id = vaultKeylet.key, .amount = STAmount{share, 10}});
+        toCarol[sfDestination] = carol.human();
+        env(toCarol);
+        env.close();
+        BEAST_EXPECT(env.balance(carol, asset) == asset(Number{15, -1}));
+
+        // 3. 1.6 USD to dave, whose limit is 1.5 USD, rounds down to 10 shares and pays 1.5 USD.
+        json::Value toDave = Vault::withdraw(
+            {.depositor = depositor, .id = vaultKeylet.key, .amount = asset(Number{16, -1})});
+        toDave[sfDestination] = dave.human();
+        // BUG: the result is tecNO_LINE.
+        env(toDave, Ter(tesSUCCESS));
+        env.close();
+    }
+
+    // FV_M2_32: an early-exit VaultWithdraw fails on the destination limit though the payout fits.
+    void
+    testEarlyExitDestinationLimit()
+    {
+        testcase("FV_M2_32 EarlyExitDestinationLimit");
+        using namespace test::jtx;
+
+        Env env{*this, all_ | featureLendingProtocolV1_1};
+        auto const [issuer, owner, depositor, asset] = setupIou(env);
+        Account const dave{"dave"};
+        env.fund(XRP(1'000'000), dave);
+        env.close();
+        env(trust(dave, asset(1)));
+        env.close();
+
+        // 1. A Scale 1 closed-ended vault, early-exit fee 50%. 4 USD buy the depositor 40 shares.
+        Vault const vault{env};
+        auto [tx, vaultKeylet, subscriptionDate] =
+            vault.createClosedEnded({.owner = owner, .asset = asset, .earlyExitFeeRate = 50'000});
+        tx[sfScale] = 1;
+        env(tx);
+        env.close();
+        env(vault.deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = asset(4)}));
+        env.close();
+        MPTIssue const share{env.le(vaultKeylet)->at(sfShareMPTID)};
+        vault.closePastSubscription(subscriptionDate);
+
+        // 2. In the Investment phase 20 shares to dave, whose limit is 1 USD, are worth 2 USD and
+        //    pay 1 USD after the fee.
+        json::Value toDave = Vault::withdraw(
+            {.depositor = depositor, .id = vaultKeylet.key, .amount = STAmount{share, 20}});
+        toDave[sfDestination] = dave.human();
+        // BUG: the result is tecNO_LINE.
+        env(toDave, Ter(tesSUCCESS));
+        env.close();
+    }
+
+    // FV_M4_24: two holders whose shares are each worth less than one base unit can't redeem them.
     void
     testVaultDustHoldersLocked()
     {
@@ -657,8 +1047,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         env.close();
     }
 
-    // FV_M4_37: the last shareholder of an MPT vault grown by late interest cannot withdraw all
-    // shares. VaultWithdraw returns tecINSUFFICIENT_FUNDS.
+    // FV_M4_37: the last holder of an MPT vault grown by late interest can't withdraw all shares.
     void
     testVaultWithdrawMptAllShares()
     {
@@ -684,8 +1073,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         env.close();
     }
 
-    // FV_M4_38: a full VaultClawback on an MPT vault grown by late interest burns every share,
-    // leaves 1 unit in the vault and fails with tecINVARIANT_FAILED.
+    // FV_M4_38: a full MPT VaultClawback that leaves 1 unit fails with tecINVARIANT_FAILED.
     void
     testVaultClawbackMptRemainder()
     {
@@ -712,8 +1100,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         env.close();
     }
 
-    // FV_M4_43: on an MPT vault grown past 10^18 units by late interest, a VaultWithdraw or a
-    // VaultClawback by assets pays out 1 unit more than requested.
+    // FV_M4_43: on an MPT vault past 10^18 units a withdrawal or clawback pays 1 unit too much.
     void
     testVaultWithdrawAboveRequested()
     {
@@ -754,8 +1141,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         }
     }
 
-    // FV_M4_52: a VaultDeposit donation on an XRP vault returns tefEXCEPTION when AssetsTotal plus
-    // the amount is above 10^17 drops. The Open limit check builds that sum as an XRP amount.
+    // FV_M4_52: an XRP donation that takes AssetsTotal above 10^17 drops returns tefEXCEPTION.
     void
     testVaultDonateXRPRange()
     {
@@ -809,8 +1195,7 @@ class VaultFindings_test : public LoanManageFixedPrecisionBase
         env.close();
     }
 
-    // FV_M4_60: a VaultDeposit donation on an MPT vault returns tefEXCEPTION when AssetsTotal plus
-    // the amount is above 2^63 - 1. The Open limit check builds that sum as an MPT amount.
+    // FV_M4_60: an MPT donation that takes AssetsTotal above 2^63 - 1 returns tefEXCEPTION.
     void
     testVaultDonateMPTRange()
     {
@@ -878,21 +1263,30 @@ public:
     {
         // Open bugs. Each call fails until the C++ code is fixed, so it is commented out.
         // clang-format off
-        // testMulDivRoundNegative();             // FV_M2_2
-        // testVaultDepositOvervaluedShares();    // FV_M2_3
-        // testVaultWithdrawOvervaluedShares();   // FV_M2_3
-        // testVaultShareCountRounding();         // FV_M2_20
-        // testVaultDepositOvercharge();          // FV_M2_21
-        // testVaultDepositInternalError();       // FV_M2_22
-        // testVaultDepositPathDry();             // FV_M2_23
-        // testVaultWithdrawXRPRange();           // FV_M2_25
-        // testVaultDustHoldersLocked();          // FV_M4_24
-        // testVaultClawbackMptRounding();        // FV_M4_36
-        // testVaultWithdrawMptAllShares();       // FV_M4_37
-        // testVaultClawbackMptRemainder();       // FV_M4_38
-        // testVaultWithdrawAboveRequested();     // FV_M4_43
-        // testVaultDonateXRPRange();             // FV_M4_52
-        // testVaultDonateMPTRange();             // FV_M4_60
+        // testMulDivRoundNegative();                // FV_M2_2
+        // testVaultDepositOvervaluedShares();       // FV_M2_3
+        // testVaultWithdrawOvervaluedShares();      // FV_M2_3
+        // testVaultDepositChargeFloored();          // FV_M2_3
+        // testVaultShareCountRounding();            // FV_M2_20
+        // testVaultDepositOvercharge();             // FV_M2_21
+        // testVaultDepositInternalError();          // FV_M2_22
+        // testVaultDepositPathDry();                // FV_M2_23
+        // testVaultDepositSharesOverflow();         // FV_M2_24, without fixed precision vaults
+        // testVaultWithdrawXRPRange();              // FV_M2_25
+        // testShareEscrowAssetForbidsEscrow();      // FV_M2_26
+        // testWithdrawAfterHolderDeletesMPToken();  // FV_M2_27
+        // testSharePaymentNoRipple();               // FV_M2_28, without MPTokensV2
+        // testWithdrawByUnauthorizedHolder();       // FV_M2_31
+        // testCoverWithdrawByUnauthorizedOwner();   // FV_M2_31
+        // testVaultWithdrawDestinationLimit();      // FV_M2_32
+        // testEarlyExitDestinationLimit();          // FV_M2_32
+        // testVaultDustHoldersLocked();             // FV_M4_24
+        // testVaultClawbackMptRounding();           // FV_M4_36
+        // testVaultWithdrawMptAllShares();          // FV_M4_37
+        // testVaultClawbackMptRemainder();          // FV_M4_38
+        // testVaultWithdrawAboveRequested();        // FV_M4_43
+        // testVaultDonateXRPRange();                // FV_M4_52
+        // testVaultDonateMPTRange();                // FV_M4_60
         // clang-format on
 
         // Keeps a run of this suite alone from reporting "No tests run".

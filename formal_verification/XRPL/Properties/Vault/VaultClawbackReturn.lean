@@ -4,9 +4,8 @@ import XRPL.Properties.Vault.Proofs.MaxValueFits
 
 /-! # `Vault.clawback` exits
 
-One line per exit of `Vault.clawback_exits`, in the order the clawback runs its checks. A rejection
-carries only its code: the vault is not touched. The later exits assume a vault whose asset is not XRP, and the pricing
-exits assume the pricing reached them, read off the code (`Vault.ClawbackPriced`). -/
+One line per exit of `Vault.clawback_exits`, in check order. A rejection carries only its code, and the later exits
+assume a vault whose asset is not XRP and a pricing that reached them (`Vault.ClawbackPriced`). -/
 
 namespace XRPL.Model.SingleAssetVault
 

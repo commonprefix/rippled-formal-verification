@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.AssetFit
 import XRPL.Properties.Lending.Ledger.Common.PaymentsCommute
 import XRPL.Properties.Lending.Ledger.Common.PaymentsCommuteWitness
@@ -18,10 +19,9 @@ import XRPL.Properties.Lending.Loan.Common.Twin
 
 /-! # Order of transactions
 
-A default's cover depends on the broker's DebtTotal at the time of the default, and all loans share one Open limit
-of `9·10^15` base units. Loans created with the same terms are charged the same for every instalment. Other
-transactions never change a loan: its own transactions alone leave the same fields, and a broker's and its loans'
-transactions alone leave the same broker, up to how a coarsened vault rounds a default's cover. -/
+A default's cover depends on DebtTotal at the time of the default, and all loans share one Open limit. Equal terms
+give equal charges. A loan's own transactions alone give the same loan, and a broker's the same broker, up to how a
+coarsened vault rounds a default's cover. -/
 
 namespace XRPL.Model
 

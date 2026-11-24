@@ -7,9 +7,7 @@ import XRPL.Properties.Vault.Proofs.Support.VaultBalances
 
 /-! # `Vault.canBurnShares` / `Vault.burnShares` proofs
 
-Proof bodies behind `VaultBurn.lean` and `VaultBurnReturn.lean`. Burning reads and
-writes only `sharesTotal`, so nothing here prices, rounds an asset amount or
-clamps. -/
+Proofs behind `VaultBurn.lean` and `VaultBurnReturn.lean`. Burning changes only `sharesTotal`. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -55,7 +53,7 @@ private lemma Vault.burn_sub_exact (v : Vault) (sharesDestroyed : STAmount) (sha
       rw [STAmount.IntegralCanonical.toRat_eq_signedDrops sharesDestroyed hcanon]
       unfold STAmount.signedDrops
       rw [show sharesDestroyed.mIsNegative = false from hnn]
-      simp only [Bool.false_eq_true, if_false]
+      simp only [Bool.false_eq_true, ite_false]
       norm_cast
     have h1 : ((sharesDestroyed.mValue.toNat : ℕ) : ℚ) ≤ ((2 ^ 63 - 1 : ℕ) : ℚ) := by
       rw [← hsd_val]

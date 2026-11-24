@@ -3,9 +3,7 @@ import XRPL.Properties.Lending.Loan.Common.ManageDefs
 
 /-! # The assets each transaction moves in or out of AssetsTotal
 
-`l.flowOf tx` reads the amounts off the operation `tx` runs on `l`: the assets a VaultDeposit adds, the payout of
-a VaultWithdraw after its early-exit fee, the assets a VaultClawback recovers, the interest a LoanPay pays and the
-PrincipalOutstanding − defaultCovered a default writes off. `start.flows txs` adds them up along a run. -/
+`l.flowOf tx` reads the assets `tx` moves in or out on `l`, and `start.flows txs` adds them up along a run. -/
 
 namespace XRPL.Model.Lending
 

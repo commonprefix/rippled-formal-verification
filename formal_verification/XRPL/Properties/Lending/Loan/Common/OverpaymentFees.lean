@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaidAmounts
 import XRPL.Properties.Lending.Loan.Common.PayLedger
 import XRPL.Properties.Lending.Loan.Common.PayUnits
@@ -24,9 +25,8 @@ private lemma Loan.tryOverpayment_feePaid (l : Loan) (opc : PaymentComponents) (
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   assumption
 
@@ -84,7 +84,7 @@ private lemma UnsettledPayment.applyOverpayment_feePaid (p p' : UnsettledPayment
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first | exact absurd rfl hne | skip
+  all_goals try exact absurd rfl hne
   rename_i _ a' ha' hcond _ un hun _ ov hov hovp _ opc hopc hpd _ _ re hre _ am ham _ l' hl'
   -- the extra amount the overpayment computes is `extra`
   rw [hamount] at ha'

@@ -1,15 +1,13 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.VaultAccounting
 import XRPL.Properties.Lending.Ledger.Common.ShareValueWitness
 import XRPL.Properties.Lending.Ledger.Common.AssetsTotalBoundWitness
 
 /-! # A payment where AssetsTotal strays from the flows, and a delete where AssetsAvailable does
 
-On the coarsened vault of `ShareValueWitness.lean`, a late instalment of 1.5 without interest is credited to
-AssetsAvailable on the coarser grid as 1. AssetsDeployed drops by the exact 1.5, so AssetsTotal ends 0.5 below the
-flows. On the coarsened vault of `AssetsTotalBoundWitness.lean`, a LoanDelete of a pending loan of 0.6 credits
-AssetsAvailable 1. -/
+A payment leaves AssetsTotal below the flows (FV_M4_25), and a LoanDelete over-credits AssetsAvailable. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

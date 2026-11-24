@@ -65,12 +65,13 @@ lemma STAmount.toNumber_zero_eq (s : STAmount) (mode : rounding_mode) (n : Numbe
     (hz : s.mValue = 0) (hok : s.toNumber mode = .ok n) : n = Number.zero := by
   by_cases hint : s.integral = true
   · unfold STAmount.toNumber at hok
-    rw [if_pos hint] at hok
+    rw [ite_eq_left hint] at hok
     unfold STAmount.intAmount at hok
-    rw [if_pos hint] at hok
+    rw [ite_eq_left hint] at hok
     have hsd : s.signedDrops = 0 := by unfold STAmount.signedDrops; simp [hz]
+    rw [STAmount.signedDropsChecked_of_lt s (by rw [hz]; decide)] at hok
     simp only [hsd, IntAmount.toNumber, Number.from_rep,
-      show Int.toInt64Checked 0 = .ok 0 from by decide, ok_bind, pure_eq, Int64.magnitude_eq,
+      show Int.toInt64 0 = 0 from by decide, ok_bind, pure_eq, Int64.magnitude_eq,
       show (Int64.toInt 0).natAbs.toUInt64 = 0 from by decide,
       Number.normalized_zero_mantissa] at hok
     exact (Except.ok.inj hok).symm
@@ -94,8 +95,8 @@ lemma STAmount.canonicalize_signtrue_nonpos (s result : STAmount) (mode : roundi
     result.toRat ≤ 0 := by
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
-  rw [if_neg hint] at hok
-  rw [STAmount.iou_eq mode hint] at hok
+  rw [ite_eq_right hint] at hok
+  rw [STAmount.iou_eq mode hint hfit] at hok
   have hsd_np : s.signedDrops.toInt64.toInt ≤ 0 := by
     rw [STAmount.signedDrops_toInt64_toInt_of_lt s hfit]
     unfold STAmount.signedDrops; rw [hneg]; simp
@@ -132,7 +133,7 @@ lemma STAmount.ofNumber_frac_exp_range (nt : NumericType) (n : Number) (mode : r
       (result.mValue ≠ 0 → ((-96 : ℤ) ≤ result.exponent ∧ result.exponent ≤ 80)) := by
   obtain rfl := NumericType.eq_fractional_of_not_integral hnt
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide : ¬ (NumericType.fractional).isIntegral = true)] at hok
+  rw [ite_eq_right (by decide : ¬ (NumericType.fractional).isIntegral = true)] at hok
   cases hnr : (if decide (n.signum < 0) = true then n.operator_neg else n).normalizeToRange
       kMinValue kMaxValue mode with
   | error e => rw [hnr] at hok; exact absurd hok (by simp)
@@ -143,7 +144,7 @@ lemma STAmount.ofNumber_frac_exp_range (nt : NumericType) (n : Number) (mode : r
     obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     unfold STAmount.checked STAmount.canonicalize at hok
-    rw [if_neg (show ¬ (STAmount.unchecked .fractional mant.toUInt64 exp
+    rw [ite_eq_right (show ¬ (STAmount.unchecked .fractional mant.toUInt64 exp
       (decide (n.signum < 0))).integral = true by
         show ¬ NumericType.fractional.isIntegral = true; decide)] at hok
     cases hi : (STAmount.unchecked .fractional mant.toUInt64 exp
@@ -162,8 +163,8 @@ lemma STAmount.ofNumber_frac_exp_range (nt : NumericType) (n : Number) (mode : r
       have hiff : result.mValue = 0 ↔ i.mantissa_ = 0 := by
         rw [hmv, Int64.toUInt64_eq_zero_iff]
         by_cases hs : i.signum < 0
-        · rw [if_pos hs]; exact Int64.neg_eq_zero_iff i.mantissa_
-        · rw [if_neg hs]
+        · rw [ite_eq_left hs]; exact Int64.neg_eq_zero_iff i.mantissa_
+        · rw [ite_eq_right hs]
       refine ⟨fun h0 => ?_, fun hne => ?_⟩
       · rw [hexp]; exact IOUAmount.normalize_zero_exp _ mode i hi (hiff.mp h0)
       · rcases IOUAmount.normalize_exp_range _ mode i hi with ⟨hm0, -⟩ | h
@@ -243,7 +244,7 @@ lemma STAmount.ofNumber_fractional_zero_below_min (nt : NumericType) (n : Number
   have hwork : (if decide (n.signum < 0) then n.operator_neg else n) = n := by
     rw [hneg_dec]; simp
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide : ¬ (NumericType.fractional.isIntegral = true))] at hok
+  rw [ite_eq_right (by decide : ¬ (NumericType.fractional.isIntegral = true))] at hok
   rw [hwork] at hok
   rw [hneg_dec] at hok
   cases hnorm : n.normalizeToRange kMinValue kMaxValue mode with
@@ -349,7 +350,7 @@ lemma STAmount.operator_sub_self_zero (a result : STAmount) (mode : rounding_mod
        + ((if (!a.mIsNegative) then (-1 : ℚ) else 1) * (a.mValue.toNat : ℚ)
           * (10 : ℚ) ^ a.mOffset) = 0
     rcases hb : a.mIsNegative with _ | _ <;>
-      simp only [Bool.not_false, Bool.not_true, if_true, if_false, Bool.false_eq_true] <;>
+      simp only [Bool.not_false, Bool.not_true, ite_true, ite_false, Bool.false_eq_true] <;>
       ring
   have h_n₂_val : n₂.toRat = 0 := by
     have h := Number.operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm
@@ -368,7 +369,7 @@ lemma STAmount.isFractionalNonPositive_zero (a : STAmount) (ht : a.mNumericType 
   unfold STAmount.isFractionalNonPositive
   have hint : ¬ a.integral = true := by
     show ¬ a.mNumericType.isIntegral = true; rw [ht]; decide
-  rw [if_neg hint]
+  rw [ite_eq_right hint]
   have hz0 : STAmount.zero a.numericType = ⟨.fractional, 0, -100, false⟩ := by
     show STAmount.zero a.mNumericType = _; rw [ht]; rfl
   rw [hz0]
@@ -380,12 +381,13 @@ lemma STAmount.toNumber_zero_ok (s : STAmount) (mode : rounding_mode) (hz : s.mV
     s.toNumber mode = .ok Number.zero := by
   by_cases hint : s.integral = true
   · unfold STAmount.toNumber
-    rw [if_pos hint]
+    rw [ite_eq_left hint]
     unfold STAmount.intAmount
-    rw [if_pos hint]
+    rw [ite_eq_left hint]
     have hsd : s.signedDrops = 0 := by unfold STAmount.signedDrops; simp [hz]
+    rw [STAmount.signedDropsChecked_of_lt s (by rw [hz]; decide)]
     simp only [hsd, IntAmount.toNumber, Number.from_rep,
-      show Int.toInt64Checked 0 = .ok 0 from by decide, ok_bind, pure_eq, Int64.magnitude_eq,
+      show Int.toInt64 0 = 0 from by decide, ok_bind, pure_eq, Int64.magnitude_eq,
       show (Int64.toInt 0).natAbs.toUInt64 = 0 from by decide,
       Number.normalized_zero_mantissa]
   · exact STAmount.toNumber_zero_fractional s mode (by simpa using hint) hz

@@ -4,9 +4,8 @@ import XRPL.Properties.Protocol.STAmount.Compare.Common.Proofs
 
 /-! # Amounts on decimal grids
 
-Two amounts on the grids `10 ^ a` and `10 ^ b` that differ, differ by at least the finer step. So
-flooring a canonical amount onto a coarser grid either keeps it or lowers it by at least one step
-of its own grid, and by less than one step of the coarser grid. -/
+Two different amounts on the grids `10 ^ a` and `10 ^ b` differ by at least the finer step. So flooring onto a
+coarser grid keeps an amount or lowers it by at least one step of its own grid and less than one coarser step. -/
 
 namespace XRPL.Model.Protocol
 

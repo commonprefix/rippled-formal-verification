@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 Loan A's late payment takes AssetsAvailable past `10^16` base units, after which the vault credits whole units only.
 Loan D's instalment of 1.9 paid after it credits 1, and paid before it the vault ends one unit higher. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

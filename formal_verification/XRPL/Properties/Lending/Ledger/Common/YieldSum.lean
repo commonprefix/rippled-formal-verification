@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.OpenZoneSteps
 import XRPL.Properties.Lending.Loan.Common.VaultOwed
 
@@ -324,7 +325,7 @@ lemma LendingLedger.YieldSumInv.loan_step {l : LendingLedger} (hinv : l.YieldSum
         rw [show (LoanEffect.ofCreate i l.loans.length r).loanIndex = l.loans.length from rfl, hnone,
           show (LoanEffect.ofCreate i l.loans.length r).loan = some { brokerIndex := i, loan := r.loan' } from rfl]
           at this
-        simp only [LoanEntry.principalIf, if_true, add_zero] at this
+        simp only [LoanEntry.principalIf, ite_true, add_zero] at this
         rw [this, hPOr]
       rw [hc', ← hdep]
       show _ + _ + r.pool'.yieldUnrealized.toRat ≤ _
@@ -354,7 +355,7 @@ lemma LendingLedger.YieldSumInv.loan_step {l : LendingLedger} (hinv : l.YieldSum
         have := hcP
         rw [show (LoanEffect.ofLoan i e r.loan' r.pool').loanIndex = i from rfl, he,
           show (LoanEffect.ofLoan i e r.loan' r.pool').loan = some { e with loan := r.loan' } from rfl] at this
-        simp only [LoanEntry.principalIf, if_true] at this
+        simp only [LoanEntry.principalIf, ite_true] at this
         rw [hPO', hpo] at this
         linarith
       rw [hc', ← hdep]
@@ -372,10 +373,10 @@ lemma LendingLedger.YieldSumInv.loan_step {l : LendingLedger} (hinv : l.YieldSum
         r.loan'.toExact.interestDue := by
       simp only [LoanEntry.interestIf, hp', Bool.not_false, ↓reduceIte]
     have hold' : LoanEntry.principalIf (fun _ => true) (l.loan? i) = loan.principalOutstanding.toRat := by
-      rw [he]; simp only [LoanEntry.principalIf, if_true]; rw [hpo]
+      rw [he]; simp only [LoanEntry.principalIf, ite_true]; rw [hpo]
     have hnew' : LoanEntry.principalIf (fun _ => true) (some { e with loan := r.loan' }) =
         r.loan'.principalOutstanding.toRat := by
-      simp only [LoanEntry.principalIf, if_true]
+      simp only [LoanEntry.principalIf, ite_true]
     have hi0 : 0 ≤ loan.toExact.interestDue := Loan.Reachable.interestDue_nonneg hrl
     have hP0 : 0 ≤ loan.principalOutstanding.toRat := loan.exact.principalOutstanding_nonneg
     have hidx : (LoanEffect.ofLoan i e r.loan' r.pool').loanIndex = i := rfl
@@ -441,10 +442,10 @@ lemma LendingLedger.YieldSumInv.loan_step {l : LendingLedger} (hinv : l.YieldSum
         r.loan'.toExact.interestDue := by
       simp only [LoanEntry.interestIf, hp', Bool.not_false, ↓reduceIte]
     have hold' : LoanEntry.principalIf (fun _ => true) (l.loan? i) = loan.principalOutstanding.toRat := by
-      rw [he]; simp only [LoanEntry.principalIf, if_true]; rw [hpo]
+      rw [he]; simp only [LoanEntry.principalIf, ite_true]; rw [hpo]
     have hnew' : LoanEntry.principalIf (fun _ => true) (some { e with loan := r.loan' }) =
         r.loan'.principalOutstanding.toRat := by
-      simp only [LoanEntry.principalIf, if_true]
+      simp only [LoanEntry.principalIf, ite_true]
     have hle' : loan.toExact.interestDue ≤ l.vault.yieldUnrealized.toRat := by
       have := (hr.interestIf_le_sum (!·.isPending) i).2
       rw [hold] at this
@@ -463,7 +464,7 @@ lemma LendingLedger.YieldSumInv.loan_step {l : LendingLedger} (hinv : l.YieldSum
       exact_mod_cast nonneg_of_mul_nonneg_left this hb10
     have hn63 : n + d < 2 ^ 63 := by
       have : ((n + d : ℤ) : ℚ) * 10 ^ l.vault.baseExponent < ((2 ^ 63 : ℤ) : ℚ) * 10 ^ l.vault.baseExponent := by
-        push_cast; rw [add_mul, ← hn, ← hd, hyv]; push_cast at hopen; linarith
+        push_cast; rw [add_mul, ← hn, ← hd, hyv]; linarith
       exact_mod_cast lt_of_mul_lt_mul_right this hb10.le
     have hv := Number.operator_add_toRat_of_grid _ _ _ n d _ hYn hyn hn hd ⟨by omega, hn63⟩ hsb hadd
     have hv' : r.pool'.yieldUnrealized.toRat = l.vault.yieldUnrealized.toRat + y.toRat := by
@@ -490,13 +491,13 @@ lemma LendingLedger.YieldSumInv.loan_step {l : LendingLedger} (hinv : l.YieldSum
       simp only [LoanEntry.interestIf, add_zero]
       cases hp : loan.isPending
       · have hep : e.loan.isPending = false := by rw [← hpe]; exact hp
-        rw [if_pos (by rw [hep]; decide), ← hint, Loan.delete_active_interest loan hc hp, add_zero]
+        rw [ite_eq_left (by rw [hep]; decide), ← hint, Loan.delete_active_interest loan hc hp, add_zero]
       · have hep : e.loan.isPending = true := by rw [← hpe]; exact hp
-        rw [if_neg (by rw [hep]; decide), add_zero]
+        rw [ite_eq_right (by rw [hep]; decide), add_zero]
     refine hinv.commitLoan hr' hs hsum (hinv.bound_of_slot hr' hsum ?_)
     have h0 := (hr.interestIf_le_sum (!·.isPending) i).1
     have hP0 : 0 ≤ LoanEntry.principalIf (fun _ => true) (l.loan? i) := by
-      rw [he]; simp only [LoanEntry.principalIf, if_true]; exact e.loan.exact.principalOutstanding_nonneg
+      rw [he]; simp only [LoanEntry.principalIf, ite_true]; exact e.loan.exact.principalOutstanding_nonneg
     rw [hi, hlo, show LoanEntry.principalIf (fun _ => true) none = 0 from rfl,
       show LoanEntry.interestIf (!·.isPending) none = 0 from rfl]
     linarith

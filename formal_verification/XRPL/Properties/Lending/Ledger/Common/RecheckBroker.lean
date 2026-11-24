@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.RecheckVault
 import XRPL.Properties.Lending.Ledger.Common.RecheckLoan
 import XRPL.Properties.Lending.Ledger.Common.RecheckLoanSet
@@ -6,10 +7,8 @@ import XRPL.Properties.Lending.LoanBroker.LoanBrokerValid
 
 /-! # Broker transactions pass their lawfulness re-check
 
-A broker transaction on a reachable ledger never fails the model with `notLawful`, and a cover clawback does not
-either once the asset stores CoverAvailable exactly (C++ associateAsset, which the model leaves out). The preflight
-keeps a new DebtMaximum and the rates in range, the checks keep a nonzero DebtMaximum at least DebtTotal and a
-withdrawal within the cover, and a deposit never takes the cover below zero. -/
+A broker transaction on a reachable ledger never fails with `notLawful`. A cover clawback needs the asset to store
+CoverAvailable exactly (C++ associateAsset, which the model leaves out). -/
 
 namespace XRPL.Model.Lending
 
@@ -391,7 +390,7 @@ lemma LoanBroker.coverDeposit_ne_notLawful (lb : LoanBroker) (v : Vault) (amount
     intro hfr
     have hsr' := hsr
     unfold sumRoundAndSubtract at hsr'
-    rw [if_neg (by rw [hfr]; decide)] at hsr'
+    rw [ite_eq_right (by rw [hfr]; decide)] at hsr'
     obtain ⟨_, -, hsr'⟩ := bind_ok_peel _ _ _ hsr'
     obtain ⟨E, hE, -⟩ := bind_ok_peel _ _ _ hsr'
     rw [hfr] at hE

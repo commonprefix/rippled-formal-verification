@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Lawful
 import XRPL.Properties.Lending.Ledger.Common.BrokerProofs
 import XRPL.Properties.Lending.Loan.Common.OverpaymentSkip
@@ -5,9 +6,8 @@ import XRPL.Properties.Protocol.Common.ErrorKinds
 
 /-! # Steps of the vault transactions that always compute
 
-A model step fails where C++ throws. The lemmas here show that the steps a VaultDeposit, a VaultSet and a VaultDelete
-run outside the pricing return a value: sums of balances, the conversion of a sum within the largest amount of the
-asset, and the clamp of an amount onto the grid of a balance. -/
+The steps a VaultDeposit, a VaultSet and a VaultDelete run outside the pricing return a value: sums of balances, the
+conversion of a sum within the asset's largest amount, and the clamp of an amount onto a balance's grid. -/
 
 namespace XRPL.Model.Protocol.VaultDepositNoException
 
@@ -34,14 +34,14 @@ lemma add_nearest_bounds (x y n w : Number) (hx : x.isNormalized) (hy : y.isNorm
 /-- The largest XRP amount is `10^17` drops. -/
 lemma maxAmount_native : NumericType.native.maxAmount = 100000000000000000 := by
   unfold NumericType.maxAmount
-  rw [if_pos (show NumericType.native.isIntegral = true from rfl),
+  rw [ite_eq_left (show NumericType.native.isIntegral = true from rfl),
     show NumericType.native.maxValue.toNat = 100000000000000000 from rfl]
   norm_num
 
 /-- The largest MPT amount is `2^63 - 1` units. -/
 lemma maxAmount_int64 : NumericType.int64.maxAmount = 9223372036854775807 := by
   unfold NumericType.maxAmount
-  rw [if_pos (show NumericType.int64.isIntegral = true from rfl),
+  rw [ite_eq_left (show NumericType.int64.isIntegral = true from rfl),
     show NumericType.int64.maxValue.toNat = 9223372036854775807 from rfl]
   norm_num
 
@@ -123,31 +123,31 @@ lemma clampToSumExponent_computes (A : Number) (delta : STAmount) (b : Int) (hA 
     rcases hfz.2 with hio | hz
     · have hm : delta.mValue ≠ 0 := fun h => by have := hio.mant_lo; rw [h] at this; simp at this
       by_cases hn : delta.negative = true
-      · rw [if_pos hn]
+      · rw [ite_eq_left hn]
         refine STAmount.roundToExponent_towards_zero_ok _ e ?_ ?_ he_lo he_hi
         · unfold STAmount.operator_neg
-          rw [if_neg (by simpa using hm)]
+          rw [ite_eq_right (by simpa using hm)]
           exact ⟨hio.is_fractional, hio.mant_lo, hio.mant_hi, hio.exp_lo, hio.exp_hi⟩
         · unfold STAmount.operator_neg
-          rw [if_neg (by simpa using hm)]
+          rw [ite_eq_right (by simpa using hm)]
           simpa [STAmount.negative] using hn
-      · rw [if_neg hn]
+      · rw [ite_eq_right hn]
         exact STAmount.roundToExponent_towards_zero_ok _ e hio (by simpa [STAmount.negative] using hn) he_lo he_hi
     · have hz' : (if delta.negative = true then delta.operator_neg else delta).mValue = 0 := by
         split
-        · unfold STAmount.operator_neg; rw [if_pos (by simp [hz])]; exact hz
+        · unfold STAmount.operator_neg; rw [ite_eq_left (by simp [hz])]; exact hz
         · exact hz
       generalize (if delta.negative = true then delta.operator_neg else delta) = dabs at hz'
       refine ⟨dabs, ?_⟩
       unfold STAmount.roundToExponent
       by_cases hi : dabs.integral = true
-      · rw [if_pos hi]
-      · rw [if_neg hi, if_pos (by simp [STAmount.isZero, hz'])]
+      · rw [ite_eq_left hi]
+      · rw [ite_eq_right hi, ite_eq_left (by simp [STAmount.isZero, hz'])]
   obtain ⟨r, hr⟩ := habs
   refine ⟨r, ?_⟩
   unfold clampToSumExponent
   simp only [bind, Except.bind, pure, Except.pure]
-  rw [if_neg hint, hdn]
+  rw [ite_eq_right hint, hdn]
   have hnt : delta.numericType = .fractional := hfz.1
   simp only [hnt, he]
   exact hr

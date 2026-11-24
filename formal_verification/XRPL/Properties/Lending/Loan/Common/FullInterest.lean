@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaymentFactor
 import XRPL.Properties.Protocol.Common.TenthBips
 
@@ -15,7 +16,7 @@ open private rn_nonneg from XRPL.Properties.Lending.Loan.Common.SetLawful
 local notation "ε" => Number.nearestError
 
 /-- A count of seconds converts to a `Number` of the same value. -/
-private lemma Number.ofInt64_seconds (n : UInt32) : (Number.ofInt64 n.toInt64).toRat = n.toNat :=
+private lemma Number.ofInt64_seconds (n : UInt32) : (Number.ofInt64 n.toInt64 .to_nearest).toRat = n.toNat :=
   Number.ofInt64_count n
 
 /-- The interest accrued since the last payment is at most one period of interest plus three roundings up,
@@ -95,8 +96,8 @@ lemma tenthBipsOfValue_le_share (x : Number) (bips : TenthBips32) (r : Number) (
   obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts bips
   obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
   have hU : (kTenthBipsPerUnity.toNat : ℚ) = 100000 := rfl
-  have heq : tenthBipsOfValue x bips .to_nearest = (x.operator_mul bips.toNumber .to_nearest) >>=
-      (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest) := rfl
+  have heq : tenthBipsOfValue x bips .to_nearest = (x.operator_mul (bips.toNumber .to_nearest) .to_nearest) >>=
+      (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨p, hp, h⟩ := bind_ok_peel _ _ _ h
   have hpn := Number.operator_mul_isNormalized _ _ _ _ hx hrn hp

@@ -6,11 +6,8 @@ import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 
 /-! # Integer-valued amounts
 
-Model-independent facts used by the exact (integral) vault theorems:
-
-* rational bookkeeping for integer-valued `ℚ` values (`den = 1`),
-* the zero-record shape chain, re-exported from `Protocol/Number/Sub/ZeroShape`,
-* `STAmount` canonical-shape exactness for `toNumber` / `ofNumber .int64`. -/
+Model-independent facts for the exact integral vault theorems: rationals with denominator 1, the zero-record shape
+chain, and exact `toNumber` and `ofNumber .int64` on canonical amounts. -/
 
 namespace XRPL.Model.Protocol
 
@@ -91,14 +88,14 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
   have hsig : decide (n.signum < 0) = false := by
     unfold Number.signum
     rw [hnegf]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     by_cases hm : (n.mantissa_ != 0) = true
-    · rw [if_pos hm]; decide
-    · rw [if_neg hm]; decide
+    · rw [ite_eq_left hm]; decide
+    · rw [ite_eq_right hm]; decide
   unfold STAmount.ofNumber at hok
   rw [hsig] at hok
-  simp only [Bool.false_eq_true, if_false,
-    show NumericType.int64.isIntegral = true from rfl, if_true] at hok
+  simp only [Bool.false_eq_true, ite_false,
+    show NumericType.int64.isIntegral = true from rfl, ite_true] at hok
   cases hrep : n.to_rep mode with
   | error e => rw [hrep] at hok; simp at hok
   | ok rv =>
@@ -117,10 +114,10 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
       exact_mod_cast this
     have hu64 : (rv.toUInt64.toNat : ℤ) = rv.toInt := toUInt64_toNat_of_nonneg rv h0
     unfold STAmount.checked STAmount.canonicalize at hok
-    rw [if_pos (show (STAmount.unchecked .int64 rv.toUInt64 0 false).integral = true
+    rw [ite_eq_left (show (STAmount.unchecked .int64 rv.toUInt64 0 false).integral = true
       from rfl)] at hok
     by_cases hz : (rv.toUInt64 == 0) = true
-    · rw [if_pos (show ((STAmount.unchecked .int64 rv.toUInt64 0 false).mValue == 0 ||
+    · rw [ite_eq_left (show ((STAmount.unchecked .int64 rv.toUInt64 0 false).mValue == 0 ||
           decide ((STAmount.unchecked .int64 rv.toUInt64 0 false).mOffset ≤ -20)) = true
           from by rw [show (STAmount.unchecked .int64 rv.toUInt64 0 false).mValue
             = rv.toUInt64 from rfl, hz]; rfl)] at hok
@@ -134,14 +131,14 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
       · rw [hval0]; rfl
       · rw [hval0]
         exact STAmount.toRat_zero_aux _ rfl rfl
-    · rw [if_neg (show ¬ ((STAmount.unchecked .int64 rv.toUInt64 0 false).mValue == 0 ||
+    · rw [ite_eq_right (show ¬ ((STAmount.unchecked .int64 rv.toUInt64 0 false).mValue == 0 ||
           decide ((STAmount.unchecked .int64 rv.toUInt64 0 false).mOffset ≤ -20)) = true
           from by
         rw [show (STAmount.unchecked .int64 rv.toUInt64 0 false).mValue = rv.toUInt64 from rfl,
           show (STAmount.unchecked .int64 rv.toUInt64 0 false).mOffset = (0 : Int) from rfl]
         rw [Bool.or_eq_true, not_or]
         exact ⟨by simpa using hz, by decide⟩)] at hok
-      rw [if_neg (show ¬ (STAmount.unchecked .int64 rv.toUInt64 0 false).mOffset >
+      rw [ite_eq_right (show ¬ (STAmount.unchecked .int64 rv.toUInt64 0 false).mOffset >
           (STAmount.unchecked .int64 rv.toUInt64 0 false).mNumericType.maxOffset
           from by show ¬ ((0 : Int) > (18 : Int)); decide)] at hok
       simp only [IntAmount.ofNumber] at hok
@@ -156,7 +153,7 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
         have hmaxrep : rv.toUInt64.toNat ≤ maxRep.toNat := by
           rw [maxRep_val]; omega
         have hkey := Number.to_rep_exact_of_exponent_zero false rv.toUInt64 mode r2 hmaxrep hr2
-        rw [if_neg (by exact Bool.false_ne_true)] at hkey
+        rw [ite_eq_right (by exact Bool.false_ne_true)] at hkey
         have hr2v : r2.toInt = (rv.toUInt64.toNat : ℤ) := by
           have : (r2.toInt : ℚ) = ((rv.toUInt64.toNat : ℤ) : ℚ) := by
             rw [hkey]; push_cast; ring
@@ -168,7 +165,7 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
             omega
           exact UInt64.toNat_ofNat_of_lt hlt
 
-        rw [if_neg (show ¬ (r2.toInt.natAbs.toUInt64 >
+        rw [ite_eq_right (show ¬ (r2.toInt.natAbs.toUInt64 >
             (STAmount.unchecked .int64 rv.toUInt64 0 false).mNumericType.maxValue)
             from by
           show ¬ ((9223372036854775807 : UInt64) < r2.toInt.natAbs.toUInt64)
@@ -198,7 +195,7 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
                       mValue := r2.toInt.natAbs.toUInt64, mOffset := 0,
                       mIsNegative := decide (r2 < 0) } : STAmount).mIsNegative
             = decide (r2 < 0) from rfl, hnegr2]
-          simp only [Bool.false_eq_true, if_false]
+          simp only [Bool.false_eq_true, ite_false]
           show ((r2.toInt.natAbs.toUInt64.toNat : ℤ) : ℚ) = n.toRat
           rw [hvNat, hna, ← hexact, ← hu64]
 

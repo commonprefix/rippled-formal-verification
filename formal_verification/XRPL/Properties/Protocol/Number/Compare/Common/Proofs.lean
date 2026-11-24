@@ -95,21 +95,21 @@ theorem Number.operator_lt_iff_proof (x y : Number)
       have hys := toRat_eq_neg_abs y hsy
       unfold Number.operator_lt
       rw [hsx, hsy]
-      simp only [bne_self_eq_false, Bool.false_eq_true, if_false]
+      simp only [bne_self_eq_false, Bool.false_eq_true, ite_false]
       rw [show (x.mantissa_ == 0) = false from beq_eq_false_iff_ne.mpr hxm,
           show (y.mantissa_ == 0) = false from beq_eq_false_iff_ne.mpr hym]
-      simp only [Bool.false_eq_true, if_false]
+      simp only [Bool.false_eq_true, ite_false]
       rcases lt_trichotomy x.exponent_ y.exponent_ with hexp | hexp | hexp
       · -- ex < ey: |x| < |y| so x > y, and the operator returns !lneg = false.
-        rw [if_neg (by omega : ¬ x.exponent_ > y.exponent_), if_pos hexp,
+        rw [ite_eq_right (by omega : ¬ x.exponent_ > y.exponent_), ite_eq_left hexp,
             show (!(true : Bool)) = false from rfl]
         simp only [Bool.false_eq_true, false_iff, not_lt]
         have habs := abs_toRat_lt_of_exp_lt x y hx hy hxm hym hexp
         rw [hxs, hys]
         linarith
       · -- ex = ey: sign-aware mantissa compare.
-        rw [if_neg (by omega : ¬ x.exponent_ > y.exponent_),
-            if_neg (by omega : ¬ x.exponent_ < y.exponent_), if_pos trivial,
+        rw [ite_eq_right (by omega : ¬ x.exponent_ > y.exponent_),
+            ite_eq_right (by omega : ¬ x.exponent_ < y.exponent_), ite_eq_left trivial,
             decide_eq_true_iff]
         constructor
         · intro h
@@ -120,7 +120,7 @@ theorem Number.operator_lt_iff_proof (x y : Number)
           rw [hxs, hys] at h
           exact (abs_toRat_lt_iff_of_exp_eq y x hexp.symm).mp (by linarith)
       · -- ex > ey: |x| > |y| so x < y, and the operator returns lneg = true.
-        rw [if_pos hexp]
+        rw [ite_eq_left hexp]
         constructor
         · intro _
           have habs := abs_toRat_lt_of_exp_lt y x hy hx hym hxm hexp
@@ -159,11 +159,11 @@ theorem Number.operator_lt_iff_proof (x y : Number)
       have hys := toRat_eq_abs y hsyf
       unfold Number.operator_lt
       rw [hsxf, hsyf]
-      simp only [bne_self_eq_false, Bool.false_eq_true, if_false]
+      simp only [bne_self_eq_false, Bool.false_eq_true, ite_false]
       by_cases hxm : x.mantissa_ = 0
       · -- x = 0: x < y iff y is nonzero.
         rw [show (x.mantissa_ == 0) = true from beq_iff_eq.mpr hxm]
-        simp only [if_true]
+        simp only [ite_true]
         rw [decide_eq_true_iff]
         have hx0 : x.toRat = 0 := Number.toRat_eq_zero_iff.mpr hxm
         rw [hx0]
@@ -186,28 +186,28 @@ theorem Number.operator_lt_iff_proof (x y : Number)
             rfl
           omega
       · rw [show (x.mantissa_ == 0) = false from beq_eq_false_iff_ne.mpr hxm]
-        simp only [Bool.false_eq_true, if_false]
+        simp only [Bool.false_eq_true, ite_false]
         by_cases hym : y.mantissa_ = 0
         · -- y = 0: a positive x is never below it.
           rw [show (y.mantissa_ == 0) = true from beq_iff_eq.mpr hym]
-          simp only [if_true]
+          simp only [ite_true]
           have hy0 : y.toRat = 0 := Number.toRat_eq_zero_iff.mpr hym
           rw [hy0]
           simp only [Bool.false_eq_true, false_iff, not_lt]
           exact le_of_lt (Number.toRat_pos_of_not_negative x hsxf hxm)
         · rw [show (y.mantissa_ == 0) = false from beq_eq_false_iff_ne.mpr hym]
-          simp only [Bool.false_eq_true, if_false]
+          simp only [Bool.false_eq_true, ite_false]
           rcases lt_trichotomy x.exponent_ y.exponent_ with hexp | hexp | hexp
           · -- ex < ey: |x| < |y| so x < y, and the operator returns !lneg = true.
-            rw [if_neg (by omega : ¬ x.exponent_ > y.exponent_), if_pos hexp,
+            rw [ite_eq_right (by omega : ¬ x.exponent_ > y.exponent_), ite_eq_left hexp,
                 show (!(false : Bool)) = true from rfl]
             simp only [true_iff]
             have habs := abs_toRat_lt_of_exp_lt x y hx hy hxm hym hexp
             rw [hxs, hys]
             linarith
           · -- ex = ey: mantissa compare.
-            rw [if_neg (by omega : ¬ x.exponent_ > y.exponent_),
-                if_neg (by omega : ¬ x.exponent_ < y.exponent_),
+            rw [ite_eq_right (by omega : ¬ x.exponent_ > y.exponent_),
+                ite_eq_right (by omega : ¬ x.exponent_ < y.exponent_),
                 decide_eq_true_iff]
             constructor
             · intro h
@@ -218,7 +218,7 @@ theorem Number.operator_lt_iff_proof (x y : Number)
               rw [hxs, hys] at h
               exact (abs_toRat_lt_iff_of_exp_eq x y hexp).mp (by linarith)
           · -- ex > ey: |x| > |y| so never x < y, and the operator returns lneg = false.
-            rw [if_pos hexp]
+            rw [ite_eq_left hexp]
             simp only [Bool.false_eq_true, false_iff, not_lt]
             have habs := abs_toRat_lt_of_exp_lt y x hy hx hym hxm hexp
             rw [hxs, hys]

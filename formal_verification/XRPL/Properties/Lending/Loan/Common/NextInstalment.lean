@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FactorComputes
 import XRPL.Properties.Lending.Loan.Common.RoundAnySign
 import XRPL.Properties.Lending.Loan.Common.DuePayment
@@ -104,7 +105,7 @@ private lemma LoanState.buildTheoretical_below (pp rate : Number) (ir : TenthBip
   have hppB : pp.toRat ≤ B := by nlinarith
   have hcN := Number.ofInt64_isNormalized k.toInt64
   have hcv := Number.ofInt64_count k
-  obtain ⟨vo, hvo⟩ := Number.operator_mul_ok_of_abs pp (Number.ofInt64 k.toInt64) .to_nearest hpp hcN
+  obtain ⟨vo, hvo⟩ := Number.operator_mul_ok_of_abs pp (Number.ofInt64 k.toInt64 .to_nearest) .to_nearest hpp hcN
     (by rw [abs_of_nonneg hpp0]; linarith [show (10 : ℚ) ^ 18 < 10 ^ 200 by norm_num])
     (by rw [hcv, abs_of_nonneg (by positivity)]; linarith [show (2 : ℚ) ^ 32 < 10 ^ 200 by norm_num])
   have hvoN := Number.operator_mul_isNormalized _ _ _ _ hpp hcN hvo

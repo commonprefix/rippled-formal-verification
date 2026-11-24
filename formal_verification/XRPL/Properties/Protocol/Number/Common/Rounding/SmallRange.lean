@@ -36,12 +36,8 @@ lemma Number.normalizeToRange_tail {r : Number} (hfit : r.mantissa_.toNat < 2 ^ 
 
 /-! # The 16-digit (`cMinValue`/`cMaxValue`) `doNormalize` instantiation
 
-`IOUAmount.fromNumber` runs `Number.normalizeToRange cMinValue cMaxValue`, which is
-`doNormalize` at the 16-digit mantissa range. For the inputs the
-`STAmount.roundToExponent` proof produces (19-digit normalized mantissas) the
-pipeline is a 3-step `scaleDown` followed by a cusp-free `doRoundUp`: every
-16-digit mantissa sits far below `maxRep`, so `pushOverflow`, the cusp
-branches, and `capAtMaxRep` are all dead. -/
+`IOUAmount.fromNumber` normalizes to the 16-digit mantissa range. On a 19-digit normalized input this is three digit
+drops and a `doRoundUp` that never reaches the `maxRep` cusp. -/
 
 lemma cMinValue_val : cMinValue.toNat = 1000000000000000 := by decide
 
@@ -73,7 +69,7 @@ lemma doNormalize_scaleDown_step {maxMant M : UInt64} {e : Int} {g : Guard}
     doNormalize_scaleDown maxMant M e g
       = doNormalize_scaleDown maxMant (M / 10) (e + 1) (g.push (M % 10)) := by
   conv_lhs => unfold doNormalize_scaleDown
-  rw [dif_pos hgt, if_neg (not_le.mpr he)]
+  rw [dite_eq_left hgt, ite_eq_right (not_le.mpr he)]
 
 /-- For a 19-digit mantissa, `scaleDown` at `cMaxValue` fires exactly three
 times, dropping the three low decimal digits into the guard. -/
@@ -154,12 +150,12 @@ lemma doRoundUp_small_truncate (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
   unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_lt_maxRep h_lt_maxRep g mode, hb]
-  simp only [Bool.false_eq_true, if_false]
-  rw [if_neg h_no_cusp]
+  simp only [Bool.false_eq_true, ite_false]
+  rw [ite_eq_right h_no_cusp]
   rw [bringIntoRange_noscale_result (fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1)
     (not_lt.mpr hmin))]
-  rw [if_neg (not_or.mpr ⟨not_lt.mpr hexp_lo, h_m_ne⟩)]
-  rw [if_neg (not_lt.mpr hexp_hi)]
+  rw [ite_eq_right (not_or.mpr ⟨not_lt.mpr hexp_lo, h_m_ne⟩)]
+  rw [ite_eq_right (not_lt.mpr hexp_hi)]
 
 /-- 16-digit `doRoundUp`, firing branch: the round decision is on and the
 mantissa has headroom (`m < cMaxValue`), so it increments in place. -/
@@ -188,12 +184,12 @@ lemma doRoundUp_small_fire (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
   unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_lt_maxRep h_lt_maxRep2 g mode, hb]
-  simp only [if_true]
-  rw [if_pos h_branch]
+  simp only [ite_true]
+  rw [ite_eq_left h_branch]
   rw [bringIntoRange_noscale_result (fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1)
     (by rw [not_lt, h_add_one]; omega))]
-  rw [if_neg (not_or.mpr ⟨not_lt.mpr hexp_lo, h_m1_ne⟩)]
-  rw [if_neg (not_lt.mpr hexp_hi)]
+  rw [ite_eq_right (not_or.mpr ⟨not_lt.mpr hexp_lo, h_m1_ne⟩)]
+  rw [ite_eq_right (not_lt.mpr hexp_hi)]
 
 /-- Close the tail of an unfolded `normalizeToRange` whose normalized mantissa is a known small value. -/
 macro "ntr_tail" : tactic => `(tactic| exact Number.normalizeToRange_tail (by
@@ -255,7 +251,7 @@ theorem doNormalize_small_facts (neg : Bool) (M : UInt64) (e : Int) (mode : roun
     unfold doNormalizeSpec
     rw [show (M == 0) = false from Bool.not_eq_true _ ▸ Bool.eq_false_iff.mpr
       (fun h => hM_ne h)]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     rw [doNormalize_scaleUp_id cMinValue M e
       (by rw [UInt64.le_iff_toNat_le, cMinValue_val]; omega)]
     simp only []
@@ -271,11 +267,11 @@ theorem doNormalize_small_facts (neg : Bool) (M : UInt64) (e : Int) (mode : roun
         rw [UInt64.lt_iff_toNat_lt, hm3, cMinValue_val]
         omega
     rw [h_zero_check]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     have h_cap : doNormalize_capAtMaxRep (M / 10 / 10 / 10) (e + 3) g3
         = .ok (M / 10 / 10 / 10, e + 3, g3) := by
       unfold doNormalize_capAtMaxRep
-      rw [if_neg]
+      rw [ite_eq_right]
       intro h
       have h1 := UInt64.lt_iff_toNat_lt.mp h
       have h2 : maxRepUp.toNat = maxRepUpNat := rfl
@@ -288,7 +284,7 @@ lemma doNormalize_scaleUp_step {minMant m : UInt64} {e : Int}
     (hlt : m < minMant) (he : minExponent < e) :
     doNormalize_scaleUpSpec minMant m e = doNormalize_scaleUpSpec minMant (m * 10) (e - 1) := by
   conv_lhs => unfold doNormalize_scaleUpSpec
-  rw [if_pos ⟨hlt, he⟩]
+  rw [ite_eq_left ⟨hlt, he⟩]
 
 /-- A 16-digit mantissa scales up exactly three times at `largeRange.min`. -/
 lemma doNormalize_scaleUp_three (m₀ : UInt64) (e : Int)
@@ -350,7 +346,7 @@ theorem doNormalize_large_16digit (neg : Bool) (m₀ : UInt64) (e : Int) (mode :
   all_goals try min_fit
   unfold doNormalizeSpec
   rw [show (m₀ == 0) = false from Bool.eq_false_iff.mpr (fun h => hm₀_ne h)]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [doNormalize_scaleUp_three m₀ e h_lo h_hi he_lo]
   simp only []
   rw [← hg0_def, ← hM_def,
@@ -362,13 +358,13 @@ theorem doNormalize_large_16digit (neg : Bool) (m₀ : UInt64) (e : Int) (mode :
     · exact decide_eq_false (by omega)
     · exact decide_eq_false (by rw [UInt64.lt_iff_toNat_lt, hminN]; omega)
   rw [h_zero_check]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   by_cases h_cap_fire : M > maxRepUp
   · -- Divide arm: capAtMaxRep pushes the zero low digit and doRoundUp rescales back.
     have h_cap : doNormalize_capAtMaxRep M (e - 3) g0
         = .ok (M / 10, e - 3 + 1, g0.push (M % 10)) := by
       unfold doNormalize_capAtMaxRep
-      rw [if_pos h_cap_fire, if_neg (by omega : ¬ (e - 3 ≥ maxExponent))]
+      rw [ite_eq_left h_cap_fire, ite_eq_right (by omega : ¬ (e - 3 ≥ maxExponent))]
       rfl
     rw [h_cap]
     simp only []
@@ -392,7 +388,7 @@ theorem doNormalize_large_16digit (neg : Bool) (m₀ : UInt64) (e : Int) (mode :
   · -- Keep arm: capAtMaxRep is the identity and the empty guard truncates in place.
     have h_cap : doNormalize_capAtMaxRep M (e - 3) g0 = .ok (M, e - 3, g0) := by
       unfold doNormalize_capAtMaxRep
-      rw [if_neg h_cap_fire]
+      rw [ite_eq_right h_cap_fire]
     rw [h_cap]
     simp only []
     have hM_le_up : M.toNat ≤ maxRepUp.toNat := by
@@ -460,17 +456,17 @@ lemma round_bool_towards_zero (g : Guard) (m : UInt64) :
     (g.round .towards_zero == 1 || (g.round .towards_zero == 0 && m % 2 == 1)) = false := by
   unfold Guard.round
   by_cases h : g.empty = true
-  · rw [if_pos h]; rfl
-  · rw [if_neg h]; rfl
+  · rw [ite_eq_left h]; rfl
+  · rw [ite_eq_right h]; rfl
 
 /-- Round-decision bool, `.downward`, positive sign: never fires. -/
 lemma round_bool_downward_pos (g : Guard) (m : UInt64) (h_sbit : g.sbit_ = false) :
     (g.round .downward == 1 || (g.round .downward == 0 && m % 2 == 1)) = false := by
   unfold Guard.round
   by_cases h : g.empty = true
-  · rw [if_pos h]; rfl
-  · rw [if_neg h]
-    simp only [h_sbit, Bool.false_eq_true, if_false]
+  · rw [ite_eq_left h]; rfl
+  · rw [ite_eq_right h]
+    simp only [h_sbit, Bool.false_eq_true, ite_false]
     rfl
 
 /-- Round-decision bool, `.downward`, negative sign, nonempty: fires. -/
@@ -478,9 +474,9 @@ lemma round_bool_downward_neg (g : Guard) (m : UInt64)
     (h_sbit : g.sbit_ = true) (h_ne : g.empty = false) :
     (g.round .downward == 1 || (g.round .downward == 0 && m % 2 == 1)) = true := by
   unfold Guard.round
-  rw [if_neg (by rw [h_ne]; exact Bool.false_ne_true), h_sbit]
-  simp only [if_true]
-  rw [if_pos (Guard.content_of_not_empty h_ne)]
+  rw [ite_eq_right (by rw [h_ne]; exact Bool.false_ne_true), h_sbit]
+  simp only [ite_true]
+  rw [ite_eq_left (Guard.content_of_not_empty h_ne)]
   rfl
 
 /-- Round-decision bool, `.upward`, negative sign: never fires. -/
@@ -488,8 +484,8 @@ lemma round_bool_upward_neg (g : Guard) (m : UInt64) (h_sbit : g.sbit_ = true) :
     (g.round .upward == 1 || (g.round .upward == 0 && m % 2 == 1)) = false := by
   unfold Guard.round
   by_cases h : g.empty = true
-  · rw [if_pos h]; rfl
-  · rw [if_neg h, h_sbit]
+  · rw [ite_eq_left h]; rfl
+  · rw [ite_eq_right h, h_sbit]
     rfl
 
 /-- Round-decision bool, `.upward`, positive sign, nonempty: fires. -/
@@ -497,9 +493,9 @@ lemma round_bool_upward_pos (g : Guard) (m : UInt64)
     (h_sbit : g.sbit_ = false) (h_ne : g.empty = false) :
     (g.round .upward == 1 || (g.round .upward == 0 && m % 2 == 1)) = true := by
   unfold Guard.round
-  rw [if_neg (by rw [h_ne]; exact Bool.false_ne_true), h_sbit]
-  simp only [Bool.false_eq_true, if_false]
-  rw [if_pos (Guard.content_of_not_empty h_ne)]
+  rw [ite_eq_right (by rw [h_ne]; exact Bool.false_ne_true), h_sbit]
+  simp only [Bool.false_eq_true, ite_false]
+  rw [ite_eq_left (Guard.content_of_not_empty h_ne)]
   rfl
 
 /-- Round-decision bool, any mode, empty guard: never fires. -/
@@ -596,7 +592,7 @@ theorem normalizeToRange_16_per_mode (n : Number) (mode : rounding_mode)
     have h_no_bump : ∀ b : Bool, (if n.negative_ = b ∧ n.mantissa_.toNat % 1000 ≠ 0
         then 1 else 0) = 0 := by
       intro b
-      rw [if_neg (by intro ⟨_, h⟩; exact h h_mod)]
+      rw [ite_eq_right (by intro ⟨_, h⟩; exact h h_mod)]
     exact ⟨mLow, h_truncate (round_bool_empty g _ mode h_empty), by omega,
       fun _ => Or.inl hm3, fun _ => hm3,
       fun _ => by rw [hm3, h_no_bump true, Nat.add_zero],
@@ -630,7 +626,7 @@ theorem normalizeToRange_16_per_mode (n : Number) (mode : rounding_mode)
       · refine ⟨mLow, ?_, by omega,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
           fun _ => by
-            rw [hm3, if_neg (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero],
+            rw [hm3, ite_eq_right (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero],
           fun h => rounding_mode.noConfusion h,
           fun h => absurd h h_mod⟩
         have := h_truncate (round_bool_downward_pos g _ (hneg ▸ hsbit))
@@ -638,7 +634,7 @@ theorem normalizeToRange_16_per_mode (n : Number) (mode : rounding_mode)
         exact this
       · refine ⟨mHigh, ?_, by omega,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
-          fun _ => by rw [h_add, if_pos ⟨rfl, h_mod⟩],
+          fun _ => by rw [h_add, ite_eq_left ⟨rfl, h_mod⟩],
           fun h => rounding_mode.noConfusion h,
           fun h => absurd h h_mod⟩
         have := h_fire (round_bool_downward_neg g _ (hneg ▸ hsbit) h_ne)
@@ -649,7 +645,7 @@ theorem normalizeToRange_16_per_mode (n : Number) (mode : rounding_mode)
       · refine ⟨mHigh, ?_, by omega,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
           fun h => rounding_mode.noConfusion h,
-          fun _ => by rw [h_add, if_pos ⟨rfl, h_mod⟩],
+          fun _ => by rw [h_add, ite_eq_left ⟨rfl, h_mod⟩],
           fun h => absurd h h_mod⟩
         have := h_fire (round_bool_upward_pos g _ (hneg ▸ hsbit) h_ne)
         rw [hneg] at this
@@ -658,7 +654,7 @@ theorem normalizeToRange_16_per_mode (n : Number) (mode : rounding_mode)
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
           fun h => rounding_mode.noConfusion h,
           fun _ => by
-            rw [hm3, if_neg (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero],
+            rw [hm3, ite_eq_right (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero],
           fun h => absurd h h_mod⟩
         have := h_truncate (round_bool_upward_neg g _ (hneg ▸ hsbit))
         rw [hneg] at this

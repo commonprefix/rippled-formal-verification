@@ -96,7 +96,7 @@ lemma Number.lower_neg_eq (q : ℚ) (hq : q < 0) :
     Number.lower q = (upperPosAux (-q)).map (fun n => { n with negative_ := true }) := by
   unfold Number.lower
   have hq_ne : q ≠ 0 := ne_of_lt hq
-  rw [if_neg hq_ne, if_pos hq]
+  rw [ite_eq_right hq_ne, ite_eq_left hq]
 
 /-- Characterization of `Number.upper q` for negative q: it sign-flips `Number.lower (-q)`,
 with a `Number.zero` short-circuit. -/
@@ -105,7 +105,7 @@ lemma Number.upper_neg_eq (q : ℚ) (hq : q < 0) :
       if n = Number.zero then Number.zero else { n with negative_ := true }) := by
   unfold Number.upper
   have hq_ne : q ≠ 0 := ne_of_lt hq
-  rw [if_neg hq_ne, if_pos hq]
+  rw [ite_eq_right hq_ne, ite_eq_left hq]
 
 /-- A mantissa `m` in `largeRange` that is at most `maxRep` or a multiple of 10, with `e` in the
 exponent range, gives a normalized Number of either sign. -/
@@ -456,7 +456,7 @@ lemma Number.upper_isNormalized (q : ℚ) (n : Number) (h : Number.upper q = som
         change largeRange.min.toNat ≤ (0 : UInt64).toNat at h_min
         rw [this] at h_min
         simp at h_min
-      simp only [if_neg h_n'_ne_zero]
+      simp only [ite_eq_right h_n'_ne_zero]
       right
       exact h_bounds
   · have hq_pos : 0 < q := by

@@ -2,6 +2,7 @@ import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.TenthBips
 import XRPL.Properties.Protocol.Common.FixedWidth
 import XRPL.Properties.Protocol.Number.ToRep.Common.Proofs
+import XRPL.Properties.Protocol.STAmount.Common.Checked
 
 /-! # Errors of the Protocol operations
 
@@ -113,20 +114,20 @@ lemma divQuotient128_eq_error {xm ym : UInt64} {xe ye : Int} {e : Error}
   · rw [h1, err_bind] at h; cases h; exact BitVec.mulChecked_eq_error h1
   rw [h1, ok_bind] at h
   by_cases hr : (num % toUInt128 ym != 0) = true
-  · rw [if_pos hr] at h
+  · rw [ite_eq_left hr] at h
     rcases h2 : BitVec.mulChecked (num % toUInt128 ym) 100000 with e2 | pn
     · rw [h2, err_bind] at h; cases h; exact BitVec.mulChecked_eq_error h2
     rw [h2, ok_bind] at h
     by_cases hc : (pn / toUInt128 ym != 0) = true
-    · rw [if_pos hc] at h
+    · rw [ite_eq_left hc] at h
       rcases h3 : BitVec.mulChecked (num / toUInt128 ym) 100000 with e3 | sc
       · rw [h3, err_bind] at h; cases h; exact BitVec.mulChecked_eq_error h3
       rw [h3, ok_bind] at h
       rcases h4 : BitVec.addChecked sc (pn / toUInt128 ym) with e4 | co
       · rw [h4, err_bind] at h; cases h; exact BitVec.addChecked_eq_error h4
       rw [h4, ok_bind] at h; cases h
-    · rw [if_neg hc] at h; cases h
-  · rw [if_neg hr] at h; cases h
+    · rw [ite_eq_right hc] at h; cases h
+  · rw [ite_eq_right hr] at h; cases h
 
 lemma divQuotient128_ne_notLawful (xm ym : UInt64) (xe ye : Int) :
     divQuotient128 xm ym xe ye ≠ .error .notLawful :=
@@ -147,16 +148,16 @@ lemma Number.operator_div_ne_notLawful (x y : Number) (mode : rounding_mode) :
 lemma Number.operator_add_ne_notLawful (x y : Number) (mode : rounding_mode) :
     x.operator_add y mode ≠ .error .notLawful := by
   refine (Number.operator_add_refines _ _ _).ne_error ?_ (by decide)
-  unfold Number.operator_addSpec checkSumAtTop
-  split_ne_notLawful [Number.normalize_ne_notLawful, Guard.doRoundUp_ne_notLawful,
-    doNormalize128_ne_notLawful, ok_bind]
+  unfold Number.operator_addSpec
+  split_ne_notLawful [doNormalize128_ne_notLawful]
 
 lemma Number.operator_sub_ne_notLawful (x y : Number) (mode : rounding_mode) :
     x.operator_sub y mode ≠ .error .notLawful :=
   Number.operator_add_ne_notLawful _ _ _
 
-lemma Number.power_ne_notLawful (base : Number) (n : Nat) : base.power n ≠ .error .notLawful := by
-  fun_induction Number.power base n with
+lemma Number.power_ne_notLawful {mode : rounding_mode} (base : Number) (n : Nat) :
+    base.power n mode ≠ .error .notLawful := by
+  fun_induction Number.power base n mode with
   | case1 => simp
   | case2 => simp
   | case3 k ih =>
@@ -221,11 +222,12 @@ lemma IOUAmount.operator_add_ne_notLawful (x y : IOUAmount) (mode : rounding_mod
 lemma STAmount.intAmount_ne_notLawful (s : STAmount) : s.intAmount ≠ .error .notLawful := by
   unfold STAmount.intAmount
   simp only [bind, Except.bind, pure, Except.pure]
-  split_ne_notLawful []
+  split_ne_notLawful [STAmount.signedDropsChecked_ne_notLawful]
 
 lemma STAmount.iou_ne_notLawful (s : STAmount) (mode : rounding_mode) : s.iou mode ≠ .error .notLawful := by
   unfold STAmount.iou
-  split_ne_notLawful [IOUAmount.ofMantissaExp_ne_notLawful]
+  simp only [bind, Except.bind]
+  split_ne_notLawful [STAmount.signedDropsChecked_ne_notLawful, IOUAmount.ofMantissaExp_ne_notLawful]
 
 lemma STAmount.toNumber_ne_notLawful (s : STAmount) (mode : rounding_mode) :
     s.toNumber mode ≠ .error .notLawful := by
@@ -243,8 +245,10 @@ lemma STAmount.checked_ne_notLawful (nt : NumericType) (mValue : UInt64) (mOffse
   STAmount.canonicalize_ne_notLawful _ _
 
 lemma STAmount.ofIOUAmount_ne_notLawful (a : IOUAmount) (mode : rounding_mode) :
-    STAmount.ofIOUAmount a mode ≠ .error .notLawful :=
-  STAmount.canonicalize_ne_notLawful _ _
+    STAmount.ofIOUAmount a mode ≠ .error .notLawful := by
+  unfold STAmount.ofIOUAmount
+  simp only [bind, Except.bind]
+  split_ne_notLawful [STAmount.uncheckedFromInt64_ne_notLawful, STAmount.canonicalize_ne_notLawful]
 
 lemma STAmount.ofNumber_ne_notLawful (nt : NumericType) (n : Number) (mode : rounding_mode) :
     STAmount.ofNumber nt n mode ≠ .error .notLawful := by
@@ -268,7 +272,8 @@ lemma STAmount.operator_add_ne_notLawful (v1 v2 : STAmount) (mode : rounding_mod
   unfold STAmount.operator_add
   simp only [bind, Except.bind]
   split_ne_notLawful [STAmount.checked_ne_notLawful, STAmount.canonicalize_ne_notLawful,
-    STAmount.iou_ne_notLawful, IOUAmount.operator_add_ne_notLawful, STAmount.ofIOUAmount_ne_notLawful]
+    STAmount.iou_ne_notLawful, IOUAmount.operator_add_ne_notLawful, STAmount.ofIOUAmount_ne_notLawful,
+    STAmount.signedDropsChecked_ne_notLawful, STAmount.uncheckedFromInt64_ne_notLawful]
 
 lemma STAmount.operator_sub_ne_notLawful (v1 v2 : STAmount) (mode : rounding_mode) :
     v1.operator_sub v2 mode ≠ .error .notLawful :=

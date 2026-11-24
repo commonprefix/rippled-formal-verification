@@ -1,12 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.PayReplay
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequenceDefs
 
 /-! # A loan transaction replayed on a twin of the loan
 
-A LoanDelete, LoanManage or LoanPay that succeeded on a stored loan succeeds as well on another reachable ledger
-that stores a twin of the loan under another number: the same loan but for the copy of its broker. The second
-ledger has the same close time and asset, a vault that exists and is not coarsened, and a broker of the same
-management fee rate. The vault and broker balances may differ. -/
+A LoanDelete, LoanManage or LoanPay that succeeded on a loan succeeds on its twin on another reachable ledger with the
+same close time, asset and management fee rate and a vault that is not coarsened. Balances may differ. -/
 
 namespace XRPL.Model.Lending
 

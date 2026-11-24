@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.AcceptTotal
 import XRPL.Properties.Lending.Ledger.Common.LoanClosable
 import XRPL.Properties.Lending.Ledger.Common.LoanSteps
@@ -7,10 +8,8 @@ import XRPL.Properties.Lending.Loan.Common.PaySettle
 
 /-! # A loan transaction replayed on another reachable ledger
 
-A transaction on a stored loan reads the close time, the vault settings, the loan, its broker's asset and
-management fee rate, and the vault's balances. When a second reachable ledger keeps all but the balances, the
-transaction that succeeded on the first succeeds on the second as well, while the vault is not coarsened and
-a LoanAccept still fits the Open limit. -/
+A transaction that succeeded on a stored loan succeeds on a second reachable ledger that keeps all it reads but the
+balances, while the vault is not coarsened and a LoanAccept still fits the Open limit. -/
 
 namespace XRPL.Model.Lending
 

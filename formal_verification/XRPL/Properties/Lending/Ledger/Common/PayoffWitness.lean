@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Ledger.Common.ShareValueWitness
 The run `svTxs` coarsens the vault after loan D of 3 is created. Each instalment of 1.5 without interest is
 credited on the coarser grid as 1, so the share value falls and the payoff sends the vault 2 of the 3. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

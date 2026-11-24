@@ -9,9 +9,9 @@ import XRPL.Properties.Lending.Ledger.Common.ExtraInterestSum
 
 /-! # Accounting over many transactions
 
-Over any sequence of transactions every vault, broker and loan field moves only by the sums of what flowed in and out.
-While the vault is not coarsened, only a default, a VaultWithdraw or a VaultClawback lowers AssetsTotal. Witnesses
-for the claims that fail: a payment and a pending delete on a coarsened vault, a default on a coarsened cover. -/
+Over any sequence of transactions every vault, broker and loan field moves by the sums of what flowed in and out,
+except on a coarsened vault or cover. While the vault is not coarsened, only a default, a VaultWithdraw or a
+VaultClawback lowers AssetsTotal. -/
 
 namespace XRPL.Model
 
@@ -38,10 +38,8 @@ theorem Lending.Reachable.accounting (start l : LendingLedger) (txs : List Lendi
     l.vault.lossUnrealized.toRat = start.vault.lossUnrealized.toRat + start.impaired txs - start.unimpaired txs ∧
     l.vault.yieldUnrealized.toRat = start.vault.yieldUnrealized.toRat + start.interestBooked txs -
       start.interestRemoved txs - start.interestDefaulted txs ∧
-    -- SharesTotal: the share supply limit, every deposit leaves SharesTotal at most 2^63 − 1
-    (start.SharesFitAlong txs →
-      l.vault.sharesTotal.toRat = start.vault.sharesTotal.toRat + start.sharesCreated txs - start.sharesRedeemed txs -
-        start.sharesDestroyed txs) ∧
+    l.vault.sharesTotal.toRat = start.vault.sharesTotal.toRat + start.sharesCreated txs - start.sharesRedeemed txs -
+      start.sharesDestroyed txs ∧
     -- a broker present before and after the sequence. CoverAvailable: its cover is not coarsened at any step
     (∀ (j : Nat) (b b' : LoanBroker), start.broker? j = some b → l.broker? j = some b' →
       b'.debtTotal.toRat = b.debtTotal.toRat + start.brokerLent j txs - start.brokerPrincipalPaid j txs -

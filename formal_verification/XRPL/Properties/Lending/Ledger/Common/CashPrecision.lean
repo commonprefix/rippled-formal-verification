@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.LoanSteps
 import XRPL.Properties.Lending.Ledger.Common.VaultSteps
 import XRPL.Properties.Vault.Proofs.AssociateAssetPreserve

@@ -21,8 +21,7 @@ import XRPL.Properties.Lending.Loan.Common.PayDefs
 /-! # Lending ledger
 
 A slice of the ledger with one vault, its share holders, the loan brokers on it and their loans.
-A transaction runs its preflight, its checks and then its operation, like C++ `preflight`,
-`preclaim` and `doApply`. -/
+A transaction runs its preflight, its checks and its operation, like C++ `preflight`, `preclaim` and `doApply`. -/
 
 namespace XRPL.Model.Lending
 
@@ -153,7 +152,7 @@ def LendingTx.preflight (l : LendingLedger) : LendingTx → TER
     else .tesSUCCESS
   | .vaultBurnShares _ amount =>
     if isCanonicalAmount amount .int64 && !amount.mIsNegative then .tesSUCCESS else .temBAD_AMOUNT
-  | .vaultSet assetsMaximum blockDeposit =>
+  | .vaultSet assetsMaximum _ =>
     let maximumOk := match assetsMaximum with
       | none => true
       | some m => isNonnegativeInput m
@@ -249,7 +248,6 @@ def LendingLedger.applyVault (l : LendingLedger) : LendingTx → TerExcept Vault
       let holderShares ← STAmount.ofNumber .int64 held .to_nearest
       let r ← l.vault.clawback assets holderShares (l.isSoleShareholder h) hnn
       let destroyed ← r.shares.toNumber .to_nearest
-      if held.operator_lt destroyed then throw .tecINSUFFICIENT_FUNDS
       let shares' ← held.operator_sub destroyed .to_nearest
       return { vault := r.vault', holderShares := some (h, shares') }
     else throw .temBAD_AMOUNT

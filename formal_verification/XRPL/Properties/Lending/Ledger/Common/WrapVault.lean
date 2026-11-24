@@ -123,6 +123,7 @@ lemma Vault.deposit_ne_wrap (v : Vault) (amount : STAmount) (isDonation : Bool) 
     | (refine Vault.adjustAssetsAndShares_ne_wrap _ _ _ ?_ ?_ ‹_› <;> wrap_side)
     | (refine Vault.checkOpenLimit_ne_wrap _ _ ?_ ‹_›; wrap_side)
     | (refine RawVault.assetsTotal_ne_wrap _ ?_ ?_ ‹_› <;> wrap_side)
+    | exact absurd ‹STAmount.ofNumber _ _ _ = _› (STAmount.ofNumber_ne_wrap _ _ _)
     | exact RawVault.to_lawful_ne_wrap _ ‹_›
 
 lemma Vault.deposit_mValue_lt {v : Vault} {amount : STAmount} {isDonation : Bool} {t : UInt32}

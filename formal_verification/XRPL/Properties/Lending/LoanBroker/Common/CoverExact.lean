@@ -2,9 +2,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.OpenZone
 
 /-! # Exact cover updates in the Open zone
 
-On a broker in the Open zone every cover operation moves CoverAvailable by whole base units and the `Number`
-arithmetic is exact: a deposit credits at most the amount, and a withdrawal or a clawback debits at most the cover.
-A clawback only needs the cover to be whole base units below `10^16` of them. -/
+On a broker in the Open zone every cover operation moves CoverAvailable by whole base units with exact `Number`
+arithmetic. A deposit credits at most the amount, a withdrawal or clawback debits at most the cover. -/
 
 namespace XRPL.Model.Lending
 

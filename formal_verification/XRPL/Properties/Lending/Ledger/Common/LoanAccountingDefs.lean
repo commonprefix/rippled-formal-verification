@@ -1,12 +1,10 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.RunSums
 
 /-! # What each transaction takes off one loan
 
-Each `…Of` reads one amount off the operation a transaction runs on the loan at slot `i` of the ledger `l`, and is
-zero for every other transaction. A payment pays scheduled instalments, each one taking its own value, management
-fee and one payment off the loan. An overpayment then re-amortizes the loan, a full payment clears what is left and a
-default writes it off. The sum of the same name adds the amount up along a sequence of transactions, each read on the
-ledger it runs on. -/
+Each `…Of` reads one amount off the operation a transaction runs on the loan at slot `i` and is zero for other
+transactions. The sum of the same name adds it up along a sequence. -/
 
 namespace XRPL.Model.Lending
 

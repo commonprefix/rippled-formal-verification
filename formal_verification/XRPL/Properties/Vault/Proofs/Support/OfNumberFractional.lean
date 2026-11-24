@@ -51,7 +51,7 @@ lemma STAmount.ofNumber_fractional_ok (r : Number) (mode : rounding_mode)
   have hneg_eq : decide (r.signum < 0) = r.negative_ := by
     unfold Number.signum
     rcases hrn : r.negative_ with _ | _ <;>
-      simp only [hmne, if_true, if_false, Bool.false_eq_true] <;> decide
+      simp only [hmne, ite_true, ite_false, Bool.false_eq_true] <;> decide
   set neg : Bool := decide (r.signum < 0) with hneg_def
   set working : Number := if neg then r.operator_neg else r with hw_def
   have hw_mant : working.mantissa_ = r.mantissa_ := by
@@ -61,12 +61,12 @@ lemma STAmount.ofNumber_fractional_ok (r : Number) (mode : rounding_mode)
   have hw_exp : working.exponent_ = r.exponent_ := by
     rw [hw_def]; rcases neg with _ | _
     · simp
-    · simp only [if_true]; unfold Number.operator_neg; rw [if_neg (by simpa using hr_ne)]
+    · simp only [ite_true]; unfold Number.operator_neg; rw [ite_eq_right (by simpa using hr_ne)]
   have hw_neg : working.negative_ = false := by
     rw [hw_def, hneg_eq]
     by_cases hrn : r.negative_ = true
-    · rw [if_pos hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
-    · rw [if_neg hrn]; simpa using hrn
+    · rw [ite_eq_left hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
+    · rw [ite_eq_right hrn]; simpa using hrn
   have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hr_lo
   have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hr_hi
   have hme : maxExponent = 32768 := rfl
@@ -91,7 +91,7 @@ lemma STAmount.ofNumber_fractional_ok (r : Number) (mode : rounding_mode)
   -- the stored IOU amount is the rounded mantissa at an exponent within the ceiling
   have hnorm' : working.normalizeToRange kMinValue kMaxValue mode = .ok (mant, exp) := hnorm
   unfold STAmount.ofNumber
-  rw [if_neg (by decide), ← hneg_def, ← hw_def, hnorm']
+  rw [ite_eq_right (by decide), ← hneg_def, ← hw_def, hnorm']
   simp only []
   rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hmant_pos)), ok_bind]
   have h_int : ¬ (STAmount.unchecked .fractional mant.toUInt64 exp neg).integral = true := by
@@ -110,14 +110,14 @@ lemma STAmount.ofNumber_fractional_ok (r : Number) (mode : rounding_mode)
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    rw [STAmount.iou_eq mode h_int]
+    rw [STAmount.iou_eq mode h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp neg mode hmtu_lo hmtu_hi
       (by rw [hw_exp] at hexp_lo3; omega) (by omega)
   rw [STAmount.checked]
   unfold STAmount.canonicalize
-  rw [if_neg h_int, hiou, if_neg (by rw [hw_exp] at hexp_hi; omega)]
+  rw [ite_eq_right h_int, hiou, ite_eq_right (by rw [hw_exp] at hexp_hi; omega)]
   split_ifs <;> exact ⟨_, rfl⟩
 
 end XRPL.Model.Protocol

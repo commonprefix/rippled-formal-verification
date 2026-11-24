@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequenceDefs
 import XRPL.Properties.Lending.Ledger.Common.Isolation
 import XRPL.Properties.Lending.Ledger.Common.BrokerAccounting
@@ -9,9 +10,8 @@ import XRPL.Properties.Lending.Loan.Common.GuardProofs
 
 /-! # One loan in a sequence and in its subsequence
 
-What a transaction keeps on the ledger: the close time, the vault's asset and scale, the brokers' management fee
-rates and the other loans. A transaction on two twins of a loan, the same loan but for the copy of its broker,
-leaves twins on both ledgers or deletes both. -/
+What a transaction keeps on the ledger, and that a transaction on two twins of a loan, the same loan but for the copy
+of its broker, leaves twins on both ledgers or deletes both. -/
 
 namespace XRPL.Model.Lending
 
@@ -131,16 +131,16 @@ private lemma LendingLedger.apply_feeRate {l l' : LendingLedger} {tx : LendingTx
   · obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_broker hb h
     rw [LendingLedger.broker?_commitBroker] at hb'
     by_cases hk : k = (if u.index < l.brokers.length then u.index else l.brokers.length)
-    · rw [if_pos hk] at hb'
+    · rw [ite_eq_left hk] at hb'
       by_cases hlt : u.index < l.brokers.length
-      · rw [if_pos hlt] at hk
+      · rw [ite_eq_left hlt] at hk
         subst hk
         rcases LendingLedger.applyBroker_feeRate l tx u hu b' hb' with hi | hold
         · exact Or.inl (le_of_eq hi.symm)
         · exact Or.inr hold
-      · rw [if_neg hlt] at hk
+      · rw [ite_eq_right hlt] at hk
         exact Or.inl (le_of_eq hk.symm)
-    · rw [if_neg hk] at hb'
+    · rw [ite_eq_right hk] at hb'
       exact Or.inr ⟨b', hb', rfl⟩
   by_cases hl : tx.isLoan = true
   · obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_loan hl h
@@ -203,13 +203,13 @@ private lemma LendingLedger.apply_loans {l l' : LendingLedger} {tx : LendingTx}
     have hlen : (l.commitLoan u).loans.length = (storeSlot l.loans u.loanIndex u.loan).length := rfl
     rcases LendingLedger.applyLoan_slot hu with ⟨hlt, hidx⟩ | ⟨heq, hidx⟩
     · refine ⟨Or.inl ?_, fun j hj hne => ?_⟩
-      · rw [hlen]; unfold storeSlot; rw [if_pos hlt]; simp
+      · rw [hlen]; unfold storeSlot; rw [ite_eq_left hlt]; simp
       · have hji : ¬ j = u.loanIndex := fun hji => hne (by rw [hji, hidx])
-        rw [LendingLedger.loan?_commitLoan, if_pos hlt, if_neg hji]
+        rw [LendingLedger.loan?_commitLoan, ite_eq_left hlt, ite_eq_right hji]
     · have hge : ¬ u.loanIndex < l.loans.length := by omega
       refine ⟨Or.inr ⟨?_, hl, hidx⟩, fun j hj _ => ?_⟩
-      · rw [hlen]; unfold storeSlot; rw [if_neg hge]; simp
-      · rw [LendingLedger.loan?_commitLoan, if_neg hge, if_neg (show ¬ j = l.loans.length by omega)]
+      · rw [hlen]; unfold storeSlot; rw [ite_eq_right hge]; simp
+      · rw [LendingLedger.loan?_commitLoan, ite_eq_right hge, ite_eq_right (show ¬ j = l.loans.length by omega)]
   have hloans : l'.loans = l.loans := by
     by_cases hv : tx.isVault = true
     · obtain ⟨u, -, rfl⟩ := LendingLedger.apply_vault hv h
@@ -428,14 +428,14 @@ private lemma LendingLedger.apply_keeps_active {l l' : LendingLedger} {tx : Lend
     cases he
   · obtain ⟨e0, loan, r, he0, hat, -, hok, rfl, -⟩ := LendingLedger.loanManage_ok h
     intro f hf
-    rw [LendingLedger.loan?_commit_ofLoan l he0, if_pos rfl] at hf
+    rw [LendingLedger.loan?_commit_ofLoan l he0, ite_eq_left rfl] at hf
     obtain rfl := Option.some.inj hf
     show r.loan'.isPending = false
     rw [Loan.manage_isPending _ _ _ _ _ hok, hat.isPending_eq he0]
     exact hact e0 he0
   · obtain ⟨e0, loan, r, he0, hat, -, -, hok, rfl, -⟩ := LendingLedger.loanPay_ok h
     intro f hf
-    rw [LendingLedger.loan?_commit_ofLoan l he0, if_pos rfl] at hf
+    rw [LendingLedger.loan?_commit_ofLoan l he0, ite_eq_left rfl] at hf
     obtain rfl := Option.some.inj hf
     show r.loan'.isPending = false
     rw [Loan.pay_isPending _ _ _ _ _ _ hok, hat.isPending_eq he0]

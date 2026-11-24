@@ -94,8 +94,8 @@ theorem Number.operator_div_rounded_to_nearest_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact hyz hmeq
     unfold Number.operator_div at hok
-    rw [if_neg hy_guard,
-        if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
+    rw [ite_eq_right hy_guard,
+        ite_eq_left (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
       (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     have h_truth0 : x.toRat / y.toRat = 0 := by
@@ -104,7 +104,7 @@ theorem Number.operator_div_rounded_to_nearest_proof (x y result : Number)
     left
     refine ⟨Number.zero, ?_, ?_⟩
     · unfold Number.lower
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
     · rw [h_result, hx_zero]
   -- Underflow: the flushed zero is a grid neighbor of the tiny quotient.
   by_cases hres : result.mantissa_ = 0

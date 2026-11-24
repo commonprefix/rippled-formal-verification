@@ -140,7 +140,7 @@ lemma LoanBroker.update_success_proof (lb : LoanBroker) (dm : Number)
 lemma LoanBroker.update_none_proof (lb : LoanBroker) : lb.update none = .ok lb := by
   rw [LoanBroker.update_eq]
   unfold RawLoanBroker.to_lawful
-  rw [dif_pos ⟨lb.wf, lb.valid⟩]
+  rw [dite_eq_left ⟨lb.wf, lb.valid⟩]
   rfl
 
 end XRPL.Model.Lending

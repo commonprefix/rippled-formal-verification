@@ -4,10 +4,8 @@ import XRPL.Properties.Lending.Ledger.Common.XrpTotal
 
 /-! # LoanAccept, LoanDelete and LoanManage return a result code
 
-On a reachable ledger each of the three transactions ends in a result code, never in a model error (a C++
-exception). LoanAccept, impair and unimpair need nothing more. A pending LoanDelete and a default add an amount to
-AssetsAvailable, and the sum must stay within the asset's largest amount. On XRP the total the vault stored keeps
-it so. On an MPT or an IOU C++ keeps it so through the balance of the vault account, which the model does not run. -/
+A pending LoanDelete and a default need AssetsAvailable plus what they add within the asset's largest amount. On XRP
+the stored vault total keeps it so, on an MPT or an IOU the vault account's balance, which the model does not run. -/
 
 namespace XRPL.Model.Lending
 
@@ -67,7 +65,7 @@ lemma LendingLedger.loanDelete_no_exception_proof (l : LendingLedger) (hr : l.Re
         have htot := hr.total_le_native hx
         have hma : l.vault.numericType.maxAmount = (l.vault.numericType.maxValue.toNat : ℚ) := by
           unfold NumericType.maxAmount
-          rw [if_pos (by rw [hx]; rfl)]
+          rw [ite_eq_left (by rw [hx]; rfl)]
         rw [hma]
         linarith
       · rw [hpo]; exact hroom hx e' he (by rw [← hpend]; exact hp)
@@ -126,7 +124,7 @@ lemma LendingLedger.loanManage_no_exception_proof (l : LendingLedger) (hr : l.Re
         have htot := hr.total_le_native hx
         have hma : l.vault.numericType.maxAmount = (l.vault.numericType.maxValue.toNat : ℚ) := by
           unfold NumericType.maxAmount
-          rw [if_pos (by rw [hx]; rfl)]
+          rw [ite_eq_left (by rw [hx]; rfl)]
         have hmin : min e'.loan.principalOutstanding.toRat b.coverAvailable.toRat ≤
             l.vault.assetsDeployed.toRat := le_trans (min_le_left _ _) (by rw [← hpo]; exact hpad)
         rw [hma]

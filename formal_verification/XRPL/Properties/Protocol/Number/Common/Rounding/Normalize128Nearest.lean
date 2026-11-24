@@ -51,7 +51,7 @@ lemma Guard.roundsLike_push {g : Guard} {φ : ℚ} {d : UInt64} (he : g.empty = 
   refine ⟨hE.trans hf0.symm, ?_⟩
   by_cases hemp : (g.push d).empty = true
   · obtain ⟨h1, h2⟩ := hE.mp hemp
-    have hr : (g.push d).round .to_nearest = -2 := by unfold Guard.round; rw [if_pos hemp]
+    have hr : (g.push d).round .to_nearest = -2 := by unfold Guard.round; rw [ite_eq_left hemp]
     rw [hr, h1, h2]
     norm_num
   rw [round_to_nearest_toNat hemp, hdig, hx]
@@ -59,7 +59,7 @@ lemma Guard.roundsLike_push {g : Guard} {φ : ℚ} {d : UInt64} (he : g.empty = 
   · have hlt' : (d.toNat : ℚ) ≤ 4 := by exact_mod_cast (by omega : d.toNat ≤ 4)
     have hf : (φ + (d.toNat : ℚ)) / 10 < 1 / 2 := by
       rw [div_lt_iff₀ (by norm_num)]; linarith
-    rw [if_neg (by omega), if_pos (by omega)]
+    rw [ite_eq_right (by omega), ite_eq_left (by omega)]
     constructor
     · constructor
       · intro h; norm_num at h
@@ -71,10 +71,10 @@ lemma Guard.roundsLike_push {g : Guard} {φ : ℚ} {d : UInt64} (he : g.empty = 
     rw [heq] at hE
     push_cast
     by_cases hD : g.digits_.toNat / 16 = 0
-    · rw [if_neg (by omega), if_neg (by omega)]
+    · rw [ite_eq_right (by omega), ite_eq_right (by omega)]
       by_cases hφ : φ = 0
       · obtain ⟨hD0, hx0⟩ := he.mpr hφ
-        rw [hx0, hD0, if_neg (by decide), hφ]
+        rw [hx0, hD0, ite_eq_right (by decide), hφ]
         norm_num
       · have hx1 : (g.xbit_ || decide (g.digits_.toNat % 16 ≠ 0)) = true := by
           cases hgx' : g.xbit_
@@ -83,12 +83,12 @@ lemma Guard.roundsLike_push {g : Guard} {φ : ℚ} {d : UInt64} (he : g.empty = 
             exact hφ (he.mp ⟨by omega, hgx'⟩)
           · rfl
         have hφpos : 0 < φ := lt_of_le_of_ne hφ0 (Ne.symm hφ)
-        rw [if_pos hx1]
+        rw [ite_eq_left hx1]
         refine ⟨⟨fun _ => by rw [lt_div_iff₀ (by norm_num)]; linarith, fun _ => rfl⟩, ?_⟩
         constructor
         · intro h; norm_num at h
         · intro h; linarith
-    · rw [if_pos (by omega)]
+    · rw [ite_eq_left (by omega)]
       have hφpos : φ ≠ 0 := fun h => by
         have := he.mpr h
         omega
@@ -101,7 +101,7 @@ lemma Guard.roundsLike_push {g : Guard} {φ : ℚ} {d : UInt64} (he : g.empty = 
   · have hge : (6 : ℚ) ≤ d.toNat := by exact_mod_cast (by omega : 6 ≤ d.toNat)
     have hf : 1 / 2 < (φ + (d.toNat : ℚ)) / 10 := by
       rw [lt_div_iff₀ (by norm_num)]; linarith
-    rw [if_pos (by omega)]
+    rw [ite_eq_left (by omega)]
     constructor
     · exact ⟨fun _ => hf, fun _ => rfl⟩
     · constructor
@@ -128,14 +128,14 @@ private lemma doNormalize_scaleDown128_roundsLike (m : UInt128) (e : Int) (g : G
   | case1 m e g hgt hge =>
     rw [show doNormalize_scaleDown128Spec largeRange.max m e g = .error .normalize1 from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_pos hgt, if_pos hge]] at hok
+      rw [dite_eq_left hgt, ite_eq_left hge]] at hok
     exact absurd hok (by intro h; cases h)
   | case2 m e g hgt hnge ih =>
     rw [show doNormalize_scaleDown128Spec largeRange.max m e g
         = doNormalize_scaleDown128Spec largeRange.max (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
         from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_pos hgt, if_neg hnge]] at hok
+      rw [dite_eq_left hgt, ite_eq_right hnge]] at hok
     have h10 : ((10 : UInt128)).toNat = 10 := by decide
     have h_div : (m / 10 : UInt128).toNat = m.toNat / 10 := by
       rw [BitVec.toNat_udiv, h10]
@@ -172,7 +172,7 @@ private lemma doNormalize_scaleDown128_roundsLike (m : UInt128) (e : Int) (g : G
   | case3 m e g hgt =>
     rw [show doNormalize_scaleDown128Spec largeRange.max m e g = .ok (m, e, g) from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_neg hgt]] at hok
+      rw [dite_eq_right hgt]] at hok
     obtain rfl := (Except.ok.inj hok).symm
     exact ⟨φ, hφ0, hφ1, rfl, hrl.resolve_right hgt⟩
 
@@ -186,11 +186,11 @@ private lemma doNormalize_capAtMaxRep_roundsLike (m : UInt64) (e : Int) (g : Gua
       out.2.2.RoundsLike φ₂ := by
   unfold doNormalize_capAtMaxRep at hok
   by_cases h_gt : m > maxRepUp
-  · rw [if_pos h_gt] at hok
+  · rw [ite_eq_left h_gt] at hok
     by_cases h_ge : e ≥ maxExponent
-    · rw [if_pos h_ge] at hok
+    · rw [ite_eq_left h_ge] at hok
       exact absurd hok (by intro h; cases h)
-    · rw [if_neg h_ge] at hok
+    · rw [ite_eq_right h_ge] at hok
       unfold divu10 at hok
       simp only [] at hok
       obtain rfl := (Except.ok.inj hok).symm
@@ -215,7 +215,7 @@ private lemma doNormalize_capAtMaxRep_roundsLike (m : UInt64) (e : Int) (g : Gua
           rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; simp]
         field_simp
         ring
-  · rw [if_neg h_gt] at hok
+  · rw [ite_eq_right h_gt] at hok
     obtain rfl := (Except.ok.inj hok).symm
     exact ⟨φ, hφ0, hφ1, rfl, hrl⟩
 
@@ -250,7 +250,7 @@ lemma doNormalize128_nearest_facts
     simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
@@ -305,15 +305,15 @@ lemma doNormalize128_nearest_facts
   have hrep₀ : represents g₀ ftilde₀ := by
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst, if_pos hst]
+    · rw [ite_eq_left hst, ite_eq_left hst]
       exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]
+    · rw [ite_eq_right hst, ite_eq_right hst]
       exact g0_represents_zero zn
   -- The starting guard rounds `δ₁` like exact rounding, unless the scale-down pushes a digit.
   have hrl₀ : g₀.RoundsLike ftilde₀ := Guard.roundsLike_of_represents hrep₀
   have hinit : (g₀.empty = true ↔ δ₁ = 0) ∧ (g₀.RoundsLike δ₁ ∨ M₁ > toUInt128 largeRange.max) := by
     by_cases hst : sticky = true
-    · have hft : ftilde₀ = 1 / 10 ^ 17 := by rw [hft₀_def, if_pos hst]
+    · have hft : ftilde₀ = 1 / 10 ^ 17 := by rw [hft₀_def, ite_eq_left hst]
       have hpos := hδ₁_pos hst
       refine ⟨hrl₀.1.trans ⟨fun h => by rw [hft] at h; norm_num at h, fun h => by linarith⟩, ?_⟩
       by_cases hgt : M₁ > toUInt128 largeRange.max
@@ -332,7 +332,7 @@ lemma doNormalize128_nearest_facts
         refine hrl₀.congr ⟨fun h => by norm_num at h, fun h => by linarith⟩
           ⟨fun h => by norm_num at h, fun h => by linarith⟩ ⟨fun h => by norm_num at h, fun h => by linarith⟩
     · have hft : ftilde₀ = δ₁ := by
-        rw [hft₀_def, if_neg hst, hδ₁_zero (Bool.not_eq_true _ |>.mp hst)]
+        rw [hft₀_def, ite_eq_right hst, hδ₁_zero (Bool.not_eq_true _ |>.mp hst)]
       rw [hft] at hrl₀
       exact ⟨hrl₀.1, Or.inl hrl₀⟩
   cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
@@ -347,13 +347,13 @@ lemma doNormalize128_nearest_facts
     obtain ⟨φ₂, hφ₂_nn, hφ₂_lt, hφ₂_val, hφ₂_rl⟩ :=
       doNormalize_scaleDown128_roundsLike M₁ e₁ g₀ δ₁ hδ₁_nn hδ₁_lt hinit.1 hinit.2 sd hsd
     by_cases hund : (sd.2.1 < minExponent || sd.1 < toUInt128 largeRange.min) = true
-    · rw [if_pos hund] at hok
+    · rw [ite_eq_left hund] at hok
       exfalso
       apply hres
       have h := Except.ok.inj hok
       rw [← h]
       rfl
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by

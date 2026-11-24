@@ -49,7 +49,7 @@ theorem normalizeToRange_16_ceil_neg (n : Number) (mant : Int64) (exp : Int)
     obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     refine ⟨?_, by omega⟩
     rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), hm3,
-        if_neg (show ¬ n.mantissa_.toNat % 1000 ≠ 0 by rw [hrem0]; decide), hnf, if_pos rfl]
+        ite_eq_right (show ¬ n.mantissa_.toNat % 1000 ≠ 0 by rw [hrem0]; decide), hnf, ite_eq_left rfl]
     simp only [neg_mul, one_mul, Int.cast_neg, Int.cast_natCast, Nat.add_zero]
   · -- fire (nonempty ⟹ remainder ≠ 0): magnitude ceil = M/1000 + 1, or cusp carry.
     have hrem_ne : n.mantissa_.toNat % 1000 ≠ 0 := fun h => hemp (h_empty_of h)
@@ -69,7 +69,7 @@ theorem normalizeToRange_16_ceil_neg (n : Number) (mant : Int64) (exp : Int)
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       refine ⟨?_, by omega⟩
       rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ cMinValue (by rw [hcMin]; omega),
-          if_pos hrem_ne, hMk, hnf, if_pos rfl, hcMin,
+          ite_eq_left hrem_ne, hMk, hnf, ite_eq_left rfl, hcMin,
           show ((10 ^ 16 - 1 + 1 : ℕ)) = (10 ^ 16 : ℕ) from by norm_num,
           zpow_add₀ (by norm_num : (10:ℚ) ≠ 0) (n.exponent_ + 3) 1, zpow_one]
       push_cast; ring
@@ -91,7 +91,7 @@ theorem normalizeToRange_16_ceil_neg (n : Number) (mant : Int64) (exp : Int)
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       refine ⟨?_, by omega⟩
       rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hadd]; omega), hadd,
-          if_pos hrem_ne, hnf, if_pos rfl]
+          ite_eq_left hrem_ne, hnf, ite_eq_left rfl]
       simp only [neg_mul, one_mul, Int.cast_neg, Int.cast_natCast]
 
 /-- `.upward`/`.towards_zero` on a negative `Number`: exact magnitude floor
@@ -129,7 +129,7 @@ theorem normalizeToRange_16_floor_neg (n : Number) (mant : Int64) (exp : Int) (m
   obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
   refine ⟨?_, by omega⟩
   rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), hm3,
-      hnf, if_pos rfl]
+      hnf, ite_eq_left rfl]
   simp only [neg_mul, one_mul, Int.cast_neg, Int.cast_natCast]
 
 end XRPL.Model.Protocol

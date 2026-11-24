@@ -8,7 +8,7 @@ import XRPL.Properties.Lending.Loan.Common.PayProofs
 
 The coarsened run of `CoarsenedVault.lean` up to loan A's late payment, where the stuck-loan witnesses start. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

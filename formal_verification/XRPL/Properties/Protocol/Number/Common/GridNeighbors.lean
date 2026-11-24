@@ -3,12 +3,8 @@ import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 
 /-! # 16-digit grid neighbors as normalized `Number`s
 
-The 16-digit grid embeds in the 19-digit `Number` grid, so the points one 16-digit
-ULP below/above a value `Mr·10^ec` are themselves normalized `Number`s. That makes
-them admissible witnesses for the `Number.lower`/`upper` tightness lemmas, which
-quantify over normalized `Number`s only: if a double-rounded result were more than
-one ULP from the target, its far-side neighbor would be a representable value
-between the correctly-rounded `Number` and the target, contradicting tightness. -/
+The points one 16-digit unit below and above a value are normalized `Number`s. This bounds a double-rounded result
+to one unit from the target. -/
 
 namespace XRPL.Model.Protocol
 

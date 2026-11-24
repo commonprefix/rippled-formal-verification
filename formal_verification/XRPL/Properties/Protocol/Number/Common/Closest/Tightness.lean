@@ -164,14 +164,14 @@ lemma upperPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
         have h_ceil_lower : m_ceil_nat ≥ 9999999999999999991 := by
           unfold bumpToValidMantissa at h_bump_eq
           by_cases hb1 : m_ceil_nat ≤ maxRep.toNat
-          · rw [if_pos hb1] at h_bump_eq; exact absurd h_bump_eq (by simp)
-          rw [if_neg hb1] at h_bump_eq
+          · rw [ite_eq_left hb1] at h_bump_eq; exact absurd h_bump_eq (by simp)
+          rw [ite_eq_right hb1] at h_bump_eq
           by_cases hb2 : m_ceil_nat < cuspMin
-          · rw [if_pos hb2] at h_bump_eq; exact absurd h_bump_eq (by simp)
-          rw [if_neg hb2] at h_bump_eq
+          · rw [ite_eq_left hb2] at h_bump_eq; exact absurd h_bump_eq (by simp)
+          rw [ite_eq_right hb2] at h_bump_eq
           simp only at h_bump_eq
           by_cases hb3 : ((m_ceil_nat + 9) / 10) * 10 < 10^19
-          · rw [if_pos hb3] at h_bump_eq; exact absurd h_bump_eq (by simp)
+          · rw [ite_eq_left hb3] at h_bump_eq; exact absurd h_bump_eq (by simp)
           push Not at hb3
           have h_div_eq : 10 * ((m_ceil_nat + 9) / 10) + (m_ceil_nat + 9) % 10 = m_ceil_nat + 9 :=
             Nat.div_add_mod (m_ceil_nat + 9) 10
@@ -454,18 +454,18 @@ lemma lowerPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
         have h_tr_ge_pow18 : truncToValidMantissa m_floor_nat ≥ 10^18 := by
           by_cases h1 : m_floor_nat ≤ maxRep.toNat
           · have h_eq : truncToValidMantissa m_floor_nat = m_floor_nat := by
-              unfold truncToValidMantissa; rw [if_pos h1]
+              unfold truncToValidMantissa; rw [ite_eq_left h1]
             rw [h_eq]; exact h_floor_ge
           · push Not at h1
             by_cases h2 : m_floor_nat < cuspMin
             · have h_eq : truncToValidMantissa m_floor_nat = maxRep.toNat := by
                 unfold truncToValidMantissa
-                rw [if_neg (by omega), if_pos h2]
+                rw [ite_eq_right (by omega), ite_eq_left h2]
               rw [h_eq]; omega
             · push Not at h2
               have h_eq : truncToValidMantissa m_floor_nat = (m_floor_nat / 10) * 10 := by
                 unfold truncToValidMantissa
-                rw [if_neg (by omega), if_neg (by omega)]
+                rw [ite_eq_right (by omega), ite_eq_right (by omega)]
               rw [h_eq]
               have h_div_ge : cuspMin / 10 ≤ m_floor_nat / 10 := Nat.div_le_div_right h2
               have h_cusp_div_v : cuspMin / 10 = mantissaFloorSucc := cuspMin_div_ten

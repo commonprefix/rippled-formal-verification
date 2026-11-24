@@ -2,14 +2,9 @@ import XRPL.Properties.Lending.Ledger.Common.BrokerProofs
 
 /-! # Witnesses for a LoanBrokerCoverDeposit above the asset's range
 
-Runs from a new closed-ended vault, checked by `native_decide`. A broker is created and takes a first cover deposit.
-A second deposit that takes CoverAvailable above the asset's maximum ends in an error where C++ throws while it
-builds the new cover as an amount of the asset, before the Open limit check.
+Cover deposits above the largest XRP or MPT amount end in an error before the Open limit check (FV_M3_10). -/
 
-* XRP: CoverAvailable is 1 drop and the amount is `10^17` drops, the largest XRP amount.
-* MPT: CoverAvailable is 2 units and the amount is `2^63 - 1` units, the largest MPT amount. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -41,7 +36,7 @@ private def bwMptGenesis : LendingLedger :=
 private lemma bwXrpGenesis_genesis : bwXrpGenesis.Genesis where
   created := ⟨none, none, bwSchedule, none, false, .native, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨bwXrpVault.wf, bwXrpVault.valid⟩⟩
+    exact dite_eq_left ⟨bwXrpVault.wf, bwXrpVault.valid⟩⟩
   holds_asset := Or.inr (Or.inl rfl)
   no_holders := rfl
   no_brokers := rfl
@@ -51,7 +46,7 @@ private lemma bwXrpGenesis_genesis : bwXrpGenesis.Genesis where
 private lemma bwMptGenesis_genesis : bwMptGenesis.Genesis where
   created := ⟨none, none, bwSchedule, none, false, .int64, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨bwMptVault.wf, bwMptVault.valid⟩⟩
+    exact dite_eq_left ⟨bwMptVault.wf, bwMptVault.valid⟩⟩
   holds_asset := Or.inr (Or.inr rfl)
   no_holders := rfl
   no_brokers := rfl

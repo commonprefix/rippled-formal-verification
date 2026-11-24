@@ -97,7 +97,7 @@ lemma Number.nearestTo_of_gap (t f : ℚ) (zm : UInt64) (ze' : Int) (r : Number)
 `(zm+1)·10^ze'` with `f ≥ 1/2` (round up). -/
 lemma doRoundUp_clean_down_up (g : Guard) (zm : UInt64) (ze' : Int) (f : ℚ)
     (res_pos : RoundResult) (result : Number) (loc : Error)
-    (hf_rep : represents g f)
+    (hrl : g.RoundsLike f)
     (hrounds : g.doRoundUp false zm ze' largeRange.min largeRange.max .to_nearest loc
       = .ok res_pos)
     (habs : result.toRat = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_)
@@ -111,15 +111,15 @@ lemma doRoundUp_clean_down_up (g : Guard) (zm : UInt64) (ze' : Int) (f : ℚ)
       hrounds hres_ne
     refine ⟨by rw [habs, hval], ?_⟩
     rcases hru with h1 | ⟨h0, _⟩
-    · exact le_of_lt (represents_round_eq_one hf_rep h1)
-    · exact le_of_eq (represents_round_eq_zero hf_rep h0).symm
+    · exact le_of_lt (hrl.2.1.mp h1)
+    · exact le_of_eq (hrl.2.2.mp h0).symm
   · left
     have hzm_le : zm.toNat ≤ maxRep.toNat := by omega
     have hval := doRoundUp_value_no_roundUp g zm ze' hru hzm_le loc res_pos hrounds hres_ne
     refine ⟨by rw [habs, hval], ?_⟩
     by_contra hlt
     push Not at hlt
-    exact hru (Or.inl (represents_f_gt_half hf_rep hlt))
+    exact hru (Or.inl (hrl.2.1.mpr hlt))
 
 /-- `operator_mul` is deterministic at a tie: equal exact products with the same nonzero left factor give equal
 results. -/

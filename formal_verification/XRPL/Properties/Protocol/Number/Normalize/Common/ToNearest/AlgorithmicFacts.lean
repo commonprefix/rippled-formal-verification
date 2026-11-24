@@ -8,10 +8,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Value-preservation lemmas for `Number.normalize`
 
-The normalize pipeline is: exact `scaleUp`, then `scaleDown`+`capAtMaxRep`
-(each dropped decimal digit pushed into the guard), then `doRoundUp`. This file
-proves that the pre-`doRoundUp` state exactly captures `|n.toRat|` in the
-`represents` form `((m.toNat : ℚ) + f) * 10 ^ e`. -/
+`normalize` scales up, drops digits into the guard and calls `doRoundUp`. The state before `doRoundUp` holds the
+exact value as `(m + f) * 10 ^ e`. -/
 
 /-- `doNormalize_scaleDown` preserves the guard's sign bit: every recursive step
 pushes a digit (`Guard.push` keeps `sbit_`), and the base case returns `g`. -/
@@ -21,13 +19,13 @@ lemma doNormalize_scaleDown_sbit_preserved
     g'.sbit_ = g.sbit_ := by
   induction m, e, g using doNormalize_scaleDown.induct (maxMantissa := maxM) generalizing m' e' g' with
   | case1 m e g hgt hmax =>
-    rw [doNormalize_scaleDown, dif_pos hgt, if_pos hmax] at h
+    rw [doNormalize_scaleDown, dite_eq_left hgt, ite_eq_left hmax] at h
     exact absurd h (by intro hh; cases hh)
   | case2 m e g hgt hmax IH =>
-    rw [doNormalize_scaleDown, dif_pos hgt, if_neg hmax] at h
+    rw [doNormalize_scaleDown, dite_eq_left hgt, ite_eq_right hmax] at h
     rw [IH m' e' g' h]; rfl
   | case3 m e g hgt =>
-    rw [doNormalize_scaleDown, dif_neg hgt] at h
+    rw [doNormalize_scaleDown, dite_eq_right hgt] at h
     have hg' : g = g' := (Prod.mk.inj (Prod.mk.inj (Except.ok.inj h)).2).2
     rw [← hg']
 
@@ -39,14 +37,14 @@ lemma doNormalize_capAtMaxRep_sbit_preserved
     g'.sbit_ = g.sbit_ := by
   unfold doNormalize_capAtMaxRep at h
   by_cases hmr : m > maxRepUp
-  · rw [if_pos hmr] at h
+  · rw [ite_eq_left hmr] at h
     by_cases hexp : e ≥ maxExponent
-    · rw [if_pos hexp] at h; exact absurd h (by intro hh; cases hh)
-    · rw [if_neg hexp] at h
+    · rw [ite_eq_left hexp] at h; exact absurd h (by intro hh; cases hh)
+    · rw [ite_eq_right hexp] at h
       simp only [divu10] at h
       have hg' : (g.push (m % 10)) = g' := (Prod.mk.inj (Prod.mk.inj (Except.ok.inj h)).2).2
       rw [← hg']; rfl
-  · rw [if_neg hmr] at h
+  · rw [ite_eq_right hmr] at h
     have hg' : g = g' := (Prod.mk.inj (Prod.mk.inj (Except.ok.inj h)).2).2
     rw [← hg']
 
@@ -62,7 +60,7 @@ theorem doNormalize_scaleUp_value (minMant m : UInt64) (e : Int)
     have hunfold : doNormalize_scaleUpSpec minMant m e
         = doNormalize_scaleUpSpec minMant (m * 10) (e - 1) := by
       conv_lhs => rw [doNormalize_scaleUpSpec]
-      rw [if_pos ⟨hlt, hexp⟩]
+      rw [ite_eq_left ⟨hlt, hexp⟩]
     simp only [hunfold] at *
     -- m < minMant ≤ 10^18, so m.toNat < 10^18, hence m.toNat * 10 < 10^19 < 2^64
     have hm_lt : m.toNat < 10 ^ 18 := by
@@ -84,7 +82,7 @@ theorem doNormalize_scaleUp_value (minMant m : UInt64) (e : Int)
     ring
   | case2 m e hcond =>
     have hunfold : doNormalize_scaleUpSpec minMant m e = (m, e) := by
-      rw [doNormalize_scaleUpSpec]; rw [if_neg hcond]
+      rw [doNormalize_scaleUpSpec]; rw [ite_eq_right hcond]
     rw [hunfold]
 
 /-- When `doNormalize_scaleDown` returns `.ok (m', e', g')`, `m' ≤ maxMantissa` and the value `(m + f0) * 10^e`
@@ -104,7 +102,7 @@ theorem doNormalize_scaleDown_correct
     -- error branch: contradicts hok
     exfalso
     rw [doNormalize_scaleDown] at hok
-    rw [dif_pos hcond, if_pos hexp] at hok
+    rw [dite_eq_left hcond, ite_eq_left hexp] at hok
     exact absurd hok (by intro h; cases h)
   | case2 m e g0 hcond hexp IH =>
     -- recursive branch
@@ -119,7 +117,7 @@ theorem doNormalize_scaleDown_correct
     have hunfold : doNormalize_scaleDown maxMant m e g0
         = doNormalize_scaleDown maxMant (m / 10) (e + 1) (g0.push (m % 10)) := by
       rw [doNormalize_scaleDown]
-      rw [dif_pos hcond, if_neg hexp]
+      rw [dite_eq_left hcond, ite_eq_right hexp]
     rw [hunfold] at hok
     obtain ⟨k, f'', hek, hmle, hval, hrep_g⟩ := IH _ hpush hok
     refine ⟨k + 1, f'', ?_, hmle, ?_, hrep_g⟩
@@ -137,7 +135,7 @@ theorem doNormalize_scaleDown_correct
   | case3 m e g0 hcond =>
     -- base branch: m ≤ maxMant, returns (m, e, g0)
     rw [doNormalize_scaleDown] at hok
-    rw [dif_neg hcond] at hok
+    rw [dite_eq_right hcond] at hok
     obtain ⟨rfl, rfl, rfl⟩ : m = m' ∧ e = e' ∧ g0 = g' := by
       have := Except.ok.inj hok; simp only [Prod.mk.injEq] at this; tauto
     have hmle : m.toNat ≤ maxMant.toNat := by
@@ -160,11 +158,11 @@ theorem doNormalize_capAtMaxRep_correct
       (maxRepUp.toNat < m.toNat → 0 ≤ f0 → ((m.toNat % 10 : ℕ) : ℚ) / 10 ≤ f') := by
   unfold doNormalize_capAtMaxRep at hok
   by_cases hmr : m > maxRepUp
-  · rw [if_pos hmr] at hok
+  · rw [ite_eq_left hmr] at hok
     by_cases hexp : e ≥ maxExponent
-    · rw [if_pos hexp] at hok
+    · rw [ite_eq_left hexp] at hok
       exact absurd hok (by intro h; cases h)
-    · rw [if_neg hexp] at hok
+    · rw [ite_eq_right hexp] at hok
       simp only [divu10] at hok
       obtain ⟨rfl, rfl, rfl⟩ : m / 10 = m' ∧ e + 1 = e' ∧ g0.push (m % 10) = g' := by
         have := Except.ok.inj hok; simp only [Prod.mk.injEq] at this; tauto
@@ -193,7 +191,7 @@ theorem doNormalize_capAtMaxRep_correct
         rw [hMmod_nat]
         gcongr
         linarith
-  · rw [if_neg hmr] at hok
+  · rw [ite_eq_right hmr] at hok
     obtain ⟨rfl, rfl, rfl⟩ : m = m' ∧ e = e' ∧ g0 = g' := by
       have := Except.ok.inj hok; simp only [Prod.mk.injEq] at this; tauto
     have hmle : m.toNat ≤ maxRepUp.toNat := by
@@ -213,13 +211,13 @@ lemma doNormalize_scaleDown_fired_output_le
     m'.toNat ≤ 1844674407370955161 := by
   induction m, e, g using doNormalize_scaleDown.induct (maxMantissa := maxM) generalizing m' e' g' with
   | case1 m e g hgt' hmax =>
-    rw [doNormalize_scaleDown, dif_pos hgt', if_pos hmax] at h
+    rw [doNormalize_scaleDown, dite_eq_left hgt', ite_eq_left hmax] at h
     exact absurd h (by intro hh; cases hh)
   | case2 m e g hgt' hmax IH =>
-    rw [doNormalize_scaleDown, dif_pos hgt', if_neg hmax] at h
+    rw [doNormalize_scaleDown, dite_eq_left hgt', ite_eq_right hmax] at h
     by_cases hgt2 : m / 10 > maxM
     · exact IH m' e' g' hgt2 h
-    · rw [doNormalize_scaleDown, dif_neg hgt2] at h
+    · rw [doNormalize_scaleDown, dite_eq_right hgt2] at h
       have hm'_eq : m / 10 = m' := (Prod.mk.inj (Except.ok.inj h)).1
       have h64 : m.toNat < 2 ^ 64 := UInt64.toNat_lt_size m
       rw [← hm'_eq, UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl]
@@ -252,7 +250,7 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
   replace hok := doNormalize_ok_spec hok
   unfold doNormalizeSpec at hok
   rw [beq_eq_false_iff_ne.mpr hn_mant_ne] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   set su := doNormalize_scaleUpSpec largeRange.min n.mantissa_ n.exponent_ with hsu_def
   set m1 : UInt64 := su.1 with hm1_def
   set e1 : Int := su.2 with he1_def
@@ -270,7 +268,7 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
       rcases hzero with h | h
       · simp [h]
       · simp [h]] at hok
-    simp only [if_true] at hok
+    simp only [ite_true] at hok
     have : Number.zero = result := Except.ok.inj hok
     rw [← this] at hresult; exact absurd rfl hresult
   · push Not at hzero
@@ -278,7 +276,7 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
     rw [show (decide (e2 < minExponent) || decide (m2 < largeRange.min)) = false from by
       rw [Bool.or_eq_false_iff]
       exact ⟨decide_eq_false (not_lt.mpr he2_ge), decide_eq_false hm2_ge⟩] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     obtain ⟨m3, e3, g3, hcap⟩ : ∃ m3 e3 g3,
         doNormalize_capAtMaxRep m2 e2 g2 = .ok (m3, e3, g3) := by
       match hcap : doNormalize_capAtMaxRep m2 e2 g2 with
@@ -317,17 +315,17 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
     have hm3_ge_floor : mantissaFloor ≤ m3.toNat := by
       unfold doNormalize_capAtMaxRep at hcap
       by_cases hmr : m2 > maxRepUp
-      · rw [if_pos hmr] at hcap
+      · rw [ite_eq_left hmr] at hcap
         by_cases hexp3 : e2 ≥ maxExponent
-        · rw [if_pos hexp3] at hcap; exact absurd hcap (by intro h; cases h)
-        · rw [if_neg hexp3] at hcap
+        · rw [ite_eq_left hexp3] at hcap; exact absurd hcap (by intro h; cases h)
+        · rw [ite_eq_right hexp3] at hcap
           simp only [divu10] at hcap
           have hm3_eq : m3 = m2 / 10 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
           rw [hm3_eq, UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl]
           have hmr_nat : maxRepUp.toNat < m2.toNat := UInt64.lt_iff_toNat_lt.mp hmr
           rw [show maxRepUp.toNat = maxRepUpNat from rfl] at hmr_nat
           omega
-      · rw [if_neg hmr] at hcap
+      · rw [ite_eq_right hmr] at hcap
         have hm3_eq : m3 = m2 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
         rw [hm3_eq]; rw [hminMant_v] at hm2_ge_min; omega
     have hm3_le_maxRepUp_v : m3.toNat ≤ maxRepUp.toNat := hm3_le_maxRep
@@ -342,10 +340,10 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
       · have hm3_div : m3.toNat = m2.toNat / 10 := by
           unfold doNormalize_capAtMaxRep at hcap
           have hmr_u : m2 > maxRepUp := UInt64.lt_iff_toNat_lt.mpr hmr
-          rw [if_pos hmr_u] at hcap
+          rw [ite_eq_left hmr_u] at hcap
           by_cases hexp3 : e2 ≥ maxExponent
-          · rw [if_pos hexp3] at hcap; exact absurd hcap (by intro h; cases h)
-          · rw [if_neg hexp3] at hcap
+          · rw [ite_eq_left hexp3] at hcap; exact absurd hcap (by intro h; cases h)
+          · rw [ite_eq_right hexp3] at hcap
             simp only [divu10] at hcap
             have : m3 = m2 / 10 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
             rw [this, UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl]
@@ -357,7 +355,7 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
           have hmr_u : ¬ m2 > maxRepUp := by
             intro hgt
             have := UInt64.lt_iff_toNat_lt.mp hgt; omega
-          rw [if_neg hmr_u] at hcap
+          rw [ite_eq_right hmr_u] at hcap
           have : m3 = m2 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
           rw [this]
         rw [hminMant_v] at hm2_ge_min
@@ -371,17 +369,17 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
         unfold doNormalize_capAtMaxRep at hcap
         by_cases hmr : m2 > maxRepUp
         · exfalso
-          rw [if_pos hmr] at hcap
+          rw [ite_eq_left hmr] at hcap
           by_cases hexp3 : e2 ≥ maxExponent
-          · rw [if_pos hexp3] at hcap; exact absurd hcap (by intro h; cases h)
-          · rw [if_neg hexp3] at hcap
+          · rw [ite_eq_left hexp3] at hcap; exact absurd hcap (by intro h; cases h)
+          · rw [ite_eq_right hexp3] at hcap
             simp only [divu10] at hcap
             have hm3_eq : m3 = m2 / 10 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
             have hdiv : m3.toNat = m2.toNat / 10 := by
               rw [hm3_eq, UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl]
             have h64 : m2.toNat < 2 ^ 64 := UInt64.toNat_lt_size m2
             omega
-        · rw [if_neg hmr] at hcap
+        · rw [ite_eq_right hmr] at hcap
           have h1 : m3 = m2 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
           have h2 : g3 = g2 := (Prod.mk.inj (Prod.mk.inj (Except.ok.inj hcap)).2).2.symm
           exact ⟨h1, h2⟩
@@ -392,25 +390,25 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
           have hb := doNormalize_scaleDown_fired_output_le largeRange.max m1 e1 g0 m2 e2 g2 hm1_gt hsd
           have hm23 : m2.toNat = m3.toNat := by rw [hm32]
           omega
-        · rw [doNormalize_scaleDown, dif_neg hm1_gt] at hsd
+        · rw [doNormalize_scaleDown, dite_eq_right hm1_gt] at hsd
           exact ((Prod.mk.inj (Prod.mk.inj (Except.ok.inj hsd)).2).2).symm
       have hg3_g0 : g3 = g0 := by rw [hg32, hsd_id]
       have hempty : g3.empty = true := by
         rw [hg3_g0, hg0_def]
         by_cases hn : n.negative_
-        · rw [if_pos hn]; decide
-        · rw [if_neg hn]; decide
+        · rw [ite_eq_left hn]; decide
+        · rw [ite_eq_right hn]; decide
       refine ⟨?_, hempty⟩
       have hdig : g3.digits_ = 0 := by
         rw [hg3_g0, hg0_def]
         by_cases hn : n.negative_
-        · rw [if_pos hn]; rfl
-        · rw [if_neg hn]; rfl
+        · rw [ite_eq_left hn]; rfl
+        · rw [ite_eq_right hn]; rfl
       have hxb : g3.xbit_ = false := by
         rw [hg3_g0, hg0_def]
         by_cases hn : n.negative_
-        · rw [if_pos hn]; rfl
-        · rw [if_neg hn]; rfl
+        · rw [ite_eq_left hn]; rfl
+        · rw [ite_eq_right hn]; rfl
       exact represents_eq_zero_of_digits_zero_xbit_false hdig hxb hrep3
     have hres_mant_ne : res.mantissa_ ≠ 0 := by
       rw [hresult_eq] at hresult; exact hresult
@@ -427,8 +425,8 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
     have h_g_sbit : g3.sbit_ = n.negative_ := by
       have h_g0_sbit : g0.sbit_ = n.negative_ := by
         rw [hg0_def]; by_cases hn : n.negative_
-        · rw [if_pos hn, hn]; rfl
-        · rw [if_neg hn]; rw [Bool.not_eq_true] at hn; rw [hn]; rfl
+        · rw [ite_eq_left hn, hn]; rfl
+        · rw [ite_eq_right hn]; rw [Bool.not_eq_true] at hn; rw [hn]; rfl
       have h_g2_sbit : g2.sbit_ = g0.sbit_ :=
         doNormalize_scaleDown_sbit_preserved largeRange.max m1 e1 g0 m2 e2 g2 hsd
       have h_g3_sbit : g3.sbit_ = g2.sbit_ :=
@@ -439,17 +437,17 @@ theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : r
     have hm3_ge_floorSucc : mantissaFloorSucc ≤ m3.toNat := by
       unfold doNormalize_capAtMaxRep at hcap
       by_cases hmr : m2 > maxRepUp
-      · rw [if_pos hmr] at hcap
+      · rw [ite_eq_left hmr] at hcap
         by_cases hexp3 : e2 ≥ maxExponent
-        · rw [if_pos hexp3] at hcap; exact absurd hcap (by intro h; cases h)
-        · rw [if_neg hexp3] at hcap
+        · rw [ite_eq_left hexp3] at hcap; exact absurd hcap (by intro h; cases h)
+        · rw [ite_eq_right hexp3] at hcap
           simp only [divu10] at hcap
           have hm3_eq : m3 = m2 / 10 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
           rw [hm3_eq, UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl]
           have hmr_nat : maxRepUp.toNat < m2.toNat := UInt64.lt_iff_toNat_lt.mp hmr
           rw [show maxRepUp.toNat = maxRepUpNat from rfl] at hmr_nat
           omega
-      · rw [if_neg hmr] at hcap
+      · rw [ite_eq_right hmr] at hcap
         have hm3_eq : m3 = m2 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
         rw [hm3_eq]; rw [hminMant_v] at hm2_ge_min; omega
     refine ⟨m3, e3, f3, g3, res_pos, hm3_ge_floor, hm3_le_maxRepUp_v, hf3_nn, hf3_lt, hfloor_constraint,

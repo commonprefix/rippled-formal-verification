@@ -130,7 +130,7 @@ lemma Vault.Reachable.sharesToAssetsWithdraw_all_ok (v : Vault) (t0 : UInt32) (h
       refine ⟨cash, ?_⟩
       rw [← hcash]
       unfold STAmount.ofNumber
-      simp only [hs1, hs2, Bool.false_eq_true, if_false, hint, if_true, hi, hi', hii]
+      simp only [hs1, hs2, Bool.false_eq_true, ite_false, hint, ite_true, hi, hi', hii]
     · -- a fractional asset: the quotient sits well inside the IOU range
       rw [NumericType.eq_fractional_of_not_integral (nt := v.numericType) (by simpa using hint)]
       obtain ⟨hlo, hhi⟩ := hann.mantissaBounds_nat hanm

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayoffPay
 import XRPL.Properties.Lending.Ledger.Common.VaultGrid
 import XRPL.Properties.Lending.Ledger.Common.RecheckPool
@@ -105,7 +106,7 @@ lemma UnsettledPayment.payoff_settle_sums (p : UnsettledPayment Vault) (hpaid : 
   have hp10 : (0 : ℚ) < 10 ^ p.pool.baseExponent := zpow_pos (by norm_num) _
   have hp1 : (10 : ℚ) ^ p.pool.baseExponent ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) hbase.2
   have hint0 : p.pool.numericType.isIntegral = true → p.pool.baseExponent = 0 := by
-    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [if_pos h]
+    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [ite_eq_left h]
   have hAA0 : 0 ≤ p.pool.assetsAvailable.toRat := p.pool.exact.assetsAvailable_nonneg
   have hAAN := p.pool.wf.assetsAvailable_norm
   obtain ⟨t, ht16, htv⟩ := hdebt
@@ -232,7 +233,7 @@ lemma Vault.payoff_adjust (v : Vault) (hasset : Vault.HoldsAsset v) (toPool pp s
   have hp10 : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
   have hp1 : (10 : ℚ) ^ v.baseExponent ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) hbase.2
   have hint0 : v.numericType.isIntegral = true → v.baseExponent = 0 := by
-    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [if_pos h]
+    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [ite_eq_left h]
   have hAA0 : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
   have hAAN := v.wf.assetsAvailable_norm
   obtain ⟨d, hd16, hdv⟩ := hdep

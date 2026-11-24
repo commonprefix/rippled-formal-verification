@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Loan.Common.ShareValue
 On the coarsened vault of `CoarsenedVault.lean`, an instalment of 1.5 without interest is credited on the
 coarser grid as 1, so AssetsTotal falls. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

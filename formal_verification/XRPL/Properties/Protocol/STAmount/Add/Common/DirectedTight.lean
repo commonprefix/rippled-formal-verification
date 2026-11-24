@@ -26,14 +26,14 @@ lemma IOUAmount.ofNumber_toRange (n : Number) (mode : rounding_mode) (r : IOUAmo
     rw [hnr] at hok
     simp only at hok
     by_cases hhi : e > cMaxOffset
-    · rw [if_pos hhi] at hok; exact absurd hok (by simp)
-    · rw [if_neg hhi] at hok
+    · rw [ite_eq_left hhi] at hok; exact absurd hok (by simp)
+    · rw [ite_eq_right hhi] at hok
       by_cases hlo2 : e < cMinOffset
-      · rw [if_pos hlo2] at hok
+      · rw [ite_eq_left hlo2] at hok
         have hz : r = IOUAmount.zero := (Except.ok.inj hok).symm
         rw [hz] at hne
         exact absurd rfl hne
-      · rw [if_neg hlo2] at hok
+      · rw [ite_eq_right hlo2] at hok
         have hr : (⟨m, e⟩ : IOUAmount) = r := Except.ok.inj hok
         subst hr
         push Not at hhi hlo2
@@ -63,7 +63,7 @@ lemma Number.RoundsToRepresentable.nonneg_of_pos (s : Number) (t : ℚ) (mode : 
     | downward => obtain ⟨n, hlo, hval⟩ := hs; exact hlower n hlo hval
     | towards_zero =>
       obtain ⟨n, hif, hval⟩ := hs
-      rw [if_pos (le_of_lt ht)] at hif
+      rw [ite_eq_left (le_of_lt ht)] at hif
       exact hlower n hif hval
   cases hsn : s.negative_ with
   | false => rfl
@@ -174,12 +174,12 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
       rw [hres_grid0, hval, h1000]; ring
     have hc_ge : M ≤ c * 1000 := by
       rw [hc_def]; rcases Nat.eq_zero_or_pos (M % 1000) with h | h
-      · rw [if_neg (by omega)]; omega
-      · rw [if_pos (by omega)]; omega
+      · rw [ite_eq_right (by omega)]; omega
+      · rw [ite_eq_left (by omega)]; omega
     have hc_lt : c * 1000 < M + 1000 := by
       rw [hc_def]; rcases Nat.eq_zero_or_pos (M % 1000) with h | h
-      · rw [if_neg (by omega)]; omega
-      · rw [if_pos (by omega)]; omega
+      · rw [ite_eq_right (by omega)]; omega
+      · rw [ite_eq_left (by omega)]; omega
     have hcgeq : (M:ℚ) ≤ (c:ℚ)*1000 := by exact_mod_cast hc_ge
     have hcltq : (c:ℚ)*1000 < (M:ℚ) + 1000 := by exact_mod_cast hc_lt
     have hr_le_res : sum.toRat ≤ result.toRat := by
@@ -264,7 +264,7 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
     have hos : sum.toRat - result.toRat < (10:ℚ)^exp := by
       rw [hres_M, hsum_val, hexpeq]; nlinarith [hfltq, hp]
     obtain ⟨nLo, hlo_eq, hsum_eq⟩ := hrepr
-    rw [if_pos h_truth_nn] at hlo_eq
+    rw [ite_eq_left h_truth_nn] at hlo_eq
     have hr_le_truth : sum.toRat ≤ truth := by
       rw [hsum_eq]; exact Number.lower_le truth nLo hlo_eq
     have hres_le_truth : result.toRat ≤ truth := le_trans hres_le_r hr_le_truth
@@ -311,7 +311,7 @@ lemma Number.RoundsToRepresentable.neg_of_neg (s : Number) (t : ℚ) (mode : rou
     | downward => obtain ⟨n, hlo, hval⟩ := hs; exact hlower n hlo hval
     | towards_zero =>
       obtain ⟨n, hif, hval⟩ := hs
-      rw [if_neg (not_le.mpr ht)] at hif
+      rw [ite_eq_right (not_le.mpr ht)] at hif
       exact hupper n hif hval
   cases hsn : s.negative_ with
   | true => rfl
@@ -419,12 +419,12 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
       rw [hres_grid0, hval, h1000]; ring
     have hc_ge : M ≤ c * 1000 := by
       rw [hc_def]; rcases Nat.eq_zero_or_pos (M % 1000) with h | h
-      · rw [if_neg (by omega)]; omega
-      · rw [if_pos (by omega)]; omega
+      · rw [ite_eq_right (by omega)]; omega
+      · rw [ite_eq_left (by omega)]; omega
     have hc_lt : c * 1000 < M + 1000 := by
       rw [hc_def]; rcases Nat.eq_zero_or_pos (M % 1000) with h | h
-      · rw [if_neg (by omega)]; omega
-      · rw [if_pos (by omega)]; omega
+      · rw [ite_eq_right (by omega)]; omega
+      · rw [ite_eq_left (by omega)]; omega
     have hcgeq : (M:ℚ) ≤ (c:ℚ)*1000 := by exact_mod_cast hc_ge
     have hcltq : (c:ℚ)*1000 < (M:ℚ) + 1000 := by exact_mod_cast hc_lt
     obtain ⟨Mr, hcast, hmtu_lo, hmtu_hi⟩ :=
@@ -477,7 +477,7 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
     have hos : result.toRat - sum.toRat < (10:ℚ)^exp := by
       rw [hres_M, hsum_val, hexpeq]; nlinarith [hfltq, hp]
     obtain ⟨nUp, hif, hsum_eq⟩ := hrepr
-    rw [if_neg (not_le.mpr htruth_neg)] at hif
+    rw [ite_eq_right (not_le.mpr htruth_neg)] at hif
     have htruth_le_r : truth ≤ sum.toRat := by
       rw [hsum_eq]; exact Number.le_upper truth nUp hif
     have htruth_le_res : truth ≤ result.toRat := le_trans htruth_le_r hr_le_res

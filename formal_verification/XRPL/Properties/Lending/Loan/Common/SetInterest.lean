@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.SetLawful
 import XRPL.Properties.Lending.Loan.Common.ReachableDefs
 
@@ -46,7 +47,7 @@ private lemma loanPeriodicPayment_nonpos (principal rate : Number) (pr : UInt32)
     (hp : principal.isNormalized) (hp0 : principal.toRat ≤ 0) (hrate : rate.isNormalized)
     (hr0 : 0 ≤ rate.toRat) (h : loanPeriodicPayment principal rate pr = .ok r) : r.toRat ≤ 0 := by
   have hN := Number.ofInt64_isNormalized pr.toInt64
-  have hN0 : 0 ≤ (Number.ofInt64 pr.toInt64).toRat := by rw [Number.ofInt64_count]; positivity
+  have hN0 : 0 ≤ (Number.ofInt64 pr.toInt64 .to_nearest).toRat := by rw [Number.ofInt64_count]; positivity
   unfold loanPeriodicPayment at h
   dsimp only at h
   split at h

@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 A LoanServiceFee of `10^12` paid into a cover below its minimum leaves `1000000000001` at the scale `10^-10`.
 Defaulting a loan of `1.0000000001` leaves `999999999999.9999999999`, which a `Number` rounds to `10^12`. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -26,7 +26,7 @@ private def cpGenesis : LendingLedger := { vault := cpVault, shares := [], broke
 private lemma cpGenesis_genesis : cpGenesis.Genesis where
   created := ⟨some 10, none, cpSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨cpVault.wf, cpVault.valid⟩⟩
+    exact dite_eq_left ⟨cpVault.wf, cpVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

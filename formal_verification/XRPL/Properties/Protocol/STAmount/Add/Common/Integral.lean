@@ -15,11 +15,11 @@ lemma STAmount.toRat_of_offset_zero (s : STAmount) (ho : s.mOffset = 0) :
   unfold STAmount.toRat STAmount.signedDrops
   by_cases hm : s.mValue = 0
   · simp [hm]
-  rw [if_neg hm, ho]
-  simp only [ge_iff_le, le_refl, if_true, Int.toNat_zero, pow_zero, mul_one, Rat.mkRat_one]
+  rw [ite_eq_right hm, ho]
+  simp only [ge_iff_le, le_refl, ite_true, Int.toNat_zero, pow_zero, mul_one, Rat.mkRat_one]
   by_cases hneg : s.mIsNegative
-  · rw [if_pos hneg, if_pos hneg]; push_cast; ring
-  · rw [if_neg hneg, if_neg hneg]; push_cast; ring
+  · rw [ite_eq_left hneg, ite_eq_left hneg]; push_cast; ring
+  · rw [ite_eq_right hneg, ite_eq_right hneg]; push_cast; ring
 
 /-- A record with magnitude `|r|`, offset `0` and sign bit `r < 0` has the value `r`. -/
 lemma STAmount.reconstruct_toRat (nt : NumericType) (r : Int64) :
@@ -28,10 +28,10 @@ lemma STAmount.reconstruct_toRat (nt : NumericType) (r : Int64) :
   have hsigned : (if decide (r < 0) then -(r.toInt.natAbs : ℤ) else (r.toInt.natAbs : ℤ))
       = r.toInt := by
     by_cases hrneg : r < 0
-    · rw [if_pos (by simpa using hrneg)]
+    · rw [ite_eq_left (by simpa using hrneg)]
       have hri : r.toInt ≤ 0 := le_of_lt (by simpa using Int64.lt_iff_toInt_lt.mp hrneg)
       rw [Int.ofNat_natAbs_of_nonpos hri]; ring
-    · rw [if_neg (by simpa using hrneg)]
+    · rw [ite_eq_right (by simpa using hrneg)]
       have hri : 0 ≤ r.toInt := by
         rcases lt_or_ge r.toInt 0 with h | h
         · exact absurd (Int64.lt_iff_toInt_lt.mpr (by simpa using h)) hrneg
@@ -67,19 +67,19 @@ lemma STAmount.canonicalize_integral_toRat (s result : STAmount) (mode : roundin
   have hval_lt : s.mValue.toNat < 2 ^ 64 := by
     have hk : maxRep.toNat < 2 ^ 64 := by decide
     omega
-  rw [STAmount.canonicalize, if_pos hint] at hok
+  rw [STAmount.canonicalize, ite_eq_left hint] at hok
   by_cases hz : s.mValue == 0
-  · rw [if_pos (by rw [hz]; rfl)] at hok
+  · rw [ite_eq_left (by rw [hz]; rfl)] at hok
     rw [beq_iff_eq] at hz
     rw [Except.ok.inj hok.symm, STAmount.toRat_of_offset_zero _ rfl,
         STAmount.toRat_of_offset_zero s hoff]
     simp only [STAmount.signedDrops]; rw [hz]; simp
   · have hz' : (s.mValue == 0) = false := by simpa using hz
-    rw [if_neg (by rw [hz', hoff]; decide)] at hok
+    rw [ite_eq_right (by rw [hz', hoff]; decide)] at hok
     -- The offset guard `mOffset > maxOffset` cannot fire: it would error, but `hok` succeeds.
     by_cases hmoff : s.mOffset > s.mNumericType.maxOffset
-    · rw [if_pos hmoff] at hok; simp at hok
-    rw [if_neg hmoff] at hok
+    · rw [ite_eq_left hmoff] at hok; simp at hok
+    rw [ite_eq_right hmoff] at hok
     -- canonicalize rounds the SIGNED Number via IntAmount.ofNumber. At offset 0 `to_rep` is exact,
     -- so `r = signedDrops`, and the result reconstructs that value.
     simp only [hoff, IntAmount.ofNumber] at hok
@@ -98,8 +98,8 @@ lemma STAmount.canonicalize_integral_toRat (s result : STAmount) (mode : roundin
         rw [hr_sd]; unfold STAmount.signedDrops; split <;> simp
       -- The range guard `v > maxValue` cannot fire either: it would error, but `hok` succeeds.
       by_cases hrng : r.magnitude > s.mNumericType.maxValue
-      · rw [if_pos hrng] at hok; simp at hok
-      rw [if_neg hrng] at hok
+      · rw [ite_eq_left hrng] at hok; simp at hok
+      rw [ite_eq_right hrng] at hok
       rw [Except.ok.inj hok.symm,
           STAmount.reconstruct_toRat s.mNumericType r,
           hr_sd, ← STAmount.toRat_of_offset_zero s hoff]

@@ -3,9 +3,8 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundsUp
 
 /-! # When a rounding step stays within a limit
 
-A rounding keeps digits `q`, drops a fraction `f` and adds one to `q` or not (`RoundsUp`). The main lemma,
-`roundsWithinUnits_iff`, says the rounded digits stay within a limit `L` exactly when the exact value is inside the
-bounds of the mode. `STAmount.RoundsInRange` is these bounds for the largest amount of each type. -/
+`roundsWithinUnits_iff`: the rounded digits stay within a limit exactly when the exact value is inside the bounds of
+the mode. `STAmount.RoundsInRange` is these bounds for the largest amount of each type. -/
 
 namespace XRPL.Model.Protocol
 
@@ -96,9 +95,9 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
   have hgt : (L : ℤ) + 1 ≤ q → (L : ℚ) + 1 ≤ (q : ℚ) := fun h => by exact_mod_cast h
   have habs : |(if neg = true then (-1 : ℚ) else 1) * ((q : ℚ) + f)| = (q : ℚ) + f := by
     cases neg
-    · simp only [Bool.false_eq_true, if_false, one_mul]
+    · simp only [Bool.false_eq_true, ite_false, one_mul]
       exact abs_of_nonneg hw
-    · simp only [if_true, neg_one_mul, abs_neg]
+    · simp only [ite_true, neg_one_mul, abs_neg]
       exact abs_of_nonneg hw
   cases mode with
   | towards_zero =>
@@ -107,7 +106,7 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
       · rfl
       · exact absurd (hup.mp rfl) (by simp [RoundsUp])
     subst hno
-    simp only [RoundsWithinUnits, mul_one, habs, Bool.false_eq_true, if_false, add_zero]
+    simp only [RoundsWithinUnits, mul_one, habs, Bool.false_eq_true, ite_false, add_zero]
     constructor
     · intro h
       have := hle h
@@ -122,7 +121,7 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
     · have hnp : ¬ (1 / 2 < f ∨ (f = 1 / 2 ∧ q % 2 = 1)) := fun hp => Bool.false_ne_true (hup.mpr hp)
       rw [not_or] at hnp
       obtain ⟨hf_le, hnodd⟩ := hnp
-      simp only [Bool.false_eq_true, if_false, add_zero]
+      simp only [Bool.false_eq_true, ite_false, add_zero]
       constructor
       · intro h
         rcases lt_or_eq_of_le (not_lt.mp hf_le) with hf_lt | hf_eq
@@ -145,7 +144,7 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
         have := hgt (by omega)
         rcases h with h | ⟨h, -⟩ <;> linarith
     · have hp := hup.mp rfl
-      simp only [if_true]
+      simp only [ite_true]
       constructor
       · intro h
         left
@@ -168,7 +167,7 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
         · rfl
         · exact absurd (hup.mp rfl) (by simp [RoundsUp])
       subst hno
-      simp only [RoundsWithinUnits, mul_one, Bool.false_eq_true, if_false, one_mul, add_zero]
+      simp only [RoundsWithinUnits, mul_one, Bool.false_eq_true, ite_false, one_mul, add_zero]
       constructor
       · intro h
         have := hle h
@@ -177,12 +176,12 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
         by_contra hc
         have := hgt (by omega)
         linarith [h.2]
-    · simp only [RoundsWithinUnits, mul_one, if_true, neg_one_mul]
+    · simp only [RoundsWithinUnits, mul_one, ite_true, neg_one_mul]
       cases up
       · have hf_zero : f = 0 := by
           by_contra hne
           exact Bool.false_ne_true (hup.mpr ⟨rfl, lt_of_le_of_ne hf0 (Ne.symm hne)⟩)
-        simp only [Bool.false_eq_true, if_false, add_zero, hf_zero]
+        simp only [Bool.false_eq_true, ite_false, add_zero, hf_zero]
         constructor
         · intro h
           have := hle h
@@ -192,7 +191,7 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
           have := hgt (by omega)
           linarith [h.1]
       · have hf_pos : 0 < f := (hup.mp rfl).2
-        simp only [if_true]
+        simp only [ite_true]
         constructor
         · intro h
           have := hlt h
@@ -203,12 +202,12 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
           linarith [h.1]
   | upward =>
     cases neg
-    · simp only [RoundsWithinUnits, mul_one, Bool.false_eq_true, if_false, one_mul]
+    · simp only [RoundsWithinUnits, mul_one, Bool.false_eq_true, ite_false, one_mul]
       cases up
       · have hf_zero : f = 0 := by
           by_contra hne
           exact Bool.false_ne_true (hup.mpr ⟨rfl, lt_of_le_of_ne hf0 (Ne.symm hne)⟩)
-        simp only [Bool.false_eq_true, if_false, add_zero, hf_zero]
+        simp only [Bool.false_eq_true, ite_false, add_zero, hf_zero]
         constructor
         · intro h
           have := hle h
@@ -218,7 +217,7 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
           have := hgt (by omega)
           linarith [h.2]
       · have hf_pos : 0 < f := (hup.mp rfl).2
-        simp only [if_true]
+        simp only [ite_true]
         constructor
         · intro h
           have := hlt h
@@ -232,7 +231,7 @@ lemma roundsWithinUnits_iff (mode : rounding_mode) (neg : Bool) (q : ℤ) (L : �
         · rfl
         · exact absurd (hup.mp rfl) (by simp [RoundsUp])
       subst hno
-      simp only [RoundsWithinUnits, mul_one, if_true, neg_one_mul, Bool.false_eq_true, if_false, add_zero]
+      simp only [RoundsWithinUnits, mul_one, ite_true, neg_one_mul, Bool.false_eq_true, ite_false, add_zero]
       constructor
       · intro h
         have := hle h

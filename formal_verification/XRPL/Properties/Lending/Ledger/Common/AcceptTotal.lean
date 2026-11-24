@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.ManageTotal
 import XRPL.Properties.Lending.Ledger.Common.PhaseProofs
 import XRPL.Properties.Lending.Ledger.Common.SubscriptionInv

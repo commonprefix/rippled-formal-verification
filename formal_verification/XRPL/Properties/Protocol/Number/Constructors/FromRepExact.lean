@@ -7,10 +7,8 @@ import XRPL.Properties.Protocol.Number.Constructors.Common.Proofs
 
 /-! # `from_rep` is value-exact on any in-range `Int64` mantissa
 
-`from_rep` (hence `IOUAmount.toNumber`) only ever scales an `Int64` mantissa up into the
-internal `largeRange = [10¹⁸, 10¹⁹)`, which is exact, with no rounding. The single
-exception is `mantissa = Int64.minValue`, whose magnitude `2⁶³` lands in the cusp
-`(maxRep, maxRepUp)` where `pushOverflow` rounds, so the theorem excludes it. -/
+`from_rep` scales an `Int64` mantissa into `[10¹⁸, 10¹⁹)` exactly. The one exception is `Int64.minValue`, whose
+magnitude `2⁶³` lands in the cusp above `maxRep` and gets rounded, so the theorem excludes it. -/
 
 namespace XRPL.Model.Protocol
 
@@ -20,20 +18,20 @@ lemma doNormalize_scaleUp_exp_ge (minMant m : UInt64) (e : Int) :
   induction m, e using doNormalize_scaleUpSpec.induct (minMantissa := minMant) with
   | case1 m e hcond IH =>
     intro _
-    rw [doNormalize_scaleUpSpec, if_pos hcond]
+    rw [doNormalize_scaleUpSpec, ite_eq_left hcond]
     exact IH (by obtain ⟨_, h⟩ := hcond; omega)
   | case2 m e hcond =>
     intro he
-    rw [doNormalize_scaleUpSpec, if_neg hcond]; exact he
+    rw [doNormalize_scaleUpSpec, ite_eq_right hcond]; exact he
 
 /-- `doNormalize_scaleUpSpec` does not increase the exponent. -/
 lemma doNormalize_scaleUp_exp_le (minMant m : UInt64) (e : Int) :
     (doNormalize_scaleUpSpec minMant m e).2 ≤ e := by
   induction m, e using doNormalize_scaleUpSpec.induct (minMantissa := minMant) with
   | case1 m e hcond IH =>
-    rw [doNormalize_scaleUpSpec, if_pos hcond]; omega
+    rw [doNormalize_scaleUpSpec, ite_eq_left hcond]; omega
   | case2 m e hcond =>
-    rw [doNormalize_scaleUpSpec, if_neg hcond]
+    rw [doNormalize_scaleUpSpec, ite_eq_right hcond]
 
 /-- With `minMant ≤ 10¹⁸`, `doNormalize_scaleUpSpec` keeps the mantissa below `10¹⁹`. -/
 lemma doNormalize_scaleUp_lt19 (minMant m : UInt64) (e : Int)
@@ -42,14 +40,14 @@ lemma doNormalize_scaleUp_lt19 (minMant m : UInt64) (e : Int)
   induction m, e using doNormalize_scaleUpSpec.induct (minMantissa := minMant) with
   | case1 m e hcond IH =>
     intro _
-    rw [doNormalize_scaleUpSpec, if_pos hcond]
+    rw [doNormalize_scaleUpSpec, ite_eq_left hcond]
     obtain ⟨hlt, _⟩ := hcond
     have hmlt : m.toNat < minMant.toNat := UInt64.lt_iff_toNat_lt.mp hlt
     have hm10 : (m * 10).toNat = m.toNat * 10 := by
       rw [UInt64.toNat_mul, uint64_ten_toNat]; exact Nat.mod_eq_of_lt (by omega)
     exact IH (by rw [hm10]; omega)
   | case2 m e hcond =>
-    intro hm; rw [doNormalize_scaleUpSpec, if_neg hcond]; exact hm
+    intro hm; rw [doNormalize_scaleUpSpec, ite_eq_right hcond]; exact hm
 
 /-- `doNormalize_scaleUpSpec` exits either at the input (no scaling) or at a multiple of 10
 (at least one `×10` step). Requires `minMant ≤ 10¹⁸` so the scaling steps don't overflow. -/
@@ -58,7 +56,7 @@ lemma doNormalize_scaleUp_id_or_mul10 (minMant m : UInt64) (e : Int)
     (doNormalize_scaleUpSpec minMant m e).1 = m ∨ (doNormalize_scaleUpSpec minMant m e).1.toNat % 10 = 0 := by
   induction m, e using doNormalize_scaleUpSpec.induct (minMantissa := minMant) with
   | case1 m e hcond IH =>
-    rw [doNormalize_scaleUpSpec, if_pos hcond]
+    rw [doNormalize_scaleUpSpec, ite_eq_left hcond]
     obtain ⟨hlt, _⟩ := hcond
     have hmlt : m.toNat < minMant.toNat := UInt64.lt_iff_toNat_lt.mp hlt
     have hm10 : (m * 10).toNat = m.toNat * 10 := by
@@ -67,7 +65,7 @@ lemma doNormalize_scaleUp_id_or_mul10 (minMant m : UInt64) (e : Int)
     · right; rw [h, hm10]; omega
     · right; exact h
   | case2 m e hcond =>
-    left; rw [doNormalize_scaleUpSpec, if_neg hcond]
+    left; rw [doNormalize_scaleUpSpec, ite_eq_right hcond]
 
 /-- `doNormalize_scaleUpSpec` exits either at the input mantissa or at least one exponent lower. -/
 lemma doNormalize_scaleUp_id_or_exp_lt (minMant m : UInt64) (e : Int) :
@@ -75,10 +73,10 @@ lemma doNormalize_scaleUp_id_or_exp_lt (minMant m : UInt64) (e : Int) :
   induction m, e using doNormalize_scaleUpSpec.induct (minMantissa := minMant) with
   | case1 m e hcond _ =>
     right
-    rw [doNormalize_scaleUpSpec, if_pos hcond]
+    rw [doNormalize_scaleUpSpec, ite_eq_left hcond]
     exact doNormalize_scaleUp_exp_le minMant (m * 10) (e - 1)
   | case2 m e hcond =>
-    left; rw [doNormalize_scaleUpSpec, if_neg hcond]
+    left; rw [doNormalize_scaleUpSpec, ite_eq_right hcond]
 
 set_option maxHeartbeats 800000 in
 -- unfolds the full normalize pipeline (scaleUp / scaleDown / capAtMaxRep / doRoundUp)
@@ -165,7 +163,7 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
   all_goals try min_fit
   unfold doNormalizeSpec
   rw [show (m == 0) = false from Bool.eq_false_iff.mpr hm_ne]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [hMe1]
   simp only []
   rw [← hg0_def, doNormalize_scaleDown_id largeRange.max M e1 g0 hM_le_max]
@@ -175,7 +173,7 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
     refine ⟨decide_eq_false (by omega), decide_eq_false ?_⟩
     rw [UInt64.lt_iff_toNat_lt, hminN]; omega
   rw [h_zero_check]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   by_cases h_cap : M > maxRepUp
   · -- divide arm: M is a multiple of 10 (since M > maxRepUp > maxRep ≥ m forces a scale step)
     have hM_gt_maxRep : maxRep < M := by
@@ -196,7 +194,7 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
     have h_cap_eq : doNormalize_capAtMaxRep M e1 g0
         = .ok (M / 10, e1 + 1, g0.push (M % 10)) := by
       unfold doNormalize_capAtMaxRep
-      rw [if_pos h_cap, if_neg (by omega : ¬ (e1 ≥ maxExponent))]; rfl
+      rw [ite_eq_left h_cap, ite_eq_right (by omega : ¬ (e1 ≥ maxExponent))]; rfl
     rw [h_cap_eq]
     simp only []
     have hMmod10 : (M % 10) = 0 := by
@@ -207,7 +205,7 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
     rfl
   · -- keep arm: capAtMaxRep is identity, M avoids the (maxRep, maxRepUp) cusp
     have h_cap_eq : doNormalize_capAtMaxRep M e1 g0 = .ok (M, e1, g0) := by
-      unfold doNormalize_capAtMaxRep; rw [if_neg h_cap]
+      unfold doNormalize_capAtMaxRep; rw [ite_eq_right h_cap]
     rw [h_cap_eq]
     simp only []
     have h_no_cusp : ¬ (maxRep < M ∧ M < maxRepUp) := by
@@ -242,7 +240,7 @@ theorem Number.from_rep_exact (mantissa : Int64) (e : Int) (mode : rounding_mode
     · rw [hfr]; unfold doNormalize
       have : m == 0 := by
         rw [beq_iff_eq, ← UInt64.toNat_inj, hmt, hz]; rfl
-      rw [if_pos this]
+      rw [ite_eq_left this]
     · rw [Number.toRat_zero, hz]; push_cast; ring
   · -- nonzero mantissa: apply the general exactness lemma
     have hpos : 1 ≤ m.toNat := by rw [hmt]; omega

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.CashPrecision
 import XRPL.Properties.Lending.Ledger.Common.TotalStoredInv
 import XRPL.Properties.Lending.Ledger.Common.ClosedLoans
@@ -28,7 +29,7 @@ private lemma LendingLedger.principalOn_le_brokerPrincipal (l : LendingLedger) (
   have := List.single_le_sum hnn _ (List.mem_map_of_mem (f := LoanEntry.principalOn e.brokerIndex)
     (List.getElem_mem hi))
   rw [hei] at this
-  simpa [LoanEntry.principalOn] using this
+  simpa [LoanEntry.principalOn] using! this
 
 /-- On a reachable ledger the vault update of a pending delete succeeds and passes its re-check, when
 AssetsAvailable plus the principal fits the asset. -/
@@ -95,7 +96,7 @@ private lemma LendingLedger.pending_delete_vault (l : LendingLedger) (hr : l.Rea
   have hPOle : loan.principalOutstanding.toRat ≤ l.vault.assetsDeployed.toRat := by
     have := l.principalIf_le_sum (fun _ => true) i
     rw [he] at this
-    simp only [LoanEntry.principalIf, if_true] at this
+    simp only [LoanEntry.principalIf, ite_true] at this
     rw [hADs, hpo]; exact this
   have hADlt := hunits _ hloss.deployed
   obtain ⟨ad', had'⟩ := Number.operator_add_ok_of_small l.vault.assetsDeployed loan.principalOutstanding.operator_neg
@@ -109,7 +110,7 @@ private lemma LendingLedger.pending_delete_vault (l : LendingLedger) (hr : l.Rea
   have hPOar : loan.principalOutstanding.toRat ≤ l.vault.assetsReserved.toRat := by
     have := l.principalIf_le_sum (·.isPending) i
     rw [he] at this
-    simp only [LoanEntry.principalIf, hp, if_true] at this
+    simp only [LoanEntry.principalIf, hp, ite_true] at this
     rw [hres.sum, hpo]; exact this
   have hARlt := hunits _ hres.bound
   obtain ⟨ar', har'⟩ := Number.operator_add_ok_of_small l.vault.assetsReserved principal'.operator_neg .to_nearest

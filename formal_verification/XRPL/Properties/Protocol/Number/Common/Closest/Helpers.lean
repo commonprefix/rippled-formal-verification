@@ -10,26 +10,11 @@ namespace XRPL.Model.Protocol
 
 /-! # Discrete-grid primitives for representable Numbers
 
-For any rational `q`, define:
-- `Number.upper q`: the smallest representable Number with `n.toRat ≥ q`
-- `Number.lower q`: the largest representable Number with `n.toRat ≤ q`
-
-Both return `none` when `|q|` is too large for a Number.
-
-These are the foundation for interval arithmetic over Numbers and for the
-`_rounded` theorems that state operator correctness in discrete terms.
-
-The set of valid (normalized) Number mantissas in `largeRange` is asymmetric
-near the cusp:
-- `[10^18, maxRep]`: every integer is valid (spacing 1)
-- `(maxRep, 2^63 + 2)`: NO valid mantissas (the cusp gap)
-- `2^63 + 2 = maxRepCuspTarget`: valid (smallest above maxRep)
-- Above: only multiples of 10 (spacing 10)
-- Up to `10^19 - 10`: valid
-
-Internal helpers `bumpToValidMantissa` (round up) and `truncToValidMantissa`
-(round down) encapsulate the cusp logic. The top-level `Number.upper` and
-`Number.lower` use them along with exponent normalization via `Int.log 10`. -/
+`Number.upper q` and `Number.lower q` are the nearest normalized Numbers at or above and at or below `q`, or `none`
+when `|q|` is too large. The valid mantissas are not evenly spaced near `maxRep`:
+- `[10^18, maxRep]`: every integer
+- `(maxRep, 2^63 + 2)`: none (the cusp gap)
+- `2^63 + 2 = maxRepCuspTarget` up to `10^19 - 10`: multiples of 10 only -/
 
 /-- Smallest mantissa value strictly greater than `maxRep` that satisfies the
 divisibility-by-10 invariant. Equals `2^63 + 2 = maxRepCuspTarget`. -/
@@ -72,13 +57,13 @@ lemma bumpToValidMantissa_ge (m : ℕ) (m_out : ℕ)
   · have h_eq : m_out = cuspMin := (Option.some.inj h).symm
     rw [h_eq]; omega
   · by_cases hr : ((m + 9) / 10) * 10 < 10^19
-    · rw [if_pos hr] at h
+    · rw [ite_eq_left hr] at h
       have h_eq : m_out = ((m + 9) / 10) * 10 := (Option.some.inj h).symm
       rw [h_eq]
       have h_div : 10 * ((m + 9) / 10) + (m + 9) % 10 = m + 9 := Nat.div_add_mod (m + 9) 10
       have h_mod : (m + 9) % 10 < 10 := Nat.mod_lt _ (by omega)
       omega
-    · rw [if_neg hr] at h
+    · rw [ite_eq_right hr] at h
       exact absurd h (by simp)
 
 /-- `truncToValidMantissa` is monotone-down: output ≤ input. -/
@@ -104,12 +89,12 @@ lemma bumpToValidMantissa_valid (m : ℕ) (m_out : ℕ)
     have h_eq : m_out = cuspMin := (Option.some.inj h).symm
     rw [h_eq]; exact cuspMin_mod_ten
   · by_cases hr : ((m + 9) / 10) * 10 < 10^19
-    · rw [if_pos hr] at h
+    · rw [ite_eq_left hr] at h
       right
       have h_eq : m_out = ((m + 9) / 10) * 10 := (Option.some.inj h).symm
       rw [h_eq]
       exact Nat.mul_mod_left _ _
-    · rw [if_neg hr] at h
+    · rw [ite_eq_right hr] at h
       exact absurd h (by simp)
 
 /-- `bumpToValidMantissa`'s output is below `10^19`. -/
@@ -126,10 +111,10 @@ lemma bumpToValidMantissa_lt_pow19 (m : ℕ) (m_out : ℕ)
   · have h_eq : m_out = cuspMin := (Option.some.inj h).symm
     rw [h_eq]; exact cuspMin_lt_pow19
   · by_cases hr : ((m + 9) / 10) * 10 < 10^19
-    · rw [if_pos hr] at h
+    · rw [ite_eq_left hr] at h
       have h_eq : m_out = ((m + 9) / 10) * 10 := (Option.some.inj h).symm
       rw [h_eq]; exact hr
-    · rw [if_neg hr] at h
+    · rw [ite_eq_right hr] at h
       exact absurd h (by simp)
 
 /-- `truncToValidMantissa`'s output is in the valid set. -/
@@ -159,7 +144,7 @@ lemma bumpToValidMantissa_tight (m : ℕ) (m_out : ℕ)
       have hcusp : cuspMin = maxRepCuspTarget := rfl
       omega
   · by_cases hr : ((m + 9) / 10) * 10 < 10^19
-    · rw [if_pos hr] at h
+    · rw [ite_eq_left hr] at h
       have h_eq : m_out = ((m + 9) / 10) * 10 := (Option.some.inj h).symm
       rw [h_eq]
       rcases h_k_valid with hk_le | ⟨_, hk_mod, _⟩
@@ -178,7 +163,7 @@ lemma bumpToValidMantissa_tight (m : ℕ) (m_out : ℕ)
         calc (m + 9) / 10 * 10 ≤ (k / 10) * 10 := by
               exact Nat.mul_le_mul_right 10 h_div_le
           _ = k := h_km.symm
-    · rw [if_neg hr] at h
+    · rw [ite_eq_right hr] at h
       exact absurd h (by simp)
 
 /-- `truncToValidMantissa` produces the LARGEST valid mantissa ≤ input. -/

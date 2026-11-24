@@ -4,9 +4,8 @@ import XRPL.Properties.Lending.Ledger.Common.FullClawbackWitness
 
 /-! # Every transaction passes its lawfulness re-check
 
-Every vault, broker and loan operation ends by re-checking the objects it writes. On a reachable ledger the
-re-check never fails, given the C++ checks and balances the model runs elsewhere or not at all, except a full
-VaultClawback on a large MPT vault (FV_M4_36, FV_M4_38). -/
+On a reachable ledger, given the C++ checks the model runs elsewhere or not at all, the re-check that ends every
+vault, broker and loan operation never fails, except a full VaultClawback on a large MPT vault (FV_M4_36, FV_M4_38). -/
 
 namespace XRPL.Model
 
@@ -41,19 +40,13 @@ theorem Lending.transactions_lawful (hr : l.Reachable) :
       (∀ b, l.broker? i = some b → STAmount.isRounded b.numericType b.coverAvailable = false) →
       (l.apply (.loanBrokerCoverClawback i amount)).run ≠ .error .notLawful) ∧
     (∀ i : Nat, (l.apply (.loanBrokerDelete i)).run ≠ .error .notLawful) ∧
-    -- VaultDeposit: the new shares keep SharesTotal within the share MPT maximum, which C++ accountSend enforces and
-    -- the model does not run
     (∀ (h : Nat) (amount : STAmount) (isDonation : Bool),
-      (∀ ra amounts, (l.vault.roundedDepositAmount amount).run = .ok (.ok ra) →
-        (computeDeposit l.vault ra isDonation).run = .ok (.ok amounts) →
-        (l.vault.toExact.sharesTotal : ℚ) + amounts.shares.toRat ≤ 2 ^ 63 - 1) →
       (l.apply (.vaultDeposit h amount isDonation)).run ≠ .error .notLawful) ∧
     -- VaultWithdraw: the holder's shares are within SharesTotal, which C++ keeps for the share MPT
     (∀ (h : Nat) (amount : WithdrawAmount), (l.sharesOf h).toRat ≤ l.vault.sharesTotal.toRat →
       (l.apply (.vaultWithdraw h amount)).run ≠ .error .notLawful) ∧
-    -- VaultClawback of assets: the holder's shares are a whole number within SharesTotal, and the holder owns the
-    -- shares destroyed (C++ accountSend). An MPT vault holds less than `10^16` units: from about 10^18 units the price
-    -- of all the shares can miss the cash (FV_M4_36, FV_M4_38)
+    -- VaultClawback of assets: the holder's shares are whole, within SharesTotal and cover the shares destroyed (C++
+    -- accountSend). An MPT vault holds less than `10^16` units, else a full clawback can fail (FV_M4_36, FV_M4_38)
     (∀ (h : Nat) (assets : STAmount),
       ((l.sharesOf h).toRat.den = 1 ∧ 0 ≤ (l.sharesOf h).toRat ∧ (l.sharesOf h).toRat ≤ l.vault.sharesTotal.toRat) →
       (∀ (hs : STAmount) (amounts : VaultAmounts), STAmount.ofNumber .int64 (l.sharesOf h) .to_nearest = .ok hs →

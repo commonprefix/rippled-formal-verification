@@ -3,14 +3,10 @@ import XRPL.Model.Protocol.STAmount
 
 /-! # The values that round to an amount of a type
 
-An IOU amount has 16 digits and an exponent up to 80, so the largest one is `9999999999999999 * 10^80`. An XRP or
-MPT amount is a whole number up to the `maxValue` of its type. `STAmount.RoundsInRange` says that a value, rounded
-once in the mode, is still such an amount. A value that is too small is in range, because it rounds to zero. -/
+`STAmount.RoundsInRange` says that a value, rounded once in the mode, is an amount of the type: at most
+`9999999999999999 * 10^80` for IOU, or a whole number up to `maxValue` for XRP and MPT. -/
 
 namespace XRPL.Model.Protocol
-
-/-- The smallest int64, `-2^63` (`INT64_MIN`). Its size is one above `maxRep`, the largest int64. -/
-def minInt64 : ℚ := -9223372036854775808
 
 /-- The exact value `v`, rounded once in the mode, is an amount of the type. -/
 def STAmount.RoundsInRange (nt : NumericType) (mode : rounding_mode) (v : ℚ) : Prop :=

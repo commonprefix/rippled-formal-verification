@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.ScheduledDue
 import XRPL.Properties.Lending.Loan.Common.RegularPayoff
 import XRPL.Properties.Lending.Loan.Common.PaymentRoom
@@ -356,9 +357,8 @@ private lemma Loan.tryOverpayment_amounts (l : Loan) (opc : PaymentComponents) (
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   exact ⟨rfl, ‹_›, Loan.reamortized_principal_le l opc hlo hint gpd hpd0 hpdb ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›⟩
 
@@ -374,10 +374,10 @@ private lemma STAmount.roundToNumericType_towards_zero_some_le (nt : NumericType
     simp only at h
     obtain ⟨hret0, hretle⟩ := STAmount.ofNumber_towards_zero_le nt x ret hx h0 hof
     by_cases hint : ret.integral = true
-    · rw [if_pos hint] at h
+    · rw [ite_eq_left hint] at h
       obtain ⟨hv, -⟩ := STAmount.ofNumber_toNumber_exact nt x _ _ ret c hx (fun _ => h0) hof h
       exact ⟨hv ▸ hret0, hv ▸ hretle⟩
-    rw [if_neg hint] at h
+    rw [ite_eq_right hint] at h
     have hnt : nt = .fractional := by
       cases nt with
       | fractional => rfl
@@ -398,7 +398,7 @@ private lemma STAmount.roundToNumericType_towards_zero_some_le (nt : NumericType
         by_cases hrz : ret.mValue = 0
         · have : rounded = ret := by
             unfold STAmount.roundToExponent at hre
-            simp only [hint', Bool.false_eq_true, if_false, STAmount.isZero, hrz, beq_self_eq_true, if_true,
+            simp only [hint', Bool.false_eq_true, ite_false, STAmount.isZero, hrz, beq_self_eq_true, ite_true,
               Except.ok.injEq] at hre
             exact hre.symm
           rw [this]; exact ⟨hret0, le_refl _⟩
@@ -408,7 +408,7 @@ private lemma STAmount.roundToNumericType_towards_zero_some_le (nt : NumericType
         have hfl := STAmount.roundToExponent_rounded ret rounded e .towards_zero hc he.1 he.2 hz hre
         have hp : (0 : ℚ) < (10 : ℚ) ^ e := zpow_pos (by norm_num) _
         unfold RoundsToRepresentableAt at hfl
-        simp only [ge_iff_le, hret0, if_true] at hfl
+        simp only [ge_iff_le, hret0, ite_true] at hfl
         change rounded.toRat = _ at hfl
         rw [hfl]
         refine ⟨by positivity, ?_⟩

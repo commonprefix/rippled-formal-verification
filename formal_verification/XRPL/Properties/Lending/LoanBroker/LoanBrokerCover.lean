@@ -6,10 +6,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.ClawbackWitness
 
 /-! # Cover deposit, withdrawal and clawback
 
-What the three cover transactions share: the direction CoverAvailable moves, the minimum cover, success once the
-checks pass, and taking all of the cover. Then cover transactions in sequence on a reachable broker: undoing one,
-splitting one in two, and swapping two. Each one moves CoverAvailable by whole base units, so nothing else rounds
-along the way. -/
+What the three cover transactions share and how they combine: undoing one, splitting one in two, swapping two.
+Each one moves CoverAvailable by whole base units, so nothing rounds. -/
 
 namespace XRPL.Model.Lending
 
@@ -131,9 +129,8 @@ theorem LoanBroker.cover_total_clawback_attained :
 CoverAvailable, and when CoverAvailable ≠ 0 a withdrawal, or a clawback of an IOU or MPT, can take all of it. -/
 theorem LoanBroker.cover_possible (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) :
-    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum. CoverAvailable + 1 base unit is within
-    -- the Open limit, and for MPT within MaximumAmount, so a holder can still have a unit to deposit. The asset
-    -- accepts whole amounts (offset 0), as XRP, MPT and IOU do
+    -- C++ caps every MPT maximum within int64. One more base unit of cover fits the Open limit and, for MPT,
+    -- MaximumAmount. The asset accepts whole amounts, as XRP, MPT and IOU do
     ((lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) →
       lb.toExact.coverAvailable + 10 ^ base ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ base →
       (lb.numericType ≠ .native → lb.numericType.isIntegral = true →

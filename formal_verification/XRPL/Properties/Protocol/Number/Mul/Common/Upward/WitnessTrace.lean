@@ -7,14 +7,11 @@ namespace XRPL.Model.Protocol
 
 /-! # Witness for `Number.operator_mul_rounding_bound_upward`
 
-The bound `10/(2^63+2)` is tight: the relative error at
-`x = maxRepNat`, `y = 1000000000000000009` exceeds `9/(2^63+2)`.
-The guard is nonzero so `.upward` rounds up, giving a mantissa above `maxRepUp`, so `normalize` fires
-`capAtMaxRep` and returns `mulUpwardWitness * 10^18`. -/
+One product has a relative error above `9/(2^63+2)`, so the bound `10/(2^63+2)` is tight. -/
 
 local syntax "sd_step" : tactic
 local macro_rules | `(tactic| sd_step) => `(tactic|
-  (conv_lhs => rw [scaleDown128Spec]; rw [dif_pos (by decide)]; rfl))
+  (conv_lhs => rw [scaleDown128Spec]; rw [dite_eq_left (by decide)]; rfl))
 
 /-- `scaleDown128Spec` trace for the upward witness inputs. -/
 lemma scaleDown128_upward_witness :
@@ -29,7 +26,7 @@ lemma scaleDown128_upward_witness :
   sd_step; sd_step; sd_step; sd_step; sd_step
   sd_step; sd_step; sd_step; sd_step; sd_step
   sd_step; sd_step; sd_step; sd_step
-  conv_lhs => rw [scaleDown128Spec]; rw [dif_neg (by decide)]
+  conv_lhs => rw [scaleDown128Spec]; rw [dite_eq_right (by decide)]
   rfl
 
 /-- `doNormalize` trace for the upward witness result.
@@ -42,21 +39,21 @@ lemma doNormalize_upward_witness :
   all_goals try min_fit
   unfold doNormalizeSpec
   rw [show ((mulUpwardWitness : UInt64) == 0) = false from rfl]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [show doNormalize_scaleUpSpec largeRange.min (mulUpwardWitness : UInt64) (18 : Int)
         = ((mulUpwardWitness : UInt64), (18 : Int)) by
-        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
+        unfold doNormalize_scaleUpSpec; rw [ite_eq_right (by decide)]]
   rw [show doNormalize_scaleDown largeRange.max (mulUpwardWitness : UInt64) (18 : Int) Guard.new
         = .ok ((mulUpwardWitness : UInt64), (18 : Int), Guard.new) by
-        unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
+        unfold doNormalize_scaleDown; rw [dite_eq_right (by decide)]]
   simp only []
   rw [show ((18 : Int) < minExponent || (mulUpwardWitness : UInt64) < largeRange.min) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   have h_divu : divu10 (mulUpwardWitness : UInt64) = (922337203685477590, 0) := by decide
   rw [show doNormalize_capAtMaxRep (mulUpwardWitness : UInt64) (18 : Int) Guard.new
         = .ok ((922337203685477590 : UInt64), (19 : Int), Guard.new) from by
       unfold doNormalize_capAtMaxRep
-      rw [if_pos (by decide), if_neg (by decide), h_divu]; simp only [guard_new_push_zero]; norm_num]
+      rw [ite_eq_left (by decide), ite_eq_right (by decide), h_divu]; simp only [guard_new_push_zero]; norm_num]
   simp only []
   have h_rup2 : Guard.new.doRoundUp false (922337203685477590 : UInt64) (19 : Int)
       largeRange.min largeRange.max .upward .normalize2 =
@@ -77,7 +74,7 @@ lemma Number.operator_mul_upward_witness :
   unfold Number.operator_mulSpec
   have hx_ne : (⟨false, maxRepNat, 0⟩ : Number).operator_eq Number.zero = false := by decide
   have hy_ne : (⟨false, 1000000000000000009, 0⟩ : Number).operator_eq Number.zero = false := by decide
-  simp only [hx_ne, hy_ne, Bool.false_eq_true, if_false, bne_self_eq_false, add_zero]
+  simp only [hx_ne, hy_ne, Bool.false_eq_true, ite_false, bne_self_eq_false, add_zero]
   rw [scaleDown128_upward_witness]
   have h_rup : ({ digits_ := 4561337701706114, xbit_ := true, sbit_ := false } : Guard).doRoundUp
       false (922337203685477589 : UInt64) (19 : Int) largeRange.min largeRange.max .upward

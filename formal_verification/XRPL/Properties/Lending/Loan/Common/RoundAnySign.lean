@@ -130,8 +130,8 @@ private lemma STAmount.roundToExponent_ok_abs (value : STAmount) (s : Int) (mode
   have hps : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
   have hs79 : (10 : ℚ) ^ s ≤ 10 ^ (79 : ℤ) := zpow_le_zpow_right₀ (by norm_num) hs_hi
   unfold STAmount.roundToExponent
-  rw [if_neg (by rw [h_int]; exact Bool.false_ne_true), if_neg (by rw [hz]; exact Bool.false_ne_true),
-    if_neg (not_le.mpr hexp)]
+  rw [ite_eq_right (by rw [h_int]; exact Bool.false_ne_true), ite_eq_right (by rw [hz]; exact Bool.false_ne_true),
+    ite_eq_right (not_le.mpr hexp)]
   have hchk : STAmount.checked value.mNumericType kMinValue s value.negative mode =
       .ok ⟨.fractional, kMinValue, s, value.mIsNegative⟩ := by
     rw [hc.is_fractional]
@@ -219,7 +219,7 @@ private lemma STAmount.roundToExponent_ok_abs (value : STAmount) (s : Int) (mode
     have hs0 : (sum.mValue == 0) = true := by rw [hz0]; rfl
     rw [hcmp, hnz, hs0]
     simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-    rw [if_neg (by simp [STAmount.integral, hsnt, NumericType.isIntegral]), hsnt]
+    rw [ite_eq_right (by simp [STAmount.integral, hsnt, NumericType.isIntegral]), hsnt]
     exact ⟨_, STAmount.checked_reference s _ mode hs_lo (by omega)⟩
 
 /-- The grid points either side of a value are within one step of it. -/
@@ -339,27 +339,27 @@ private lemma Number.to_rep_unchecked_zero (neg : Bool) (m : UInt64) (mode : rou
     (Number.unchecked neg m 0).to_rep mode = .ok (if neg then -m.toInt64 else m.toInt64) := by
   have hnpre : ¬ (maxRep < m) := by rw [UInt64.lt_iff_toNat_lt]; omega
   have hmant : (Number.unchecked neg m 0).mantissa = (if neg then -m.toInt64 else m.toInt64) := by
-    simp only [Number.mantissa, Number.unchecked, gt_iff_lt, if_neg hnpre]
+    simp only [Number.mantissa, Number.unchecked, gt_iff_lt, ite_eq_right hnpre]
   have hexp : (Number.unchecked neg m 0).exponent = 0 := by
-    simp only [Number.exponent, Number.unchecked, gt_iff_lt, if_neg hnpre]
+    simp only [Number.exponent, Number.unchecked, gt_iff_lt, ite_eq_right hnpre]
   have hneg_ : (Number.unchecked neg m 0).negative_ = neg := rfl
   rw [Number.to_rep_eq_spec]
   unfold Number.to_repSpec
   simp only [hmant, hexp, hneg_]
   by_cases hz : (if neg then -m.toInt64 else m.toInt64) == 0
-  · rw [if_pos hz, beq_iff_eq.mp hz]
-  · rw [if_neg hz]
+  · rw [ite_eq_left hz, beq_iff_eq.mp hz]
+  · rw [ite_eq_right hz]
     have hmag : (if neg then -(if neg then -m.toInt64 else m.toInt64)
         else (if neg then -m.toInt64 else m.toInt64)) = m.toInt64 := by
       cases neg <;> simp
     rw [hmag]
-    simp only [lt_irrefl, if_false, ge_iff_le, le_refl, if_true]
+    simp only [lt_irrefl, ite_false, ge_iff_le, le_refl, ite_true]
     have hgrow : growSpec m.toInt64 0 = .ok m.toInt64 := by
       rw [growSpec]; simp
     rw [hgrow]
     simp only
     rw [start_guard_round]
-    rw [if_neg (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && m.toInt64 % 2 == 1) = true from by
+    rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && m.toInt64 % 2 == 1) = true from by
       simp)]
 
 /-- A negative whole number of at most the maximum of an integral asset packs into it. -/
@@ -369,11 +369,11 @@ private lemma STAmount.checked_integral_neg_ok (nt : NumericType) (v : UInt64) (
     ∃ a, STAmount.checked nt v 0 true mode = .ok a ∧ (a.mValue = 0 ∨ a.mValue = v) := by
   unfold STAmount.checked STAmount.canonicalize
   have hint : (STAmount.unchecked nt v 0 true).integral = true := hnt
-  rw [if_pos hint]
+  rw [ite_eq_left hint]
   by_cases hz : ((STAmount.unchecked nt v 0 true).mValue == 0 ||
       decide ((STAmount.unchecked nt v 0 true).mOffset ≤ -20)) = true
-  · rw [if_pos hz]; exact ⟨_, rfl, Or.inl rfl⟩
-  rw [if_neg hz, if_neg (show ¬ (STAmount.unchecked nt v 0 true).mOffset >
+  · rw [ite_eq_left hz]; exact ⟨_, rfl, Or.inl rfl⟩
+  rw [ite_eq_right hz, ite_eq_right (show ¬ (STAmount.unchecked nt v 0 true).mOffset >
       (STAmount.unchecked nt v 0 true).mNumericType.maxOffset from by
     show ¬ (0 : Int) > nt.maxOffset; omega)]
   have hvr : v.toNat ≤ maxRep.toNat := le_trans hv hmr
@@ -382,15 +382,15 @@ private lemma STAmount.checked_integral_neg_ok (nt : NumericType) (v : UInt64) (
     omega
   simp only [IntAmount.ofNumber, STAmount.unchecked]
   rw [Number.to_rep_unchecked_zero true v mode hvr]
-  simp only [if_true]
+  simp only [ite_true]
   have habs : (-v.toInt64).magnitude = v := by
     show (-v.toInt64).toInt.natAbs.toUInt64 = v
     have := signed_mantissa_toInt true v hlt
-    simp only [if_true] at this
+    simp only [ite_true] at this
     rw [this]
     simp only [neg_mul, one_mul, Int.natAbs_neg, Int.natAbs_natCast]
     exact UInt64.ofNat_toNat
-  rw [habs, if_neg (by
+  rw [habs, ite_eq_right (by
     rw [gt_iff_lt, UInt64.lt_iff_toNat_lt]
     omega)]
   exact ⟨_, rfl, Or.inr rfl⟩
@@ -442,8 +442,8 @@ lemma STAmount.roundToNumericType_integral_ok_abs (nt : NumericType) (x : Number
         norm_num
       have heq : STAmount.ofNumber nt x mode = STAmount.checked nt r.toUInt64 0 true mode := by
         unfold STAmount.ofNumber
-        rw [if_pos hint]
-        simp only [hsig, if_true]
+        rw [ite_eq_left hint]
+        simp only [hsig, ite_true]
         rw [← hw_def, hr]
         dsimp only
         rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hr0)), ok_bind]

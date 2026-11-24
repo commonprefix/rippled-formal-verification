@@ -185,11 +185,11 @@ lemma Loan.create_balances (broker : LoanBroker) (v : Vault) (principal : Number
       have h' : v.assetsReserved.operator_add principal' .to_nearest = .ok ar' := h
       have := Number.operator_add_toRat_of_grid _ _ ar' ar jb b v.wf.assetsReserved_norm hpN'
         (by rw [harv]; norm_cast) (by rw [hp', hjb]; norm_cast) (by omega) hs h'
-      rw [this, harv, hjb, if_pos rfl]; push_cast; ring
+      rw [this, harv, hjb, ite_eq_left rfl]; push_cast; ring
     | false =>
       have h' : v.assetsReserved.operator_add Number.zero .to_nearest = .ok ar' := h
       rw [Number.operator_add_zero_right, Except.ok.injEq] at h'
-      rw [← h', if_neg Bool.false_ne_true, add_zero]
+      rw [← h', ite_eq_right Bool.false_ne_true, add_zero]
   have hdebt : debtTotal'.toRat = broker.debtTotal.toRat + principal.toRat := by
     have h := Number.operator_add_toRat_of_grid _ _ debtTotal' dt jb b broker.wf.debtTotal_norm hp
       (by rw [hdtv]; norm_cast) (by rw [hjb]; norm_cast) (by omega) hs hchecks.debt
@@ -254,7 +254,7 @@ lemma Loan.create_balances (broker : LoanBroker) (v : Vault) (principal : Number
     | true =>
       have h' : v.yieldUnrealized.operator_add Number.zero .to_nearest = .ok yu' := h
       rw [Number.operator_add_zero_right, Except.ok.injEq] at h'
-      rw [← h', if_pos rfl, add_zero]
+      rw [← h', ite_eq_left rfl, add_zero]
     | false =>
       have h' : v.yieldUnrealized.operator_add loanState.interestDue .to_nearest = .ok yu' := h
       have hopen := (Vault.exceedsOpenLimit_false_bound v loanState.interestDue hiv.1 hchecks.open_zone).2.1
@@ -273,7 +273,7 @@ lemma Loan.create_balances (broker : LoanBroker) (v : Vault) (principal : Number
         exact_mod_cast h4
       have := Number.operator_add_toRat_of_grid _ _ yu' y ib b v.wf.yieldUnrealized_norm hiv.1
         (by rw [hyv]; norm_cast) hiunits ⟨by omega, hlt⟩ hs h'
-      rw [this, if_neg Bool.false_ne_true, hiD, hyv, hiunits]; push_cast; ring
+      rw [this, ite_eq_right Bool.false_ne_true, hiD, hyv, hiunits]; push_cast; ring
   have hpool' : ∀ f : RawVault → Number, f r.pool'.toRawVault = f { v.toRawVault with
       assetsAvailable := aa', assetsDeployed := ad', assetsReserved := ar', lossUnrealized := lu',
       yieldUnrealized := yu' } := fun f => by rw [hpool]

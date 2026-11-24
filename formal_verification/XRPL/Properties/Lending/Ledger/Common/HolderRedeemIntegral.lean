@@ -2,9 +2,8 @@ import XRPL.Properties.Lending.Ledger.Common.HolderRedeem
 
 /-! # A holder redeems part of an XRP or MPT vault of any size
 
-Whole-number cash below `2^63` keeps the redemption price within 20 units of the worth of the shares, so a redemption
-that leaves at least 20 units succeeds without the cash bound of a settled vault. A last single share takes all the
-cash. -/
+Whole-number cash below `2^63` keeps the redemption price within 20 units of the shares' worth, so a redemption that
+leaves at least 20 units succeeds. A last single share takes all the cash. -/
 
 namespace XRPL.Model.SingleAssetVault
 

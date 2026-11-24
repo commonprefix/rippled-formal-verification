@@ -102,7 +102,7 @@ lemma STAmount.roundToNumericType_downward_le (x c : Number) (e : Int) (hx : x.i
       rwa [max_eq_left h0] at this
     have hint : ret.integral = false := by
       unfold STAmount.integral; rw [STAmount.ofNumber_mNumericType _ _ _ _ hof]; rfl
-    simp only [hint, Bool.false_eq_true, if_false] at h
+    simp only [hint, Bool.false_eq_true, ite_false] at h
     cases hre : STAmount.roundToExponent ret e .downward with
     | error err => rw [hre] at h; exact absurd h (by simp)
     | ok rounded =>
@@ -150,14 +150,14 @@ lemma sumRoundAndSubtract_downward_le (A c : Number) (e : Int) (nt : NumericType
     st.toRat ≤ c.toRat ∧ ∀ m, st.toNumber .to_nearest = .ok m → m.toRat = st.toRat ∧ m.isNormalized := by
   unfold sumRoundAndSubtract at h
   by_cases hint : nt.isIntegral = true
-  · rw [if_pos hint] at h
+  · rw [ite_eq_left hint] at h
     obtain ⟨x, hx, h⟩ := bind_ok_peel _ _ _ h
     have hxs : x = st := Except.ok.inj h
     subst hxs
     refine ⟨?_, fun m hm => STAmount.ofNumber_toNumber_exact nt c _ _ x m hc (fun _ => hc0) hx hm⟩
     have := STAmount.ofNumber_downward_le_max nt c x hc (fun _ => hc0) hx
     rwa [max_eq_left hc0] at this
-  · rw [if_neg hint] at h
+  · rw [ite_eq_right hint] at h
     have hfr : nt = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using hint)
     subst hfr
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
@@ -216,7 +216,7 @@ private lemma sub_exact (x y r w : Number) (mode : rounding_mode) (hx : x.isNorm
     have hr : r = y.operator_neg := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hnm), hx', if_pos (by decide)] at hok
+      rw [ite_eq_right (Number.not_operator_eq_zero_of_mantissa_ne hnm), hx', ite_eq_left (by decide)] at hok
       exact (Except.ok.inj hok).symm
     rw [hr, Number.toRat_neg, hx', Number.toRat_zero]
     ring
@@ -279,7 +279,7 @@ lemma sumRoundAndSubtract_at_base_of_exponent (A c : Number) (b : Int) (st : STA
   obtain ⟨F, hF, hFv⟩ := Number.exists_units_normalized (a + kn) b hK hb
 
   unfold sumRoundAndSubtract at h
-  rw [if_neg (by decide)] at h
+  rw [ite_eq_right (by decide)] at h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨E, hE', h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨sum, hsum, h⟩ := bind_ok_peel _ _ _ h
@@ -309,7 +309,7 @@ lemma sumRoundAndSubtract_at_base_of_exponent (A c : Number) (b : Int) (st : STA
       rw [hof] at hsum'
       have hint : ret.integral = false := by
         unfold STAmount.integral; rw [STAmount.ofNumber_mNumericType _ _ _ _ hof]; rfl
-      simp only [hint, Bool.false_eq_true, if_false] at hsum'
+      simp only [hint, Bool.false_eq_true, ite_false] at hsum'
       cases hre : STAmount.roundToExponent ret E .downward with
       | error err => rw [hre] at hsum'; exact absurd hsum' (by simp)
       | ok rounded =>
@@ -449,7 +449,7 @@ lemma sumRoundAndSubtract_at_base (A c : Number) (b : Int) (st : STAmount) (a : 
   have hE : postSumExponent A c b .fractional = .ok b := by
     have h' := h
     unfold sumRoundAndSubtract at h'
-    rw [if_neg (by decide)] at h'
+    rw [ite_eq_right (by decide)] at h'
     obtain ⟨_, -, h'⟩ := bind_ok_peel _ _ _ h'
     obtain ⟨E, hE, -⟩ := bind_ok_peel _ _ _ h'
     obtain ⟨s0, hs0, hE'⟩ := postSumExponent_reduces _ _ _ _ _ hE
@@ -489,8 +489,8 @@ private lemma STAmount.ofNumber_frac_downward_neg_ge (d : Number) (st : STAmount
   -- both conversions round the same magnitude
   have hsig : decide (d.signum < 0) = true := by rw [Number.signum_neg_decide, hneg]
   unfold STAmount.ofNumber at h
-  rw [if_neg (by decide)] at h
-  simp only [hsig, if_true] at h
+  rw [ite_eq_right (by decide)] at h
+  simp only [hsig, ite_true] at h
   rw [← hwdef] at h
   cases hnorm : w.normalizeToRange kMinValue kMaxValue .downward with
   | error e => rw [hnorm] at h; cases h
@@ -533,7 +533,7 @@ private lemma STAmount.ofNumber_frac_downward_neg_ge (d : Number) (st : STAmount
       rw [STAmount.signedDrops_toInt64_toInt _
             (show (STAmount.unchecked .fractional mant.toUInt64 exp true).mValue.toNat < 10 ^ 16 from hmtu_hi)]
       have := signed_mantissa_toInt true mant.toUInt64 h_fit
-      simp only [if_true] at this
+      simp only [ite_true] at this
       rw [this]
       show (STAmount.unchecked .fractional mant.toUInt64 exp true).signedDrops = _
       unfold STAmount.signedDrops STAmount.unchecked
@@ -542,31 +542,31 @@ private lemma STAmount.ofNumber_frac_downward_neg_ge (d : Number) (st : STAmount
         = (if exp > cMaxOffset then .error .overflow
            else if exp < cMinOffset then .ok IOUAmount.zero
            else .ok ⟨-mant.toUInt64.toInt64, exp⟩) := by
-      rw [STAmount.iou_eq .downward h_int]
+      rw [STAmount.iou_eq .downward h_int h_fit]
       unfold IOUAmount.ofMantissaExp
       rw [h_sd]
       have := IOUAmount.normalize_canonical16 mant.toUInt64 exp true .downward hmtu_lo hmtu_hi
         (by rw [hEeq, hwe]; omega) (by rw [hEeq, hwe]; omega)
-      simpa using this
+      simpa using! this
     obtain ⟨vpeel, hvpeel, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     rw [STAmount.checked] at h
     unfold STAmount.canonicalize at h
-    rw [if_neg h_int, hiou] at h
+    rw [ite_eq_right h_int, hiou] at h
     have hd0 : d.toRat ≤ 0 := by rw [hdw]; linarith [Number.toRat_nonneg_of_nonnegative w hwneg]
     split_ifs at h with h1 h2
     · obtain rfl := (Except.ok.inj h).symm
       rw [STAmount.toRat_signed]
-      simpa using hd0
+      simpa [IOUAmount.zero, IOUAmount.signum, Int64.toNat_magnitude] using hd0
     · obtain rfl := (Except.ok.inj h).symm
       have hpos : 0 < mant.toUInt64.toNat := by omega
       have hxneg := signed_mantissa_decide_neg true mant.toUInt64 h_fit hpos
-      simp only [if_true, decide_eq_true_eq] at hxneg
+      simp only [ite_true, decide_eq_true_eq] at hxneg
       have hsig' : IOUAmount.signum ⟨-mant.toUInt64.toInt64, exp⟩ = -1 := by
-        unfold IOUAmount.signum; exact if_pos hxneg
+        unfold IOUAmount.signum; exact ite_eq_left hxneg
       have hlt : IOUAmount.signum ⟨-mant.toUInt64.toInt64, exp⟩ < 0 := by rw [hsig']; decide
       rw [STAmount.toRat_signed]
-      simp only [hlt, decide_true, if_true]
+      simp only [hlt, decide_true, ite_true]
       rw [← Int64.neg_toUInt64_eq_magnitude hxneg, Int64.neg_neg]
       show d.toRat ≤ -1 * ((mant.toUInt64.toInt64.toUInt64.toNat : ℕ) : ℚ) * 10 ^ exp
       rw [show mant.toUInt64.toInt64.toUInt64 = mant.toUInt64 from rfl, hdw]
@@ -582,13 +582,13 @@ lemma sumRoundAndSubtract_downward_cover_nonneg (A c : Number) (e : Int) (nt : N
     0 ≤ A.toRat + m.toRat := by
   unfold sumRoundAndSubtract at h
   by_cases hint : nt.isIntegral = true
-  · rw [if_pos hint] at h
+  · rw [ite_eq_left hint] at h
     obtain ⟨x, hx, h⟩ := bind_ok_peel _ _ _ h
     obtain rfl : x = st := Except.ok.inj h
     have hst0 := STAmount.ofNumber_nonneg nt c _ x hc (Number.negative_false_of_nonneg c hc hc0) hx
     rw [(STAmount.ofNumber_toNumber_exact nt c _ _ x m hc (fun _ => hc0) hx hm).1]
     linarith
-  · rw [if_neg hint] at h
+  · rw [ite_eq_right hint] at h
     have hfr : nt = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using hint)
     subst hfr
     have hAb := hAb rfl
@@ -656,9 +656,9 @@ lemma numberExponent_at_base (n : Number) (b : Int) (nt : NumericType) (e : Int)
     subst hb0
     unfold numberExponent at h
     by_cases hz : n.operator_eq Number.zero = true
-    · simp only [hz, if_true, pure, Except.pure, Except.ok.injEq] at h
+    · simp only [hz, ite_true, pure, Except.pure, Except.ok.injEq] at h
       exact h.symm
-    · simp only [hz, Bool.false_eq_true, if_false] at h
+    · simp only [hz, Bool.false_eq_true, ite_false] at h
       cases ha : STAmount.ofNumber nt n .downward with
       | error err => rw [ha] at h; simp [bind, Except.bind] at h
       | ok st =>

@@ -10,10 +10,7 @@ namespace XRPL.Model.Protocol
 
 /-! # Exact IOU round trip for the `roundToExponent` grid theorem
 
-The IOU pipeline (`STAmount.iou` → `IOUAmount.normalize` → `from_rep` at
-`largeRange` → `normalizeToRange` at the 16-digit range → exponent clamp)
-is the identity on canonical 16-digit inputs. This file proves that
-round-trip plus the reference-amount construction. -/
+The IOU conversion through `Number` and back to 16 digits is the identity on canonical 16-digit inputs. -/
 
 /-- A canonical (post-`canonicalize`) nonzero IOU STAmount. -/
 structure STAmount.IOUCanonical (s : STAmount) : Prop where
@@ -96,7 +93,7 @@ theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
     unfold STAmount.integral
     rw [hc.is_fractional]
     decide
-  rw [STAmount.iou_eq mode h_int, ← hsd_def]
+  rw [STAmount.iou_eq mode h_int h_fit, ← hsd_def]
   -- ofMantissaExp → normalize: mantissa ≠ 0.
   unfold IOUAmount.ofMantissaExp IOUAmount.normalize
   have h_sd_ne : ¬ (sd == 0) = true := by
@@ -107,7 +104,7 @@ theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
     rcases hneg : s.mIsNegative with _ | _ <;> rw [hneg] at h_zero <;> simp at h_zero <;>
       omega
   rw [show (sd == 0) = false from Bool.eq_false_iff.mpr (fun h => h_sd_ne h)]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   -- from_rep at largeRange: the ×1000 shift.
   set neg₀ : Bool := decide (sd < 0) with hneg₀_def
   set mAbs : UInt64 := sd.toInt.natAbs.toUInt64 with hmAbs_def
@@ -156,12 +153,12 @@ theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
   rw [h_fn]
   simp only []
   -- The clamp passes: −96 ≤ s.mOffset ≤ 80.
-  rw [if_neg (by
+  rw [ite_eq_right (by
         show ¬ s.mOffset > cMaxOffset
         have := hc.exp_hi
         unfold cMaxOffset
         omega),
-      if_neg (by
+      ite_eq_right (by
         show ¬ s.mOffset < cMinOffset
         have := hc.exp_lo
         unfold cMinOffset
@@ -180,21 +177,21 @@ theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
     · apply decide_eq_false
       rw [Int64.lt_iff_toInt_lt, h_sd_signed, hneg,
           (by decide : (0 : Int64).toInt = 0)]
-      simp only [Bool.false_eq_true, if_false]
+      simp only [Bool.false_eq_true, ite_false]
       omega
     · apply decide_eq_true
       rw [Int64.lt_iff_toInt_lt, h_sd_signed, hneg,
           (by decide : (0 : Int64).toInt = 0)]
-      simp only [if_true]
+      simp only [ite_true]
       have : 0 < s.mValue.toNat := by omega
       omega
   apply Int64.toInt_inj.mp
   rw [h_neg₀_val]
   rcases hneg : s.mIsNegative with _ | _
-  · simp only [Bool.false_eq_true, if_false]
+  · simp only [Bool.false_eq_true, ite_false]
     rw [UInt64.toInt64_toInt_of_lt _ h_fit, h_sd_signed, hneg]
     simp
-  · simp only [if_true]
+  · simp only [ite_true]
     rw [UInt64.neg_toInt64_toInt_of_lt _ h_fit, h_sd_signed, hneg]
     simp
 
@@ -218,7 +215,7 @@ theorem STAmount.canonicalize_canonical_id (s : STAmount) (mode : rounding_mode)
     unfold STAmount.signedDrops
     rcases hneg : s.mIsNegative with _ | _ <;> simp
   unfold STAmount.canonicalize
-  rw [if_neg h_int, STAmount.iou_canonical_id s mode hc]
+  rw [ite_eq_right h_int, STAmount.iou_canonical_id s mode hc]
   simp only []
   -- Repack: the sign, magnitude, and exponent all reproduce the record.
   have h_signum_neg : (IOUAmount.signum ⟨sd, s.mOffset⟩ < 0) = (s.mIsNegative = true) := by
@@ -228,21 +225,21 @@ theorem STAmount.canonicalize_canonical_id (s : STAmount) (mode : rounding_mode)
     · have h_nn : ¬ sd < 0 := by
         rw [Int64.lt_iff_toInt_lt, h_sd_signed, hneg,
             (by decide : (0 : Int64).toInt = 0)]
-        simp only [Bool.false_eq_true, if_false]
+        simp only [Bool.false_eq_true, ite_false]
         omega
-      rw [if_neg h_nn]
+      rw [ite_eq_right h_nn]
       by_cases h_ne : sd != 0
-      · rw [if_pos h_ne]
+      · rw [ite_eq_left h_ne]
         norm_num
-      · rw [if_neg h_ne]
+      · rw [ite_eq_right h_ne]
         norm_num
     · have h_lt : sd < 0 := by
         rw [Int64.lt_iff_toInt_lt, h_sd_signed, hneg,
             (by decide : (0 : Int64).toInt = 0)]
-        simp only [if_true]
+        simp only [ite_true]
         have : 0 < s.mValue.toNat := by have := hc.mant_lo; omega
         omega
-      rw [if_pos h_lt]
+      rw [ite_eq_left h_lt]
       norm_num
   rw [← hsd_def]
   have h_mag : sd.magnitude = s.mValue := by

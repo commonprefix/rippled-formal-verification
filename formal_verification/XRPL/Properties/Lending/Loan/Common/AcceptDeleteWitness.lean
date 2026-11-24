@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.DeleteWitness
 
 /-! # A LoanDelete of a pending loan on a coarsened vault
@@ -5,7 +6,7 @@ import XRPL.Properties.Lending.Loan.Common.DeleteWitness
 On the coarsened run of `DeleteWitness.lean` a LoanDelete of the pending loan E of 0.6 credits AssetsAvailable
 with 1. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

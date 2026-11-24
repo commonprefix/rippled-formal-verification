@@ -1,14 +1,13 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 import XRPL.Properties.Lending.Ledger.Common.CoverPrecisionWitness
 import XRPL.Properties.Lending.Loan.Common.ManageDefs
 
 /-! # Witnesses for the LoanManage defaults on a reachable ledger
 
-Each witness is a run from a new IOU vault, then a successful default, checked by `native_decide`. The runs are the
-coarsened run of `CoarsenedVault.lean`, the cover precision run of `CoverPrecisionWitness.lean`, and a run where a
-broker covers a loan of 100 in full. -/
+Defaults on reachable IOU ledgers that reach the cover bounds, one with a negative cover payment (FV_M4_27). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

@@ -15,7 +15,7 @@ lemma Number.lower_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
   have hq_ne : q ≠ 0 := ne_of_gt hq
   have hq_not_neg : ¬ (q < 0) := not_lt.mpr (le_of_lt hq)
   unfold Number.lower
-  rw [if_neg hq_ne, if_neg hq_not_neg]
+  rw [ite_eq_right hq_ne, ite_eq_right hq_not_neg]
   have h_lo_neg : n_lo.negative_ = false := by
     by_contra hh
     have hh' : n_lo.negative_ = true := by
@@ -69,18 +69,18 @@ lemma Number.lower_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
   have h_tr_ge_pow18 : (10^18 : ℕ) ≤ m_tr := by
     by_cases h1 : m_floor_nat ≤ maxRep.toNat
     · have h_eq : truncToValidMantissa m_floor_nat = m_floor_nat := by
-        unfold truncToValidMantissa; rw [if_pos h1]
+        unfold truncToValidMantissa; rw [ite_eq_left h1]
       rw [hm_tr_def, h_eq]; exact h_floor_ge
     · push Not at h1
       by_cases h2 : m_floor_nat < cuspMin
       · have h_eq : truncToValidMantissa m_floor_nat = maxRep.toNat := by
           unfold truncToValidMantissa
-          rw [if_neg (by omega), if_pos h2]
+          rw [ite_eq_right (by omega), ite_eq_left h2]
         rw [hm_tr_def, h_eq]; omega
       · push Not at h2
         have h_eq : truncToValidMantissa m_floor_nat = (m_floor_nat / 10) * 10 := by
           unfold truncToValidMantissa
-          rw [if_neg (by omega), if_neg (by omega)]
+          rw [ite_eq_right (by omega), ite_eq_right (by omega)]
         rw [hm_tr_def, h_eq]
         have h_div_ge : cuspMin / 10 ≤ m_floor_nat / 10 := Nat.div_le_div_right h2
         have h_cusp_div_v : cuspMin / 10 = mantissaFloorSucc := cuspMin_div_ten
@@ -94,8 +94,8 @@ lemma Number.lower_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
   have h_tr_lt_pow19 : m_tr < 10^19 := by omega
   have h_tr_lt_64 : m_tr < 2^64 := by omega
   have h_tr_ge_min : largeRange.min.toNat ≤ m_tr := by rw [h_min_eq]; exact h_tr_ge_pow18
-  rw [dif_pos ⟨h_tr_ge_min, h_tr_lt_64⟩]
-  rw [if_pos ⟨h_e_q_min, h_e_q_max⟩]
+  rw [dite_eq_left ⟨h_tr_ge_min, h_tr_lt_64⟩]
+  rw [ite_eq_left ⟨h_e_q_min, h_e_q_max⟩]
   exact ⟨_, rfl⟩
 
 lemma Number.upper_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
@@ -107,7 +107,7 @@ lemma Number.upper_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
   have hq_ne : q ≠ 0 := ne_of_gt hq
   have hq_not_neg : ¬ (q < 0) := not_lt.mpr (le_of_lt hq)
   unfold Number.upper
-  rw [if_neg hq_ne, if_neg hq_not_neg]
+  rw [ite_eq_right hq_ne, ite_eq_right hq_not_neg]
   have h_lo_neg : n_lo.negative_ = false := by
     by_contra hh
     have hh' : n_lo.negative_ = true := by
@@ -172,14 +172,14 @@ lemma Number.upper_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
   · have h_ceil_lower : m_ceil_nat ≥ 9999999999999999991 := by
       unfold bumpToValidMantissa at h_bump_eq
       by_cases hb1 : m_ceil_nat ≤ maxRep.toNat
-      · rw [if_pos hb1] at h_bump_eq; exact absurd h_bump_eq (by simp)
-      rw [if_neg hb1] at h_bump_eq
+      · rw [ite_eq_left hb1] at h_bump_eq; exact absurd h_bump_eq (by simp)
+      rw [ite_eq_right hb1] at h_bump_eq
       by_cases hb2 : m_ceil_nat < cuspMin
-      · rw [if_pos hb2] at h_bump_eq; exact absurd h_bump_eq (by simp)
-      rw [if_neg hb2] at h_bump_eq
+      · rw [ite_eq_left hb2] at h_bump_eq; exact absurd h_bump_eq (by simp)
+      rw [ite_eq_right hb2] at h_bump_eq
       simp only at h_bump_eq
       by_cases hb3 : ((m_ceil_nat + 9) / 10) * 10 < 10^19
-      · rw [if_pos hb3] at h_bump_eq; exact absurd h_bump_eq (by simp)
+      · rw [ite_eq_left hb3] at h_bump_eq; exact absurd h_bump_eq (by simp)
       push Not at hb3
       have h_div_eq : 10 * ((m_ceil_nat + 9) / 10) + (m_ceil_nat + 9) % 10 = m_ceil_nat + 9 :=
         Nat.div_add_mod (m_ceil_nat + 9) 10
@@ -215,7 +215,7 @@ lemma Number.upper_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
           else if e_q + 1 < minExponent then
             some (⟨false, largeRange.min, minExponent⟩ : Number)
           else none) = _
-    rw [dif_pos h_inner]
+    rw [dite_eq_left h_inner]
   · have h_m_b_lt : m_b < 10^19 := bumpToValidMantissa_lt_pow19 m_ceil_nat m_b h_bump_eq
     have h_pow19_v : (10 : ℕ)^19 = tenPow19 := by decide
     have h_pow64 : (2 : ℕ)^64 = twoPow64 := by decide
@@ -228,7 +228,7 @@ lemma Number.upper_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
           else if e_q < minExponent then
             some (⟨false, largeRange.min, minExponent⟩ : Number)
           else none) = _
-    rw [dif_pos h_inner]
+    rw [dite_eq_left h_inner]
 
 /-- `lowerPosAux` returns `some` for every positive `q` below `10^19 · 10^maxExponent`. Unlike
 `Number.lower_some_of_pos_witnesses`, it needs no representable Number above `q`. -/

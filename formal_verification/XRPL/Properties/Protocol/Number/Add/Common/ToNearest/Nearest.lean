@@ -27,7 +27,7 @@ lemma Number.operator_add_nearest_proof (x y result : Number)
     have h_result : result = x := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_pos hy_guard] at hok
+      rw [ite_eq_left hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     exact Number.roundsToNearest_of_eq (by rw [h_result, hy0, add_zero])
   -- Zero `x`: the model returns `y`.
@@ -37,7 +37,7 @@ lemma Number.operator_add_nearest_proof (x y result : Number)
     have h_result : result = y := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_pos hx_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_left hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     exact Number.roundsToNearest_of_eq (by rw [h_result, hx0, zero_add])
   -- Exact cancellation: the model returns zero.
@@ -45,7 +45,7 @@ lemma Number.operator_add_nearest_proof (x y result : Number)
   · have h_result : result = Number.zero := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_right hx_guard, ite_eq_left heq_guard] at hok
       exact (Except.ok.inj
         (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
     exact Number.roundsToNearest_of_eq (by rw [h_result, Number.toRat_zero, add_truth_zero_of_eq_neg x y heq_guard])
@@ -55,16 +55,15 @@ lemma Number.operator_add_nearest_proof (x y result : Number)
     Number.operator_add_truth_ne x y hx hy hx_mant_ne hy_mant_ne heq_guard .to_nearest result hok
   have hres : result.mantissa_ ≠ 0 := hresult.resolve_right h_truth_ne
   by_cases h_sign_eq : x.negative_ = y.negative_
-  · obtain ⟨zm, ze', f, g, res_pos, hs⟩ :=
-      Number.operator_add_algorithmic_facts_same_sign_anyMode x y result .to_nearest hx hy hx_mant_ne hy_mant_ne
-        h_sign_eq heq_guard hok
-    exact doRoundUp_nearest_frame result (x.toRat + y.toRat) zm ze' f g res_pos .overflow hs.zm_succ
-      hs.zm_le_maxRepUp hs.f_nonneg hs.f_lt_one hs.value_eq (Guard.roundsLike_of_represents hs.represents_f)
-      hs.rounds hs.result_abs hs.res_mant_ne
+  · obtain ⟨zm, ze', f, g, res_pos, hzm_succ, hzm_le, hf_nn, hf_lt, h_value, h_rup_pos, h_result_abs,
+        hres_pos_mant_ne, h_neg, hg⟩ :=
+      Number.operator_add_same_sign_nearest_facts x y result hx hy hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
+    exact doRoundUp_nearest_frame result (x.toRat + y.toRat) zm ze' f g res_pos .normalize2 hzm_succ hzm_le
+      hf_nn hf_lt h_value hg h_rup_pos h_result_abs hres_pos_mant_ne
       (fun h_pos => Number.toRat_nonneg_of_nonnegative result
-        (hs.result_neg.trans (add_same_sign_xn_false_of_truth_pos x y h_sign_eq h_pos)))
-      (fun h_neg => Number.toRat_nonpos_of_negative result
-        (hs.result_neg.trans (add_same_sign_xn_true_of_truth_neg x y h_sign_eq h_neg)))
+        (h_neg.trans (add_same_sign_xn_false_of_truth_pos x y h_sign_eq h_pos)))
+      (fun h_negT => Number.toRat_nonpos_of_negative result
+        (h_neg.trans (add_same_sign_xn_true_of_truth_neg x y h_sign_eq h_negT)))
   · obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
         htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
       Number.operator_add_algorithmic_facts_diff_sign_represents x y result .to_nearest hx hy

@@ -1,12 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaySize
 import XRPL.Properties.Lending.Loan.Common.PayReachable
 import XRPL.Properties.Lending.Loan.Common.PayReachableWitness
 
 /-! # What a payment adds fits a `Number`
 
-On a reachable ledger a loan is at the base scale and pays principal and interest of whole base units, together
-at most `300·(10^16 + 1)` of them, so their sum is a `Number`. The payment's vault bounds need no size hypothesis.
-Its fee and the broker's cover are whole base units too, so their sum is a `Number` below `2^63` base units. -/
+On a reachable ledger a payment's principal and interest, and its fee and the broker's cover, are whole base units
+whose sums fit a `Number`. -/
 
 namespace XRPL.Model.Lending
 

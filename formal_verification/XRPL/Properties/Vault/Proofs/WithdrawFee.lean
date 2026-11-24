@@ -9,10 +9,8 @@ import XRPL.Properties.Protocol.Number.Add.Common.Rounded
 
 /-! # The payout of a withdrawal after the early-exit fee
 
-A non-final withdrawal prices the burned shares, takes the early-exit fee from that priced amount
-rounding up, rounds the rest down into the asset and clamps it onto the grid of the cash it leaves.
-The payout never exceeds the priced amount less the exact fee share. `WithdrawPayoutFloor` shows that
-on a reachable vault it is exactly that amount floored onto the vault's base grid. -/
+The payout never exceeds the priced amount less the exact fee share. `WithdrawPayoutFloor` shows that on a reachable
+vault it is exactly that amount floored onto the base grid. -/
 
 namespace XRPL.Model.SingleAssetVault
 

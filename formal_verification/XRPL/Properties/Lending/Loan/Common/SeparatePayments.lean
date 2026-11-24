@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Twin
 import XRPL.Properties.Lending.Loan.Common.PayYield
 import XRPL.Properties.Lending.Loan.Common.Loss
@@ -183,12 +184,12 @@ private lemma LendingLedger.loanAt_commitPay {l : LendingLedger} {i : Nat} {e : 
     (l.commitLoan (LoanEffect.ofLoan i e loan' v')).LoanAt i loan' := by
   refine ⟨{ e with loan := loan' }, loan'.broker, ?_, ?_, ?_⟩
   · rw [LendingLedger.loan?_commitLoan]
-    simp only [LoanEffect.ofLoan, if_pos (LendingLedger.loan?_lt he)]
-    rfl
+    dsimp +instances only [LoanEffect.ofLoan]
+    rw [ite_eq_left (LendingLedger.loan?_lt he), ite_eq_left rfl]
   · rw [LendingLedger.broker?_commitLoan l _ b hb]
     simp [LoanEffect.ofLoan]
   · unfold Loan.withBroker RawLoan.to_lawful
-    rw [dif_pos ⟨loan'.wf, loan'.valid⟩]
+    rw [dite_eq_left ⟨loan'.wf, loan'.valid⟩]
 
 /-- A separate payment on a reachable ledger: the next ledger is reachable and holds the paid loan and the paid
 vault. -/
@@ -274,7 +275,7 @@ private lemma LendingLedger.SeparatePayments.paid {i k : Nat} {l l' : LendingLed
       by linarith [hf.debt, hs.debt], by linarith [hf.deployed], by linarith [hf.yield], ?_,
       hsR.trans hf.reserved, hf.settings.trans hsS, ?_⟩
     · rw [hs.broker, hf.broker]
-    · rw [hsL, if_neg (by simp [hf.unimpaired]), hf.loss]
+    · rw [hsL, ite_eq_right (by simp [hf.unimpaired]), hf.loss]
       simp
     · intro htotal
       have h₁ := hf.available (by linarith)

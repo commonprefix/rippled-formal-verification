@@ -1,15 +1,14 @@
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionVaultWithdrawOps
 import XRPL.Properties.Lending.Ledger.Common.RecheckVault
 import XRPL.Properties.Lending.Ledger.Common.WrapLedger
-import XRPL.Properties.Lending.Ledger.Common.SharesNonneg
+import XRPL.Properties.Lending.Ledger.Common.ShareSum
 import XRPL.Properties.Lending.Ledger.Common.TotalStoredInv
 import XRPL.Properties.Vault.Proofs.OpenZone
 
 /-! # VaultWithdraw, VaultClawback and the burn of shares never end in an exception
 
-On a reachable ledger each of the three returns a result code. The model stops with an error only in the final
-lawfulness re-check or on a wrap, which the lawfulness and no-wrap rows exclude, and for a VaultWithdraw by shares on
-an XRP vault when the shares are worth more than `10^17` drops (FV_M2_25). -/
+They fail only in the final re-check or on a wrap, which other rows exclude, and on a VaultWithdraw by shares on XRP
+worth more than `10^17` drops (FV_M2_25). -/
 
 namespace XRPL.Model.Lending
 

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.WindDownDefs
 import XRPL.Properties.Lending.Ledger.Common.AssetFit
 import XRPL.Properties.Lending.Ledger.Common.AssetFlowSteps
@@ -8,9 +9,8 @@ import XRPL.Properties.Lending.Ledger.Common.BrokerProofs
 
 /-! # Closing every loan of a vault in its redemption phase
 
-Past RedemptionDate plus every grace period, each stored loan is deleted: a pending or closed loan at once, an
-active loan after a default. None of these steps adds to AssetsAvailable + AssetsDeployed, so a vault that is not
-coarsened stays so, and a broker's cover only shrinks. -/
+Past RedemptionDate plus every grace period each stored loan is deleted, an active loan after a default. This adds
+nothing to AssetsAvailable + AssetsDeployed, so a vault stays uncoarsened, and a broker's cover only shrinks. -/
 
 namespace XRPL.Model.Lending
 
@@ -72,7 +72,7 @@ private lemma LendingLedger.Reachable.pending_fits {l : LendingLedger} (hr : l.R
   obtain ⟨mp, hmp⟩ := hr.scaleInv.principal_grid he
   have hle := l.principalIf_le_sum (fun _ => true) i
   rw [he] at hle
-  simp only [LoanEntry.principalIf, if_true] at hle
+  simp only [LoanEntry.principalIf, ite_true] at hle
   have hAD : l.vault.assetsDeployed.toRat = l.principalSum (fun _ => true) := hr.debtInv.deployed
   have hAA0 : 0 ≤ l.vault.assetsAvailable.toRat := l.vault.exact.assetsAvailable_nonneg
   have hpo0 : 0 ≤ e.loan.principalOutstanding.toRat := e.loan.exact.principalOutstanding_nonneg
@@ -134,7 +134,7 @@ lemma LendingLedger.loanDelete_frame {l l' : LendingLedger} {i : Nat}
   refine ⟨e, b, r.broker', he, hb, ?_, rfl, hrel.1, rfl, rfl, rfl, hs, hrel.2⟩
   show storeSlot l.loans i none = _
   unfold storeSlot
-  rw [if_pos (LendingLedger.loan?_lt he)]
+  rw [ite_eq_left (LendingLedger.loan?_lt he)]
 
 
 /-- What a default writes on a vault that is not coarsened. The loan's slot holds the closed loan on the same
@@ -180,7 +180,7 @@ private lemma LendingLedger.default_frame {l l' : LendingLedger} (hr : l.Reachab
     rfl, hs, ?_⟩
   · show storeSlot l.loans i (some { e with loan := r.loan' }) = _
     unfold storeSlot
-    rw [if_pos (LendingLedger.loan?_lt he), hl']
+    rw [ite_eq_left (LendingLedger.loan?_lt he), hl']
   · show r₀.loan'.toRawLoan.isPending = false
     rw [hloan]
     exact hpend
@@ -293,14 +293,14 @@ private lemma LendingLedger.LoanPhase.close_one {l : LendingLedger} {s : VaultSc
   rw [he] at he₀
   obtain rfl := Option.some.inj he₀
   have hr₁ := hr.apply h₁
-  have he₁ : l₁.loan? i = some e' := by rw [LendingLedger.loan?_of_set hi hloans₁, if_pos rfl]
+  have he₁ : l₁.loan? i = some e' := by rw [LendingLedger.loan?_of_set hi hloans₁, ite_eq_left rfl]
   obtain ⟨l₂, h₂⟩ := LendingLedger.closed_loan_deletable l₁ hr₁ (by rw [hnd₁]; exact hnd) i e' he₁ hrem' hnp'
   obtain ⟨e₂, b₂, b₂', he₂, hb₂, hloans₂, hbr₂, hcov₂, hnd₂, hnow₂, -, hset₂, hvault₂⟩ :=
     LendingLedger.loanDelete_frame h₂
   rw [he₁] at he₂
   obtain rfl := Option.some.inj he₂
   have hbb : b₂ = b' := by
-    rw [LendingLedger.broker?_of_set hbr₁ (LendingLedger.broker?_lt hb), hbi, if_pos rfl] at hb₂
+    rw [LendingLedger.broker?_of_set hbr₁ (LendingLedger.broker?_lt hb), hbi, ite_eq_left rfl] at hb₂
     exact (Option.some.inj hb₂).symm
   subst hbb
   have hl₂ : l₂.loans = l.loans.set i none := by rw [hloans₂, hloans₁, List.set_set]

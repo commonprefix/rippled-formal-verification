@@ -36,7 +36,7 @@ lemma IOUAmount.normalize_canonical16 (mant : UInt64) (exp : Int) (neg : Bool) (
     have h0 : sd.toInt.natAbs = 0 := by rw [h]; decide
     rw [h_natAbs] at h0; omega
   unfold IOUAmount.normalize
-  rw [if_neg h_sd_ne]
+  rw [ite_eq_right h_sd_ne]
   have h_fr : Number.from_rep (⟨sd, exp⟩ : IOUAmount).mantissa_ (⟨sd, exp⟩ : IOUAmount).exponent_
       largeRange.min largeRange.max mode = .ok ⟨neg, mant * 10 * 10 * 10, exp - 3⟩ := by
     show Number.from_rep sd exp largeRange.min largeRange.max mode = _
@@ -97,7 +97,7 @@ lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) 
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
-    rw [STAmount.iou_eq mode h_int]
+    rw [STAmount.iou_eq mode h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
@@ -105,13 +105,13 @@ lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) 
   · exfalso
     have hb : STAmount.checked .fractional mant exp neg mode = .error .overflow := by
       rw [STAmount.checked]; unfold STAmount.canonicalize
-      rw [if_neg h_int, hiou, if_pos hhi]
+      rw [ite_eq_right h_int, hiou, ite_eq_left hhi]
     rw [hb] at hok; simp at hok
   · by_cases hlo : exp < cMinOffset
     · exfalso; apply hresult
       rw [STAmount.checked] at hok
       unfold STAmount.canonicalize at hok
-      rw [if_neg h_int, hiou, if_neg hhi, if_pos hlo] at hok
+      rw [ite_eq_right h_int, hiou, ite_eq_right hhi, ite_eq_left hlo] at hok
       simp only [] at hok
       rw [← Except.ok.inj hok]
       show (if IOUAmount.zero.signum < 0 then -IOUAmount.zero.mantissa_
@@ -152,14 +152,14 @@ lemma STAmount.checked_iou_zero_exp_lt (mant : UInt64) (exp : Int) (neg : Bool)
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
-    rw [STAmount.iou_eq mode h_int]
+    rw [STAmount.iou_eq mode h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   by_cases hhi : exp > cMaxOffset
   · have hb : STAmount.checked .fractional mant exp neg mode = .error .overflow := by
       rw [STAmount.checked]; unfold STAmount.canonicalize
-      rw [if_neg h_int, hiou, if_pos hhi]
+      rw [ite_eq_right h_int, hiou, ite_eq_left hhi]
     rw [hb] at hok; simp at hok
   · have hexp_lo : (-96 : ℤ) ≤ exp := by unfold cMinOffset at hlo; omega
     have hexp_hi : exp ≤ 80 := by unfold cMaxOffset at hhi; omega
@@ -180,7 +180,7 @@ lemma STAmount.toNumber_iou_canonical (s : STAmount) (mode : rounding_mode)
     s.toNumber mode = .ok ⟨s.mIsNegative, s.mValue * 10 * 10 * 10, s.mOffset - 3⟩ := by
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hc.is_fractional]; decide
   unfold STAmount.toNumber
-  rw [if_neg hint, STAmount.iou_canonical_id s mode hc]
+  rw [ite_eq_right hint, STAmount.iou_canonical_id s mode hc]
   simp only []
   exact STAmount.iou_toNumber_canonical s mode hc
 
@@ -243,7 +243,7 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
   have hmne : (r.mantissa_ != 0) = true := by simp [hr_ne]
   have hneg_eq : decide (r.signum < 0) = r.negative_ := by
     unfold Number.signum
-    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, if_true, if_false,
+    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, ite_true, ite_false,
       Bool.false_eq_true] <;> decide
   -- `neg`/`working` as in `ofNumber`. `working = |r|` is non-negative, same magnitude/exponent.
   set neg : Bool := decide (r.signum < 0) with hneg_def
@@ -255,13 +255,13 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
   have hw_exp : working.exponent_ = r.exponent_ := by
     rw [hw_def]; rcases neg with _ | _
     · simp
-    · simp only [if_true]; unfold Number.operator_neg
-      rw [if_neg (by simpa using hr_ne)]
+    · simp only [ite_true]; unfold Number.operator_neg
+      rw [ite_eq_right (by simpa using hr_ne)]
   have hw_neg : working.negative_ = false := by
     rw [hw_def, hneg_eq]
     by_cases hrn : r.negative_ = true
-    · rw [if_pos hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
-    · rw [if_neg hrn]; simpa using hrn
+    · rw [ite_eq_left hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
+    · rw [ite_eq_right hrn]; simpa using hrn
   have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hr_lo
   have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hr_hi
   have hwe_lo : minExponent ≤ working.exponent_ + 3 := by rw [hw_exp]; omega
@@ -272,11 +272,11 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
   have hr_toRat : r.toRat = (if neg then (-1 : ℚ) else 1) * working.toRat := by
     rw [hw_def]
     by_cases hn : neg = true
-    · rw [if_pos hn, if_pos hn, Number.toRat_neg]; ring
-    · rw [if_neg hn, if_neg hn]; ring
+    · rw [ite_eq_left hn, ite_eq_left hn, Number.toRat_neg]; ring
+    · rw [ite_eq_right hn, ite_eq_right hn]; ring
   -- `.fractional` is non-integral, so `ofNumber` reduces to `checked` on the `normalizeToRange` output.
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
+  rw [ite_eq_right (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -358,7 +358,7 @@ lemma STAmount.ofNumber_iou_within_half_ulp (nt : NumericType) (r : Number)
   have hmne : (r.mantissa_ != 0) = true := by simp [hr_ne]
   have hneg_eq : decide (r.signum < 0) = r.negative_ := by
     unfold Number.signum
-    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, if_true, if_false,
+    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, ite_true, ite_false,
       Bool.false_eq_true] <;> decide
   set neg : Bool := decide (r.signum < 0) with hneg_def
   set working : Number := if neg then r.operator_neg else r with hw_def
@@ -369,13 +369,13 @@ lemma STAmount.ofNumber_iou_within_half_ulp (nt : NumericType) (r : Number)
   have hw_exp : working.exponent_ = r.exponent_ := by
     rw [hw_def]; rcases neg with _ | _
     · simp
-    · simp only [if_true]; unfold Number.operator_neg
-      rw [if_neg (by simpa using hr_ne)]
+    · simp only [ite_true]; unfold Number.operator_neg
+      rw [ite_eq_right (by simpa using hr_ne)]
   have hw_neg : working.negative_ = false := by
     rw [hw_def, hneg_eq]
     by_cases hrn : r.negative_ = true
-    · rw [if_pos hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
-    · rw [if_neg hrn]; simpa using hrn
+    · rw [ite_eq_left hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
+    · rw [ite_eq_right hrn]; simpa using hrn
   have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hr_lo
   have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hr_hi
   have hwe_lo : minExponent ≤ working.exponent_ + 3 := by rw [hw_exp]; omega
@@ -385,10 +385,10 @@ lemma STAmount.ofNumber_iou_within_half_ulp (nt : NumericType) (r : Number)
   have hr_toRat : r.toRat = (if neg then (-1 : ℚ) else 1) * working.toRat := by
     rw [hw_def]
     by_cases hn : neg = true
-    · rw [if_pos hn, if_pos hn, Number.toRat_neg]; ring
-    · rw [if_neg hn, if_neg hn]; ring
+    · rw [ite_eq_left hn, ite_eq_left hn, Number.toRat_neg]; ring
+    · rw [ite_eq_right hn, ite_eq_right hn]; ring
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
+  rw [ite_eq_right (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue .to_nearest with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -464,9 +464,9 @@ lemma STAmount.ofNumber_iou_mantissa_ne_zero (nt : NumericType) (r : Number) (mo
   set working : Number := if neg then r.operator_neg else r with hw_def
   have hw_mant0 : working.mantissa_ = 0 := by
     rw [hw_def]; by_cases hs : neg = true
-    · rw [if_pos hs]; unfold Number.operator_neg
-      rw [if_pos (show (r.mantissa_ == 0) = true from by rw [hrm]; rfl)]; rfl
-    · rw [if_neg hs]; exact hrm
+    · rw [ite_eq_left hs]; unfold Number.operator_neg
+      rw [ite_eq_left (show (r.mantissa_ == 0) = true from by rw [hrm]; rfl)]; rfl
+    · rw [ite_eq_right hs]; exact hrm
   have hnz : working.normalizeToRange kMinValue kMaxValue mode
       = .ok ((0 : Int64), Number.zero.exponent_) := by
     unfold Number.normalizeToRange
@@ -475,12 +475,12 @@ lemma STAmount.ofNumber_iou_mantissa_ne_zero (nt : NumericType) (r : Number) (mo
       rw [doNormalize_eq_spec]
       all_goals try min_fit
       unfold doNormalizeSpec
-      rw [if_pos (show (working.mantissa_ == 0) = true from by rw [hw_mant0]; rfl)]]
+      rw [ite_eq_left (show (working.mantissa_ == 0) = true from by rw [hw_mant0]; rfl)]]
     ntr_tail
   have hof : STAmount.ofNumber .fractional r mode
       = STAmount.checked .fractional (0 : Int64).toUInt64 Number.zero.exponent_ neg mode := by
     unfold STAmount.ofNumber
-    rw [if_neg (by decide), ← hneg_def, ← hw_def, hnz]
+    rw [ite_eq_right (by decide), ← hneg_def, ← hw_def, hnz]
     dsimp only
     rw [Int64.toUInt64Checked_of_nonneg (by decide), ok_bind]
   rw [hof] at hok
@@ -493,13 +493,13 @@ lemma STAmount.ofNumber_iou_mantissa_ne_zero (nt : NumericType) (r : Number) (mo
     rcases neg <;> decide
   have hiou0 : (STAmount.unchecked .fractional (0 : Int64).toUInt64 Number.zero.exponent_ neg).iou mode
       = .ok IOUAmount.zero := by
-    rw [STAmount.iou_eq mode h_unint]
+    rw [STAmount.iou_eq mode h_unint (show (Int64.toUInt64 0).toNat < 2 ^ 63 by decide)]
     unfold IOUAmount.ofMantissaExp IOUAmount.normalize
     rw [hsd0]
     rfl
   rw [STAmount.checked] at hok
   unfold STAmount.canonicalize at hok
-  rw [if_neg h_unint, hiou0] at hok
+  rw [ite_eq_right h_unint, hiou0] at hok
   simp only at hok
   rw [← Except.ok.inj hok]
   show IOUAmount.zero.mantissa_.magnitude = 0

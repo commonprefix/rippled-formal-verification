@@ -11,12 +11,8 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.TopGap
 
 /-! # When the `Number` operations succeed
 
-Success conditions for `doRoundUp`, `doNormalize`, `doNormalize128`, `operator_mul`, `operator_div`
-and `operator_sub` on normalized operands with exponent headroom. Then the success condition of the four
-operations in each rounding mode, and the overflow error outside it. Add, subtract and divide check for
-overflow before they round (FV_M1_19). Where that differs from the rule of the mode their theorems carry
-`hrange`, the widest range that leaves those results out, and an `_attained` witness. The four named values
-are in `Common/Rounding/TopGap.lean`. -/
+Success conditions of the four operations in each rounding mode, and the overflow error outside them. Add, subtract
+and divide check for overflow before rounding (FV_M1_19), so their theorems carry `hrange` and a witness. -/
 
 namespace XRPL.Model.Protocol
 
@@ -24,13 +20,13 @@ namespace XRPL.Model.Protocol
 theorem Number.operator_neg_of_mantissa_zero (n : Number) (h : n.mantissa_ = 0) :
     n.operator_neg = Number.zero := by
   unfold Number.operator_neg
-  rw [if_pos (by rw [h]; rfl)]
+  rw [ite_eq_left (by rw [h]; rfl)]
 
 /-- Adding the canonical zero on the right is the identity and never errors. -/
 theorem Number.operator_add_zero_right (x : Number) (mode : rounding_mode) :
     x.operator_add Number.zero mode = .ok x := by
   unfold Number.operator_add
-  rw [if_pos (by decide : Number.zero.operator_eq Number.zero = true)]
+  rw [ite_eq_left (by decide : Number.zero.operator_eq Number.zero = true)]
   rfl
 
 /-- Adding the canonical zero on the left returns the other operand and never errors. -/
@@ -38,8 +34,8 @@ theorem Number.operator_add_zero_left (y : Number) (mode : rounding_mode) :
     Number.zero.operator_add y mode = .ok y := by
   unfold Number.operator_add
   by_cases hy : y.operator_eq Number.zero = true
-  · rw [if_pos hy, (Number.operator_eq_iff_eq y Number.zero).mp hy]; rfl
-  · rw [if_neg hy, if_pos (by decide : Number.zero.operator_eq Number.zero = true)]; rfl
+  · rw [ite_eq_left hy, (Number.operator_eq_iff_eq y Number.zero).mp hy]; rfl
+  · rw [ite_eq_right hy, ite_eq_left (by decide : Number.zero.operator_eq Number.zero = true)]; rfl
 
 /-- Subtracting a mantissa-zero `Number` returns the first operand unchanged, in every mode. -/
 theorem Number.operator_sub_of_mantissa_zero (x y : Number) (mode : rounding_mode)
@@ -69,7 +65,7 @@ theorem Number.operator_div_of_divisor_ne (x y : Number) (mode : rounding_mode)
            divQuotient128 x.mantissa_ y.mantissa_ x.exponent_ y.exponent_
          doNormalize128 zn zm128 ze largeRange.min largeRange.max mode dropped) := by
   unfold Number.operator_div
-  rw [Number.operator_eq_zero_false_of_mantissa_ne y hy, if_neg Bool.false_ne_true]
+  rw [Number.operator_eq_zero_false_of_mantissa_ne y hy, ite_eq_right Bool.false_ne_true]
 
 /-- `doRoundUp` succeeds when the source exponent is at most `maxExponent - 1`, since the rounding step cannot
 overflow. -/
@@ -111,9 +107,9 @@ theorem doNormalize_capAtMaxRep_ok_of_exp (m : UInt64) (e : Int) (g : Guard)
       doNormalize_capAtMaxRep m e g = .ok (m', e', g') ∧ e' ≤ e + 1 := by
   unfold doNormalize_capAtMaxRep
   by_cases h : m > maxRepUp
-  · rw [if_pos h, if_neg (show ¬ e ≥ maxExponent from not_le.mpr he)]
+  · rw [ite_eq_left h, ite_eq_right (show ¬ e ≥ maxExponent from not_le.mpr he)]
     exact ⟨(divu10 m).1, e + 1, g.push (divu10 m).2, rfl, le_refl _⟩
-  · rw [if_neg h]
+  · rw [ite_eq_right h]
     exact ⟨m, e, g, rfl, by omega⟩
 
 /-- `scaleDown128Spec` runs some `k` steps: the output exponent is `e + k`, the output mantissa is `≤ maxRepUp`, and
@@ -214,7 +210,7 @@ theorem Number.operator_mul_ok_of_large_operands
   unfold Number.operator_mulSpec
   rw [Number.operator_eq_zero_false_of_mantissa_ne x hx]
   rw [Number.operator_eq_zero_false_of_mantissa_ne y hy]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   set zn := x.negative_ != y.negative_ with hzn_def
   set M := toUInt128 x.mantissa_ * toUInt128 y.mantissa_ with hM_def
   set ze := x.exponent_ + y.exponent_ with hze_def
@@ -263,7 +259,7 @@ theorem Number.operator_mul_ok_of_large_operands
     rw [doNormalize_eq_spec]
     all_goals try min_fit
     unfold doNormalizeSpec
-    rw [if_pos (show (res.toNumber.mantissa_ == 0) = true from by
+    rw [ite_eq_left (show (res.toNumber.mantissa_ == 0) = true from by
       show (res.mantissa_ == 0) = true; rw [beq_iff_eq]; exact hrm)]
   · obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ :=
       doRoundUp_output_invariants_upTo_maxRepUp_anyMode sd.2.2 zn sd.1 sd.2.1 mode hzm_ge hzm_le
@@ -295,11 +291,11 @@ theorem doNormalize128_scaleUp_exp_le (minMant : UInt64) (m : UInt128) (e : Int)
     rw [show doNormalize128_scaleUpSpec minMant m e
         = doNormalize128_scaleUpSpec minMant (m * 10) (e - 1) from by
       rw [doNormalize128_scaleUpSpec.eq_def]
-      simp only [if_pos hcond]]
+      simp only [ite_eq_left hcond]]
     omega
   | case2 m e hcond =>
     have h : doNormalize128_scaleUpSpec minMant m e = (m, e) := by
-      rw [doNormalize128_scaleUpSpec.eq_def]; simp only [if_neg hcond]
+      rw [doNormalize128_scaleUpSpec.eq_def]; simp only [ite_eq_right hcond]
     rw [h]
 
 /-- If the mantissa is below `(maxMantissa + 1) · 10^d` and `e + d ≤ maxExponent`, `doNormalize_scaleDown128Spec`
@@ -319,7 +315,7 @@ theorem doNormalize_scaleDown128_ok_aux (d : ℕ) :
     have hnotgt : ¬ m > toUInt128 largeRange.max := by
       rw [gt_iff_lt, BitVec.lt_def, toNat_toUInt128]; omega
     refine ⟨m, e, g, ?_, ?_⟩
-    · rw [doNormalize_scaleDown128Spec.eq_def, dif_neg hnotgt]
+    · rw [doNormalize_scaleDown128Spec.eq_def, dite_eq_right hnotgt]
     · simp
   | succ d IH =>
     intro m e g hm he
@@ -336,10 +332,10 @@ theorem doNormalize_scaleDown128_ok_aux (d : ℕ) :
       obtain ⟨m', e', g', hok, hle⟩ :=
         IH (m / 10) (e + 1) (g.push (toUInt64 (m % 10))) hm10 he10
       refine ⟨m', e', g', ?_, ?_⟩
-      · rw [doNormalize_scaleDown128Spec.eq_def, dif_pos hgt, if_neg hne]; exact hok
+      · rw [doNormalize_scaleDown128Spec.eq_def, dite_eq_left hgt, ite_eq_right hne]; exact hok
       · push_cast at hle ⊢; omega
     · refine ⟨m, e, g, ?_, ?_⟩
-      · rw [doNormalize_scaleDown128Spec.eq_def, dif_neg hgt]
+      · rw [doNormalize_scaleDown128Spec.eq_def, dite_eq_right hgt]
       · push_cast; omega
 
 /-- `doNormalize128` succeeds whenever the source exponent is at most `maxExponent - 22`, with no mantissa
@@ -348,10 +344,10 @@ theorem doNormalize128_ok_of_exp (zn : Bool) (M : UInt128) (e : Int)
     (mode : rounding_mode) (sticky : Bool) (he : e + 22 ≤ maxExponent) :
     ∃ result, doNormalize128 zn M e largeRange.min largeRange.max mode sticky = .ok result := by
   by_cases hM0 : (M == 0) = true
-  · exact ⟨Number.zero, by unfold doNormalize128; rw [if_pos hM0]⟩
+  · exact ⟨Number.zero, by unfold doNormalize128; rw [ite_eq_left hM0]⟩
   · rw [doNormalize128_eq_spec]
     unfold doNormalize128Spec
-    rw [if_neg hM0]
+    rw [ite_eq_right hM0]
     simp only []
     rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
     simp only []
@@ -369,8 +365,8 @@ theorem doNormalize128_ok_of_exp (zn : Bool) (M : UInt128) (e : Int)
     rw [hsd]
     simp only []
     by_cases hund : (e' < minExponent || m' < toUInt128 largeRange.min) = true
-    · rw [if_pos hund]; exact ⟨Number.zero, rfl⟩
-    · rw [if_neg hund]
+    · rw [ite_eq_left hund]; exact ⟨Number.zero, rfl⟩
+    · rw [ite_eq_right hund]
       obtain ⟨m'', e'', g'', hcap, hle''⟩ :=
         doNormalize_capAtMaxRep_ok_of_exp (toUInt64 m') e' g' (by push_cast at hle'; omega)
       rw [hcap]
@@ -402,115 +398,8 @@ lemma Number.operator_div_ok_of_normalized
   have hze : zeq + 22 ≤ maxExponent := by rcases hN with rfl | rfl <;> omega
   have hxeq : x.operator_eq Number.zero = false :=
     Number.operator_eq_zero_false_of_mantissa_ne x hx0
-  rw [Number.operator_div_of_divisor_ne x y mode hy0, hxeq, if_neg Bool.false_ne_true, hdq, ok_bind]
+  rw [Number.operator_div_of_divisor_ne x y mode hy0, hxeq, ite_eq_right Bool.false_ne_true, hdq, ok_bind]
   exact doNormalize128_ok_of_exp (x.negative_ != y.negative_) zmq zeq mode drp hze
-
-/-- The diff-sign `operator_add` tail (`recover` then `doNormalize128`) succeeds for any sign, mantissa and
-guard when the pre-`recover` exponent `E` has `E + 22 ≤ maxExponent`, since `recover` never raises it. -/
-lemma Number.diffSign_recover_tail_ok (zn : Bool) (m : UInt128) (E : Int)
-    (g : Guard) (mode : rounding_mode) (hE : E + 22 ≤ maxExponent) :
-    ∃ result, doNormalize128 zn
-      (if (recoverSpec (toUInt128 largeRange.min * 1000) m E g 40).2.2.empty = true
-        then (recoverSpec (toUInt128 largeRange.min * 1000) m E g 40).1
-        else (recoverSpec (toUInt128 largeRange.min * 1000) m E g 40).1 - 1)
-      (recoverSpec (toUInt128 largeRange.min * 1000) m E g 40).2.1
-      largeRange.min largeRange.max mode
-      (!(recoverSpec (toUInt128 largeRange.min * 1000) m E g 40).2.2.empty)
-    = .ok result := by
-  set R := recoverSpec (toUInt128 largeRange.min * 1000) m E g 40 with hR
-  have hle : R.2.1 ≤ E := by rw [hR]; exact recover_exponent_le _ _ _ _ _
-  exact doNormalize128_ok_of_exp zn _ R.2.1 mode _ (by omega)
-
-/-- Diff-sign `operator_add` with a nonzero second operand succeeds in every mode when both exponents are at
-least 22 below `maxExponent`. -/
-private theorem Number.operator_add_diffSign_ok (x y : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized) (hy0 : y.mantissa_ ≠ 0)
-    (hsign : (x.negative_ == y.negative_) = false)
-    (hxe : x.exponent_ + 22 ≤ maxExponent) (hye : y.exponent_ + 22 ≤ maxExponent) :
-    ∃ result, x.operator_add y mode = .ok result := by
-  rw [Number.operator_add_eq_spec mode hx hy]
-  unfold Number.operator_addSpec
-  rw [Number.operator_eq_zero_false_of_mantissa_ne y hy0, if_neg Bool.false_ne_true]
-  by_cases hg2 : x.operator_eq Number.zero = true
-  · rw [if_pos hg2]; exact ⟨y, rfl⟩
-  · rw [if_neg hg2]
-    by_cases hg3 : x.operator_eq y.operator_neg = true
-    · rw [if_pos hg3]; exact ⟨Number.zero, rfl⟩
-    · rw [if_neg hg3]
-      simp only [hsign, Bool.false_eq_true, if_false]
-      apply Number.diffSign_recover_tail_ok
-      split_ifs <;> first | (rw [alignDown_e_eq]; omega) | omega
-
-/-- Two aligned mantissas below `10^19` with sum at least `10^18`, at a common exponent at most
-`maxExponent - 3`, add and round without error. -/
-lemma Number.sameSign_add_tail_ok (xn : Bool) (xm_a ym_a : UInt64) (e : Int) (g : Guard)
-    (mode : rounding_mode) (hxm : xm_a.toNat < 10 ^ 19) (hym : ym_a.toNat < 10 ^ 19)
-    (hsum : 10 ^ 18 ≤ xm_a.toNat + ym_a.toNat) (he_hi : e + 3 ≤ maxExponent) :
-    ∃ result, (let zm128 : UInt128 := toUInt128 xm_a + toUInt128 ym_a
-      let p : UInt64 × Int × Guard :=
-        if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
-          (toUInt64 (g.doDropDigit128Spec zm128 e).2.1, (g.doDropDigit128Spec zm128 e).2.2,
-           (g.doDropDigit128Spec zm128 e).1)
-        else (toUInt64 zm128, e, g)
-      match p.2.2.doRoundUp xn p.1 p.2.1 largeRange.min largeRange.max mode .overflow with
-      | .error err => Except.error err
-      | .ok res => .ok res.toNumber) = .ok result := by
-  have hxm_tu : (toUInt128 xm_a).toNat = xm_a.toNat := toNat_toUInt128 xm_a
-  have hym_tu : (toUInt128 ym_a).toNat = ym_a.toNat := toNat_toUInt128 ym_a
-  set zm128 : UInt128 := toUInt128 xm_a + toUInt128 ym_a with hzm128_def
-  have hzm128 : zm128.toNat = xm_a.toNat + ym_a.toNat := by
-    rw [hzm128_def, BitVec.toNat_add, hxm_tu, hym_tu]
-    apply Nat.mod_eq_of_lt
-    have : 2 * 10 ^ 19 < 2 ^ 128 := by norm_num
-    omega
-  have hmru : (toUInt128 maxRepUp).toNat = 9223372036854775810 := by
-    rw [toNat_toUInt128]; rfl
-  have hlrm : (toUInt128 largeRange.max).toNat = 9999999999999999999 := by
-    rw [toNat_toUInt128]; exact largeRange_max_val
-  set p : UInt64 × Int × Guard :=
-    if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
-      (toUInt64 (g.doDropDigit128Spec zm128 e).2.1, (g.doDropDigit128Spec zm128 e).2.2,
-       (g.doDropDigit128Spec zm128 e).1)
-    else (toUInt64 zm128, e, g) with hp_def
-  -- the rounding input: mantissa in `[mantissaFloor, maxRepUp]`, exponent in `[e, e + 1]`
-  have hp : mantissaFloor ≤ p.1.toNat ∧ p.1.toNat ≤ maxRepUp.toNat ∧ e ≤ p.2.1 ∧
-      p.2.1 ≤ e + 1 := by
-    have hmru' : maxRepUp.toNat = 9223372036854775810 := rfl
-    by_cases hc : (zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp) = true
-    · rw [hp_def, if_pos hc]
-      have hgt : 9223372036854775810 < zm128.toNat := by
-        rw [Bool.or_eq_true, decide_eq_true_eq, decide_eq_true_eq] at hc
-        rcases hc with h | h
-        · have := BitVec.lt_def.mp h; rw [hlrm] at this; omega
-        · have := BitVec.lt_def.mp h; rw [hmru] at this; omega
-      have h10 : (10 : UInt128).toNat = 10 := by decide
-      have hdiv : (zm128 / 10).toNat = zm128.toNat / 10 := by rw [BitVec.toNat_udiv, h10]
-      have hfit : (zm128 / 10).toNat < 2 ^ 64 := by
-        rw [hdiv, hzm128]
-        have : 2 * 10 ^ 18 < 2 ^ 64 := by norm_num
-        omega
-      simp only [Guard.doDropDigit128Spec]
-      rw [toNat_toUInt64 hfit, hdiv, hmru']
-      refine ⟨by omega, by omega, by omega, le_refl _⟩
-    · rw [hp_def, if_neg hc]
-      rw [Bool.or_eq_true, decide_eq_true_eq, decide_eq_true_eq, not_or] at hc
-      have hle : zm128.toNat ≤ 9223372036854775810 := by
-        have h' : ¬ (toUInt128 maxRepUp).toNat < zm128.toNat := fun h => hc.2 (BitVec.lt_def.mpr h)
-        rw [hmru] at h'
-        omega
-      have hfit : zm128.toNat < 2 ^ 64 := by omega
-      simp only []
-      rw [toNat_toUInt64 hfit, hmru']
-      refine ⟨by omega, by omega, le_refl _, by omega⟩
-  obtain ⟨hlo, hhi, hze_lo, hze_hi⟩ := hp
-  obtain ⟨res, hres⟩ := Guard.doRoundUp_ok_of_exp_le p.2.2 xn p.1 p.2.1
-    largeRange.min largeRange.max mode .overflow largeRange_min_toNat_le (by omega)
-  show ∃ result, (match p.2.2.doRoundUp xn p.1 p.2.1 largeRange.min largeRange.max mode
-      .overflow with
-    | .error err => Except.error err
-    | .ok res => .ok res.toNumber) = .ok result
-  rw [hres]
-  exact ⟨res.toNumber, rfl⟩
 
 /-- The `Number` exponent of a nonzero normalized source sits at or above `minExponent`. -/
 lemma Number.exponent_ge_min (n : Number) (hn : n.isNormalized) (hn0 : n.mantissa_ ≠ 0) :
@@ -519,59 +408,21 @@ lemma Number.exponent_ge_min (n : Number) (hn : n.isNormalized) (hn0 : n.mantiss
   · exfalso; apply hn0; rw [hz]; rfl
   · exact hemin
 
-/-- Same-sign `operator_add` succeeds. Two nonzero normalized operands of the same sign, each exponent at least
-3 below `maxExponent`, add without error in every mode. -/
-lemma Number.operator_add_sameSign_ok (x y : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
-    (hsign : x.negative_ = y.negative_)
-    (hxe : x.exponent_ + 3 ≤ maxExponent) (hye : y.exponent_ + 3 ≤ maxExponent) :
-    ∃ result, x.operator_add y mode = .ok result := by
-  have hxe_min := Number.exponent_ge_min x hx hx0
-  have hye_min := Number.exponent_ge_min y hy hy0
-  have hx_b := mantissaBounds_nat_of (hx.mantissaBounds hx0)
-  have hy_b := mantissaBounds_nat_of (hy.mantissaBounds hy0)
-  rw [Number.operator_add_eq_spec mode hx hy]
-  unfold Number.operator_addSpec
-  rw [Number.operator_eq_zero_false_of_mantissa_ne y hy0,
-    Number.operator_eq_zero_false_of_mantissa_ne x hx0]
-  simp only [Bool.false_eq_true, if_false]
-  by_cases hc : x.operator_eq y.operator_neg = true
-  · rw [if_pos hc]; exact ⟨Number.zero, rfl⟩
-  rw [if_neg hc]
-  have hsn : (x.negative_ == y.negative_) = true := by rw [beq_iff_eq]; exact hsign
-  by_cases hlt : x.exponent_ < y.exponent_
-  · rw [if_pos hlt]
-    set g₀ : Guard := if x.negative_ then Guard.new.set_negative else Guard.new
-    have he := alignDown_e_eq x.mantissa_ x.exponent_ g₀ y.exponent_
-    have hm := alignDown_mantissa_le x.mantissa_ x.exponent_ g₀ y.exponent_
-    rw [max_eq_right (le_of_lt hlt)] at he
-    obtain ⟨r, hr⟩ := Number.sameSign_add_tail_ok x.negative_
-      (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).1 y.mantissa_
-      (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.1
-      (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.2 mode
-      (by omega) hy_b.2 (by omega) (by rw [he]; exact hye)
-    exact ⟨r, by simpa only [hsn, if_true, checkSumAtTop_of_lt _ (show
-      (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.1 < maxExponent by
-        rw [he]; omega), ok_bind] using hr⟩
-  by_cases hgt : x.exponent_ > y.exponent_
-  · rw [if_neg hlt, if_pos hgt]
-    set g₀ : Guard := if y.negative_ then Guard.new.set_negative else Guard.new
-    have he := alignDown_e_eq y.mantissa_ y.exponent_ g₀ x.exponent_
-    have hm := alignDown_mantissa_le y.mantissa_ y.exponent_ g₀ x.exponent_
-    rw [max_eq_right (le_of_lt hgt)] at he
-    obtain ⟨r, hr⟩ := Number.sameSign_add_tail_ok x.negative_ x.mantissa_
-      (Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_).1 x.exponent_
-      (Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_).2.2 mode
-      hx_b.2 (by omega) (by omega) hxe
-    exact ⟨r, by simpa only [hsn, if_true, checkSumAtTop_of_lt _ (show x.exponent_ < maxExponent by omega),
-      ok_bind] using hr⟩
-  · rw [if_neg hlt, if_neg hgt]
-    obtain ⟨r, hr⟩ := Number.sameSign_add_tail_ok x.negative_ x.mantissa_ y.mantissa_ x.exponent_
-      (if x.negative_ then Guard.new.set_negative else Guard.new) mode
-      hx_b.2 hy_b.2 (by omega) hxe
-    exact ⟨r, by simpa only [hsn, if_true, checkSumAtTop_of_lt _ (show x.exponent_ < maxExponent by omega),
-      ok_bind] using hr⟩
+/-- A normalized Number whose exponent is at least 3 below `maxExponent` is at most `10^16 · 10^maxExponent` in size. -/
+private lemma Number.abs_toRat_le_of_exp (x : Number) (hx : x.isNormalized) (hxe : x.exponent_ + 3 ≤ maxExponent) :
+    |x.toRat| ≤ 10 ^ 16 * (10 : ℚ) ^ (maxExponent : ℤ) := by
+  rw [abs_toRat_eq]
+  have hm : (x.mantissa_.toNat : ℚ) ≤ 10 ^ 19 := by
+    rcases hx with hz | ⟨_, hhi, _⟩
+    · rw [hz]; norm_num [Number.zero]
+    · have := (mantissaBounds_nat_of ⟨by assumption, hhi⟩).2
+      exact_mod_cast this.le
+  have hp : (10 : ℚ) ^ x.exponent_ * 10 ^ (3 : ℤ) ≤ 10 ^ (maxExponent : ℤ) := by
+    rw [← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+    exact zpow_le_zpow_right₀ (by norm_num) hxe
+  have hpos : (0 : ℚ) < 10 ^ x.exponent_ := zpow_pos (by norm_num) _
+  norm_num at hp
+  nlinarith
 
 /-- `operator_add` succeeds on two normalized operands with exponent headroom. Either operand may be zero, and the
 signs may differ. -/
@@ -585,12 +436,15 @@ lemma Number.operator_add_ok_of_exp (x y : Number) (mode : rounding_mode)
   by_cases hx0 : x.mantissa_ = 0
   · rw [Number.eq_zero_of_mantissa_zero x hx hx0]
     unfold Number.operator_add
-    rw [Number.operator_eq_zero_false_of_mantissa_ne y hy0, if_neg Bool.false_ne_true,
-      if_pos (by decide)]
+    rw [Number.operator_eq_zero_false_of_mantissa_ne y hy0, ite_eq_right Bool.false_ne_true,
+      ite_eq_left (by decide)]
     exact ⟨y, rfl⟩
-  by_cases hs : x.negative_ = y.negative_
-  · exact Number.operator_add_sameSign_ok x y mode hx hy hx0 hy0 hs (by omega) (by omega)
-  · exact Number.operator_add_diffSign_ok x y mode hx hy hy0 (beq_eq_false_iff_ne.mpr hs) hxe hye
+  refine (Number.operator_add_ok_iff_proof x y mode hx hy hx0 hy0).mpr ?_
+  have hbx := Number.abs_toRat_le_of_exp x hx (by omega)
+  have hby := Number.abs_toRat_le_of_exp y hy (by omega)
+  have hT : (0 : ℚ) < 10 ^ (maxExponent : ℤ) := zpow_pos (by norm_num) _
+  calc |x.toRat + y.toRat| ≤ |x.toRat| + |y.toRat| := abs_add_le _ _
+    _ < 9223372036854775811 * (10 : ℚ) ^ (maxExponent : ℤ) := by nlinarith
 
 /-- `operator_sub` succeeds on two normalized operands with exponent headroom. Either operand may be zero, and the
 signs may differ. -/

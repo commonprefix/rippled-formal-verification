@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import Mathlib.Analysis.Complex.ExponentialBounds
 import XRPL.Model.Vault.Vault
 import XRPL.Properties.Lending.Loan.Common.FactorBound
@@ -27,8 +28,8 @@ lemma loanPeriodicRate_bounds (ir : TenthBips32) (interval : UInt32) (rate : Num
   have he := Number.nearestError_pos
   have he' := eps_small
   have heq : loanPeriodicRate ir interval =
-      (((Number.ofInt64 interval.toInt64).operator_mul ir.toNumber .to_nearest) >>=
-        (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
+      (((Number.ofInt64 interval.toInt64 .to_nearest).operator_mul (ir.toNumber .to_nearest) .to_nearest) >>=
+        (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest)) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
@@ -40,7 +41,7 @@ lemma loanPeriodicRate_bounds (ir : TenthBips32) (interval : UInt32) (rate : Num
   obtain ⟨hY, hYv⟩ := TenthBips32.toNumber_facts (31536000 : UInt32)
   have hU' : (kTenthBipsPerUnity.toNat : ℚ) = 100000 := rfl
   have hY' : ((31536000 : UInt32).toNat : ℚ) = 31536000 := rfl
-  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) := rfl
+  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) .to_nearest := rfl
   rw [hy] at h
   rw [hU'] at hUv
   rw [hY'] at hYv

@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoverOpenZone
 Broker 1 deposits a cover of exactly the Open limit, late interest coarsens the vault, and defaulting loan B pays the
 vault a negative cover of −0.9. The cover ends 0.9 above the Open limit, with no fee paid into it. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Frame
 import XRPL.Properties.Lending.Loan.Common.PayDefs
 import XRPL.Properties.Lending.Loan.Common.SetValue

@@ -11,7 +11,7 @@ The bound `5/(2^63 + 7)` is attained at `x = 5*10^18`, `y = (2^63 + 7)/5`. -/
 
 local syntax "sd_step" : tactic
 local macro_rules | `(tactic| sd_step) => `(tactic|
-  (conv_lhs => rw [scaleDown128Spec]; rw [dif_pos (by decide)]; rfl))
+  (conv_lhs => rw [scaleDown128Spec]; rw [dite_eq_left (by decide)]; rfl))
 
 /-- `scaleDown128Spec` trace for the witness inputs. -/
 lemma scaleDown128_to_nearest_witness :
@@ -26,7 +26,7 @@ lemma scaleDown128_to_nearest_witness :
   sd_step; sd_step; sd_step; sd_step; sd_step
   sd_step; sd_step; sd_step; sd_step; sd_step
   sd_step; sd_step; sd_step; sd_step
-  conv_lhs => rw [scaleDown128Spec]; rw [dif_neg (by decide)]
+  conv_lhs => rw [scaleDown128Spec]; rw [dite_eq_right (by decide)]
   rfl
 
 /-- `doNormalize` trace for the witness result. -/
@@ -38,21 +38,21 @@ lemma doNormalize_witness :
   all_goals try min_fit
   unfold doNormalizeSpec
   rw [show ((9223372036854775820 : UInt64) == 0) = false from rfl]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [show doNormalize_scaleUpSpec largeRange.min (9223372036854775820 : UInt64) (18 : Int)
         = ((9223372036854775820 : UInt64), (18 : Int)) by
-        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
+        unfold doNormalize_scaleUpSpec; rw [ite_eq_right (by decide)]]
   rw [show doNormalize_scaleDown largeRange.max (9223372036854775820 : UInt64) (18 : Int) Guard.new
         = .ok ((9223372036854775820 : UInt64), (18 : Int), Guard.new) by
-        unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
+        unfold doNormalize_scaleDown; rw [dite_eq_right (by decide)]]
   simp only []
   rw [show ((18 : Int) < minExponent || (9223372036854775820 : UInt64) < largeRange.min) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   have h_divu : divu10 (9223372036854775820 : UInt64) = (922337203685477582, 0) := by decide
   rw [show doNormalize_capAtMaxRep (9223372036854775820 : UInt64) (18 : Int) Guard.new
         = .ok ((922337203685477582 : UInt64), (19 : Int), Guard.new) from by
       unfold doNormalize_capAtMaxRep
-      rw [if_pos (by decide), if_neg (by decide), h_divu]; simp only [guard_new_push_zero]; norm_num]
+      rw [ite_eq_left (by decide), ite_eq_right (by decide), h_divu]; simp only [guard_new_push_zero]; norm_num]
   simp only []
   have h_rup : Guard.new.doRoundUp false (922337203685477582 : UInt64) (19 : Int)
       largeRange.min largeRange.max .to_nearest .normalize2 =
@@ -73,7 +73,7 @@ lemma Number.operator_mul_to_nearest_witness :
   unfold Number.operator_mulSpec
   have hx_ne : (⟨false, 5000000000000000000, 0⟩ : Number).operator_eq Number.zero = false := by decide
   have hy_ne : (⟨false, 1844674407370955163, 0⟩ : Number).operator_eq Number.zero = false := by decide
-  simp only [hx_ne, hy_ne, Bool.false_eq_true, if_false, bne_self_eq_false, add_zero]
+  simp only [hx_ne, hy_ne, Bool.false_eq_true, ite_false, bne_self_eq_false, add_zero]
   rw [scaleDown128_to_nearest_witness]
   have h_rup : ({ digits_ := 5764607523034234880, xbit_ := false, sbit_ := false } : Guard).doRoundUp
       false (mantissaFloorSucc : UInt64) (19 : Int) largeRange.min largeRange.max .to_nearest

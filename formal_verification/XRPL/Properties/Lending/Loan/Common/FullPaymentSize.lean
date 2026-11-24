@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FullInterest
 import XRPL.Properties.Lending.Loan.Common.PaymentRoom
 import XRPL.Properties.Lending.Loan.Common.PaySums
@@ -266,11 +267,11 @@ lemma STAmount.roundToNumericType_of_representable (nt : NumericType) (x T : Num
     simp only at hok
     have hty := STAmount.ofNumber_mNumericType _ _ _ st hof
     have hfr : st.integral = false := by unfold STAmount.integral; rw [hty]; rfl
-    rw [if_neg (by rw [hfr]; decide)] at hok
+    rw [ite_eq_right (by rw [hfr]; decide)] at hok
     have hre : STAmount.roundToExponent st s .to_nearest = .ok st := by
       unfold STAmount.roundToExponent
-      rw [if_neg (by rw [hfr]; decide), if_neg (by unfold STAmount.isZero; simpa using hst0),
-        if_pos (by rw [hste]; exact hse)]
+      rw [ite_eq_right (by rw [hfr]; decide), ite_eq_right (by unfold STAmount.isZero; simpa using hst0),
+        ite_eq_left (by rw [hste]; exact hse)]
     rw [hre] at hok
     simp only at hok
     rw [(STAmount.toNumber_exact_of st T (Or.inl hc) hok).1, hstx]

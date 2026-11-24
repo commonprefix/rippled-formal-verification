@@ -5,9 +5,8 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.ResultFacts
 
 /-! # Exact success condition for `operator_mul`
 
-`operator_mul` rounds the scaled product and then runs `normalize`, which rejects a mantissa above `maxRepUp` at
-the top exponent. So `x * y` succeeds exactly when the rounded product is at most `maxRepUp * 10^maxExponent`, and
-the bound on the exact product depends on the rounding mode. -/
+`x * y` succeeds exactly when the rounded product is at most `maxRepUp * 10^maxExponent`. The bound on the exact
+product depends on the rounding mode. -/
 
 namespace XRPL.Model.Protocol
 
@@ -24,7 +23,7 @@ lemma Number.normalize_roundResult_ok_iff {g : Guard} {neg : Bool} {m : UInt64} 
       rw [doNormalize_eq_spec]
       all_goals try min_fit
       unfold doNormalizeSpec
-      rw [if_pos (show (res.toNumber.mantissa_ == 0) = true from by
+      rw [ite_eq_left (show (res.toNumber.mantissa_ == 0) = true from by
         show (res.mantissa_ == 0) = true; rw [beq_iff_eq]; exact hrm)]
     · rintro ⟨h, -⟩
       rw [hrm] at h
@@ -61,12 +60,12 @@ lemma Number.operator_mul_tail_ok_iff (g : Guard) (zn : Bool) (zm : UInt64) (ze'
     exact (Number.normalize_roundResult_ok_iff (by omega) hub hres).mpr fun h => absurd h.2 (not_le.mpr hlt)
   obtain ⟨M', E', hspec, hshape⟩ := Guard.doRoundUp_top_shape g zn zm ze' mode .overflow hlo hhi (not_lt.mp hz)
   by_cases hE : E' > maxExponent
-  · rw [hspec, if_pos hE]
+  · rw [hspec, ite_eq_left hE]
     refine iff_of_false (by rintro ⟨r, hr⟩; cases hr) ?_
     rcases hshape with ⟨h1, -, -, hE'⟩ | ⟨h1, -, -, hE'⟩ | ⟨h1, -, -, hE', -⟩ | ⟨h1, -, -, hE'⟩ <;>
       (rintro (h | ⟨h, -⟩ | ⟨h, h', -⟩) <;> omega)
   have hok : g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow =
-      .ok { negative_ := zn, mantissa_ := M', exponent_ := E' } := by rw [hspec, if_neg hE]
+      .ok { negative_ := zn, mantissa_ := M', exponent_ := E' } := by rw [hspec, ite_eq_right hE]
   have hnorm := Number.normalize_roundResult_ok_iff (mode := mode) (by omega) hub hok
   rw [hmru] at hnorm
   rw [hok]

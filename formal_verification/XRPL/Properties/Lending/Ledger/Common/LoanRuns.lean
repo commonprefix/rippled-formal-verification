@@ -6,10 +6,8 @@ import XRPL.Properties.Lending.Loan.Common.ReachableProofs
 
 /-! # The loan at one slot along a run of ledger transactions
 
-Loan slots are never reused: LoanSet adds a slot at the end and LoanDelete leaves `none` in its place. So a loan at
-`i` after a transaction was at `i` before it, and the transaction either ran an operation on that loan or left its
-entry alone, changing at most the ledger's copy of its broker. Along a run from a reachable ledger the loan at `i`
-is then reachable from the loan at `i` before the run, by `Loan.ReachableFrom`. -/
+Loan slots are never reused, so the loan at `i` after a run is reachable by `Loan.ReachableFrom` from the loan at `i`
+before it. -/
 
 namespace XRPL.Model.Lending
 
@@ -73,13 +71,13 @@ lemma LendingLedger.apply_loanSlot {l l' : LendingLedger} {tx : LendingTx} (h : 
       left
       rw [LendingLedger.loan?_commitLoan]
       simp only [LoanEffect.ofCreate, lt_irrefl, ↓reduceIte]
-      rw [if_neg (by omega)]
+      rw [ite_eq_right (by omega)]
     | loanAccept j =>
       by_cases hij : j = i
       · subst hij; exact .inr (.inr (.inl rfl))
       obtain ⟨e, _, _, he, -, -, -, rfl, -⟩ := LendingLedger.loanAccept_ok h
       left
-      rw [LendingLedger.loan?_commit_ofLoan l he, if_neg (Ne.symm hij)]
+      rw [LendingLedger.loan?_commit_ofLoan l he, ite_eq_right (Ne.symm hij)]
     | loanDelete j =>
       by_cases hij : j = i
       · subst hij; exact .inr (.inl rfl)
@@ -87,19 +85,19 @@ lemma LendingLedger.apply_loanSlot {l l' : LendingLedger} {tx : LendingTx} (h : 
       left
       rw [LendingLedger.loan?_commitLoan]
       simp only [LendingLedger.loan?_lt he, ↓reduceIte]
-      rw [if_neg (Ne.symm hij)]
+      rw [ite_eq_right (Ne.symm hij)]
     | loanManage j action =>
       by_cases hij : j = i
       · subst hij; exact .inr (.inr (.inr (.inl ⟨action, rfl⟩)))
       obtain ⟨e, _, _, he, -, -, -, rfl, -⟩ := LendingLedger.loanManage_ok h
       left
-      rw [LendingLedger.loan?_commit_ofLoan l he, if_neg (Ne.symm hij)]
+      rw [LendingLedger.loan?_commit_ofLoan l he, ite_eq_right (Ne.symm hij)]
     | loanPay j paymentType amount =>
       by_cases hij : j = i
       · subst hij; exact .inr (.inr (.inr (.inr ⟨paymentType, amount, rfl⟩)))
       obtain ⟨e, _, _, he, -, -, -, -, rfl, -⟩ := LendingLedger.loanPay_ok h
       left
-      rw [LendingLedger.loan?_commit_ofLoan l he, if_neg (Ne.symm hij)]
+      rw [LendingLedger.loan?_commit_ofLoan l he, ite_eq_right (Ne.symm hij)]
     | _ => simp [LendingTx.isLoan] at hl
   cases tx <;> simp only [LendingTx.isVault, LendingTx.isBroker, LendingTx.isLoan, Bool.false_eq_true,
     not_false_eq_true, not_true_eq_false] at hv hb hl
@@ -191,11 +189,11 @@ lemma LendingLedger.op_entry {l l' : LendingLedger} {tx : LendingTx} (h : (l.app
       l'.LoanAt i loan' := by
   rcases hop with rfl | ⟨action, rfl⟩ | ⟨paymentType, amount, rfl⟩
   · obtain ⟨e, x, r, he, hx, -, -, rfl, -, hy, -⟩ := LendingLedger.loanAccept_ok h
-    exact ⟨e, x, r.loan', he, hx, by rw [LendingLedger.loan?_commit_ofLoan l he, if_pos rfl], hy⟩
+    exact ⟨e, x, r.loan', he, hx, by rw [LendingLedger.loan?_commit_ofLoan l he, ite_eq_left rfl], hy⟩
   · obtain ⟨e, x, r, he, hx, -, -, rfl, -, hy, -⟩ := LendingLedger.loanManage_ok h
-    exact ⟨e, x, r.loan', he, hx, by rw [LendingLedger.loan?_commit_ofLoan l he, if_pos rfl], hy⟩
+    exact ⟨e, x, r.loan', he, hx, by rw [LendingLedger.loan?_commit_ofLoan l he, ite_eq_left rfl], hy⟩
   · obtain ⟨e, x, r, he, hx, -, -, -, rfl, -, hy, -⟩ := LendingLedger.loanPay_ok h
-    exact ⟨e, x, r.loan', he, hx, by rw [LendingLedger.loan?_commit_ofLoan l he, if_pos rfl], hy⟩
+    exact ⟨e, x, r.loan', he, hx, by rw [LendingLedger.loan?_commit_ofLoan l he, ite_eq_left rfl], hy⟩
 
 /-- A relation between loans holds from the loan at `i` before a run to the loan at `i` after it, on any ledger. It
 must chain, hold both ways between a loan and its copy with another broker, and hold across one operation. -/

@@ -1,12 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Payoff
 import XRPL.Properties.Lending.Loan.Common.PayCharge
 import XRPL.Properties.Lending.Loan.Common.PayLedger
 
 /-! # A LoanPay transaction that pays off an active loan
 
-A payoff payment, the last regular instalment or a full payment, pays one instalment and reads the amount only in
-the check that it covers the instalment's totalDue. Any larger amount pays the loan off the same way, so the largest
-amount the vault's asset holds passes the LoanPay preflight and pays the loan off. -/
+A payoff payment reads its amount only to check that it covers totalDue, so any larger amount pays the loan off the
+same way, the largest amount the vault's asset holds included. -/
 
 namespace XRPL.Model.Lending
 
@@ -117,7 +117,7 @@ private lemma UnsettledPayment.payInstalments_last (q p : UnsettledPayment Vault
       (by show pc.untrackedInterest.isNormalized; rw [n4]; exact Number.zero_isNormalized)
       q.loan.wf.serviceFee_norm hdue
     have hbd : b.operator_lt due = false := (Number.operator_lt_eq_false_iff b due hb hdN).mpr (htp' ▸ hle)
-    rw [if_neg (by rw [hbd]; decide)]
+    rw [ite_eq_right (by rw [hbd]; decide)]
     exact h
 
 /-- The instalment loop on a loan with one payment left charges TotalValueOutstanding + LoanServiceFee. -/
@@ -178,7 +178,7 @@ lemma Loan.regularPay_last_amount (loan : Loan) (v : Vault) (now : UInt32) (hpr 
       (by simp only [ExceptT.run]; exact ‹Loan.unimpairIfImpaired loan v = Except.ok (Except.ok _)›)
     have hcount : p.count ≠ 0 := by simpa using ‹¬(p.count == 0) = true›
     rw [UnsettledPayment.payInstalments_last _ p a b (by rw [hl]; exact hpr) rfl ‹_› hcount hb hle,
-      if_neg ‹_›, if_neg ‹_›, if_neg ‹_›]
+      ite_eq_right ‹_›, ite_eq_right ‹_›, ite_eq_right ‹_›]
     simp [‹¬(p.count == 0) = true›]
   have hx : (loan.payInstalments v .regular b now : TerExcept (UnsettledPayment Vault)) =
       loan.payInstalments v .regular a now := hpb.trans hp.symm
@@ -444,7 +444,7 @@ private lemma payoffAmount_spec (l : LendingLedger) (hasset : Vault.HoldsAsset l
     rfl
   rcases hasset with h | h | h
   · have hA : payoffAmount l.vault.numericType = ⟨false, 9999999999999999000, 77⟩ := by
-      rw [h]; unfold payoffAmount; rw [if_neg (by decide), if_neg (by decide)]
+      rw [h]; unfold payoffAmount; rw [ite_eq_right (by decide), ite_eq_right (by decide)]
     have hv : (⟨false, 9999999999999999000, 77⟩ : Number).toRat = 9999999999999999 * 10 ^ (80 : ℤ) := by
       simp [Number.toRat]; norm_num
     rw [hA]
@@ -453,7 +453,7 @@ private lemma payoffAmount_spec (l : LendingLedger) (hasset : Vault.HoldsAsset l
     exact STAmount.equalAfterNumberConvert_of_representable _ _ (by decide) (by rw [hv]; norm_num)
       (Or.inr ⟨9999999999999999, 80, by norm_num, by norm_num, by norm_num, by norm_num, by rw [hv]; push_cast; ring⟩)
   · have hA : payoffAmount l.vault.numericType = ⟨false, 1000000000000000000, -1⟩ := by
-      rw [h]; unfold payoffAmount; rw [if_pos rfl]
+      rw [h]; unfold payoffAmount; rw [ite_eq_left rfl]
     have hv : (⟨false, 1000000000000000000, -1⟩ : Number).toRat = 100000000000000000 := by
       simp [Number.toRat]; norm_num
     rw [hA]
@@ -465,7 +465,7 @@ private lemma payoffAmount_spec (l : LendingLedger) (hasset : Vault.HoldsAsset l
       rw [show NumericType.native.maxValue.toNat = 100000000000000000 from rfl]
       norm_num
   · have hA : payoffAmount l.vault.numericType = ⟨false, 9223372036854775807, 0⟩ := by
-      rw [h]; unfold payoffAmount; rw [if_neg (by decide), if_pos rfl]
+      rw [h]; unfold payoffAmount; rw [ite_eq_right (by decide), ite_eq_left rfl]
     have hv : (⟨false, 9223372036854775807, 0⟩ : Number).toRat = 9223372036854775807 := by
       simp [Number.toRat, Rat.mkRat_eq_div]
     rw [hA]

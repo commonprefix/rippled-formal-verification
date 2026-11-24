@@ -24,7 +24,7 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
   have hmne : (r.mantissa_ != 0) = true := by simp [hr_ne]
   have hneg_eq : decide (r.signum < 0) = r.negative_ := by
     unfold Number.signum
-    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, if_true, if_false,
+    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, ite_true, ite_false,
       Bool.false_eq_true] <;> decide
   -- `neg`/`working` as in `ofNumber`. `working = |r|` is non-negative, same magnitude/exponent.
   set neg : Bool := decide (r.signum < 0) with hneg_def
@@ -36,13 +36,13 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
   have hw_exp : working.exponent_ = r.exponent_ := by
     rw [hw_def]; rcases neg with _ | _
     · simp
-    · simp only [if_true]; unfold Number.operator_neg
-      rw [if_neg (by simpa using hr_ne)]
+    · simp only [ite_true]; unfold Number.operator_neg
+      rw [ite_eq_right (by simpa using hr_ne)]
   have hw_neg : working.negative_ = false := by
     rw [hw_def, hneg_eq]
     by_cases hrn : r.negative_ = true
-    · rw [if_pos hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
-    · rw [if_neg hrn]; simpa using hrn
+    · rw [ite_eq_left hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
+    · rw [ite_eq_right hrn]; simpa using hrn
   have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hr_lo
   have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hr_hi
   have hwe_lo : minExponent ≤ working.exponent_ + 3 := by rw [hw_exp]; omega
@@ -53,11 +53,11 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
   have hr_toRat : r.toRat = (if neg then (-1 : ℚ) else 1) * working.toRat := by
     rw [hw_def]
     by_cases hn : neg = true
-    · rw [if_pos hn, if_pos hn, Number.toRat_neg]; ring
-    · rw [if_neg hn, if_neg hn]; ring
+    · rw [ite_eq_left hn, ite_eq_left hn, Number.toRat_neg]; ring
+    · rw [ite_eq_right hn, ite_eq_right hn]; ring
   -- `.fractional` is not integral, so `ofNumber` reduces to `checked` on the `normalizeToRange` output.
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
+  rw [ite_eq_right (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -115,7 +115,7 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
     -- non-negativity ⟹ neg = false, so the result tracks `working = r` with no sign flip
     have hneg_false : neg = false := by
       rw [hneg_def]; unfold Number.signum; rw [h_nonneg]
-      simp only [hmne, if_true]; decide
+      simp only [hmne, ite_true]; decide
     have hwr : working.toRat = r.toRat := by rw [hr_toRat, hneg_false]; simp
     have hres' : result.toRat = (mant.toInt : ℚ) * 10 ^ exp := by rw [hres_toRat, hneg_false]; simp
     have hmag : |result.toRat - r.toRat| ≤ (10 : ℚ) ^ (r.exponent_ + 3) := by
@@ -172,7 +172,7 @@ lemma STAmount.ofNumber_iou_abs_le_towards_zero (nt : NumericType) (r : Number) 
   have hmne : (r.mantissa_ != 0) = true := by simp [hr_ne]
   have hneg_eq : decide (r.signum < 0) = r.negative_ := by
     unfold Number.signum
-    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, if_true, if_false,
+    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, ite_true, ite_false,
       Bool.false_eq_true] <;> decide
   set neg : Bool := decide (r.signum < 0) with hneg_def
   set working : Number := if neg then r.operator_neg else r with hw_def
@@ -183,12 +183,12 @@ lemma STAmount.ofNumber_iou_abs_le_towards_zero (nt : NumericType) (r : Number) 
   have hw_exp : working.exponent_ = r.exponent_ := by
     rw [hw_def]; rcases neg with _ | _
     · simp
-    · simp only [if_true]; unfold Number.operator_neg; rw [if_neg (by simpa using hr_ne)]
+    · simp only [ite_true]; unfold Number.operator_neg; rw [ite_eq_right (by simpa using hr_ne)]
   have hw_neg : working.negative_ = false := by
     rw [hw_def, hneg_eq]
     by_cases hrn : r.negative_ = true
-    · rw [if_pos hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
-    · rw [if_neg hrn]; simpa using hrn
+    · rw [ite_eq_left hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
+    · rw [ite_eq_right hrn]; simpa using hrn
   have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hr_lo
   have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hr_hi
   have hwe_lo : minExponent ≤ working.exponent_ + 3 := by rw [hw_exp]; omega
@@ -198,10 +198,10 @@ lemma STAmount.ofNumber_iou_abs_le_towards_zero (nt : NumericType) (r : Number) 
   have hr_toRat : r.toRat = (if neg then (-1 : ℚ) else 1) * working.toRat := by
     rw [hw_def]
     by_cases hn : neg = true
-    · rw [if_pos hn, if_pos hn, Number.toRat_neg]; ring
-    · rw [if_neg hn, if_neg hn]; ring
+    · rw [ite_eq_left hn, ite_eq_left hn, Number.toRat_neg]; ring
+    · rw [ite_eq_right hn, ite_eq_right hn]; ring
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
+  rw [ite_eq_right (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue .towards_zero with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>

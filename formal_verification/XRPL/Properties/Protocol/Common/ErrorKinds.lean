@@ -7,9 +7,8 @@ import XRPL.Properties.Protocol.STAmount.Range.Success
 
 /-! # Which errors the Number and amount operations return
 
-A vault transaction catches the overflow errors of its pricing and returns `tecPATH_DRY`. Every other error leaves
-the transaction as an exception. The lemmas here sort the errors of the operations a deposit, a withdrawal and a
-clawback run: an overflow error, a wrap, or for an XRP or MPT amount `outOfRange`. -/
+A vault transaction turns an overflow in its pricing into `tecPATH_DRY` and any other error into an exception.
+The vault operations fail only with an overflow, a wrap, or `outOfRange` for an XRP or MPT amount. -/
 
 namespace XRPL.Model.Protocol.ErrorKinds
 
@@ -66,7 +65,7 @@ lemma tenthBips_error {value : Number} {bips : TenthBips32} {mode : rounding_mod
     (h : tenthBipsOfValue value bips mode = .error e) : isOverflow e = true ∨ e = .wrap := by
   unfold tenthBipsOfValue at h
   dsimp only at h
-  rcases hm : value.operator_mul bips.toNumber mode with e' | p
+  rcases hm : value.operator_mul (bips.toNumber mode) mode with e' | p
   · rw [hm, err_bind] at h; cases h; exact number_mul_error hm
   · rw [hm, ok_bind] at h; exact number_div_error h
 
@@ -82,11 +81,11 @@ lemma normalizeToRange_error {n : Number} {minM maxM : UInt64} {mode : rounding_
     · rw [hm, err_bind] at h; cases h; exact Or.inr (UInt64.toInt64Checked_eq_error hm)
     rw [hm, ok_bind] at h
     by_cases hneg : res.negative_ = true
-    · rw [if_pos hneg] at h
+    · rw [ite_eq_left hneg] at h
       rcases hn : mant.negChecked with e' | sm
       · rw [hn, err_bind] at h; cases h; exact Or.inr (Int64.negChecked_eq_error hn)
       · rw [hn, ok_bind] at h; cases h
-    · rw [if_neg hneg] at h; cases h
+    · rw [ite_eq_right hneg] at h; cases h
 
 /-- The digit-growing loop of `to_rep` fails only with an overflow error. -/
 lemma growSpec_error {drops : rep} {offset : Int} {e : Error} (h : growSpec drops offset = .error e) :
@@ -165,6 +164,15 @@ lemma iou_add_error {x y : IOUAmount} {mode : rounding_mode} {e : Error}
       (Number.from_rep_isNormalized _ _ mode yn hyn) he
   · exact iou_ofNumber_error h
 
+/-- Reading an IOU amount as an `IOUAmount` fails only with an overflow error or a wrap. -/
+lemma iou_error {s : STAmount} {mode : rounding_mode} {e : Error} (hfr : ¬ s.integral = true)
+    (h : s.iou mode = .error e) : isOverflow e = true ∨ e = .wrap := by
+  unfold STAmount.iou at h
+  rw [ite_eq_right hfr] at h
+  rcases hv : s.signedDropsChecked with e' | v
+  · rw [hv, err_bind] at h; cases h; exact Or.inr (STAmount.signedDropsChecked_eq_error hv)
+  · rw [hv, ok_bind] at h; exact iou_normalize_error h
+
 /-- Reading an amount as a Number fails only with an overflow error or a wrap. -/
 lemma toNumber_error {s : STAmount} {mode : rounding_mode} {e : Error} (h : s.toNumber mode = .error e) :
     isOverflow e = true ∨ e = .wrap := by
@@ -175,32 +183,38 @@ lemma toNumber_error {s : STAmount} {mode : rounding_mode} {e : Error} (h : s.to
     · rename_i e' he
       cases h
       unfold STAmount.intAmount at he
-      rw [if_pos hint] at he
-      rcases hv : s.signedDrops.toInt64Checked with e'' | v
-      · rw [hv, err_bind] at he; cases he; exact Or.inr (Int.toInt64Checked_eq_error hv)
+      rw [ite_eq_left hint] at he
+      rcases hv : s.signedDropsChecked with e'' | v
+      · rw [hv, err_bind] at he; cases he; exact Or.inr (STAmount.signedDropsChecked_eq_error hv)
       · rw [hv, ok_bind] at he; cases he
     · exact number_from_rep_error h
   · rename_i hint
     split at h
     · rename_i e' he
       cases h
-      unfold STAmount.iou at he
-      rw [if_neg hint] at he
-      exact iou_normalize_error he
+      exact iou_error hint he
     · exact number_from_rep_error h
 
 /-- Bringing an IOU amount to its stored form fails only with an overflow error or a wrap. -/
 lemma canonicalize_fractional_error {s : STAmount} {mode : rounding_mode} {e : Error}
     (hfr : ¬ s.integral = true) (h : s.canonicalize mode = .error e) : isOverflow e = true ∨ e = .wrap := by
   unfold STAmount.canonicalize at h
-  rw [if_neg hfr] at h
+  rw [ite_eq_right hfr] at h
   split at h
   · rename_i e' he
     cases h
-    unfold STAmount.iou at he
-    rw [if_neg hfr] at he
-    exact iou_normalize_error he
+    exact iou_error hfr he
   · cases h
+
+/-- Making an IOU amount from an `IOUAmount` fails only with an overflow error or a wrap. -/
+lemma ofIOUAmount_error {a : IOUAmount} {mode : rounding_mode} {e : Error}
+    (h : STAmount.ofIOUAmount a mode = .error e) : isOverflow e = true ∨ e = .wrap := by
+  by_cases hv : a.mantissa_ = Int64.minValue
+  · unfold STAmount.ofIOUAmount at h
+    rw [hv, STAmount.uncheckedFromInt64_minValue, err_bind] at h; cases h; exact Or.inr rfl
+  · rw [STAmount.ofIOUAmount_of_ne mode hv] at h
+    exact canonicalize_fractional_error
+      (by simp [STAmount.unchecked, STAmount.integral, NumericType.isIntegral]) h
 
 /-- Converting a Number to an IOU amount fails only with an overflow error or a wrap. -/
 lemma ofNumber_fractional_error {n : Number} {mode : rounding_mode} {e : Error}
@@ -208,7 +222,7 @@ lemma ofNumber_fractional_error {n : Number} {mode : rounding_mode} {e : Error}
   unfold STAmount.ofNumber at h
   dsimp only at h
   generalize (if decide (n.signum < 0) = true then n.operator_neg else n) = w at h
-  rw [if_neg (by decide)] at h
+  rw [ite_eq_right (by decide)] at h
   split at h
   · rename_i e' he; cases h; exact normalizeToRange_error (by decide) he
   · rename_i m ex hm
@@ -235,7 +249,7 @@ lemma ofNumber_int64_error {n : Number} {mode : rounding_mode} {e : Error}
   unfold STAmount.ofNumber at h
   dsimp only at h
   generalize (if decide (n.signum < 0) = true then n.operator_neg else n) = w at h
-  rw [if_pos (by decide)] at h
+  rw [ite_eq_left (by decide)] at h
   split at h
   · rename_i e' he; cases h; exact to_rep_error he
   · rename_i r hr
@@ -273,19 +287,14 @@ lemma add_fractional_error {v1 v2 : STAmount} {mode : rounding_mode} {e : Error}
   split at h
   · rename_i e' he
     cases h
-    unfold STAmount.iou at he
-    rw [if_neg hi1] at he
-    exact iou_normalize_error he
+    exact iou_error hi1 he
   split at h
   · rename_i e' he
     cases h
-    unfold STAmount.iou at he
-    rw [if_neg hi2] at he
-    exact iou_normalize_error he
+    exact iou_error hi2 he
   split at h
   · rename_i e' he; cases h; exact iou_add_error he
-  · exact canonicalize_fractional_error
-      (by simp [STAmount.unchecked, STAmount.integral, NumericType.isIntegral]) h
+  · exact ofIOUAmount_error h
 
 /-- A type that is not XRP or an MPT is the IOU type. -/
 lemma eq_fractional_of_not_integral {nt : NumericType} (h : ¬ nt.isIntegral = true) : nt = .fractional := by
@@ -355,8 +364,8 @@ lemma clampToSumExponent_error {amount : Number} {delta : STAmount} {exponent : 
     · exact hfr
   generalize (if delta.negative = true then delta.operator_neg else delta) = dabs at h habs
   by_cases hint : delta.integral = true
-  · rw [if_pos hint] at h; cases h
-  rw [if_neg hint] at h
+  · rw [ite_eq_left hint] at h; cases h
+  rw [ite_eq_right hint] at h
   have hfr : delta.mNumericType = .fractional := eq_fractional_of_not_integral hint
   split at h
   · rename_i e' he; cases h; exact toNumber_error he

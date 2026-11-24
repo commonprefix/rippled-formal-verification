@@ -69,7 +69,7 @@ lemma LendingLedger.coverClawback_minimum_proof (l : LendingLedger) (hr : l.Reac
     obtain rfl : b₀ = b := Option.some.inj (hb₀.symm.trans hb)
     have hcl : (b₀.coverClawback l.vault amount).run = .ok (.ok r₀) := hcl
     obtain rfl : r₀ = r := Except.ok.inj (Except.ok.inj (hcl.symm.trans hok))
-    rw [LendingLedger.broker?_commitBroker, if_pos (by simp [LendingLedger.broker?_lt hb₀])] at hb'
+    rw [LendingLedger.broker?_commitBroker, ite_eq_left (by simp [LendingLedger.broker?_lt hb₀])] at hb'
     exact (Option.some.inj hb').symm
   subst hbr
   refine ⟨fun hall => ⟨?_, ?_⟩, ?_⟩

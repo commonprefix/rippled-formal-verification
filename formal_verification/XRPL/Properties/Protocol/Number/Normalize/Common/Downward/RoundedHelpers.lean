@@ -64,7 +64,7 @@ theorem Number.normalize_rounded_downward_proof (n result : Number)
     unfold Number.normalize at hok
     replace hok := doNormalize_ok_spec hok
     unfold doNormalizeSpec at hok
-    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr hnz, if_pos rfl] at hok
+    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr hnz, ite_eq_left rfl] at hok
     have h_result : result = Number.zero := (Except.ok.inj hok).symm
     apply hresult
     rw [h_result]

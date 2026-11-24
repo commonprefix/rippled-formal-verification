@@ -2,16 +2,9 @@ import XRPL.Properties.Lending.Ledger.Common.ReachableProofs
 
 /-! # Witnesses for amounts above the XRP range
 
-Runs from a new closed-ended XRP vault, checked by `native_decide`. The largest XRP amount is `10^17` drops, and
-the model ends in an error where C++ throws while it builds a larger one.
+A LoanSet and a donation on XRP vaults build an amount above `10^17` drops and end in an error (FV_M4_51, FV_M4_52). -/
 
-* LoanSet: a vault of `3.3·10^15` drops, a loan of all of it at 100% with one payment after `943000000` seconds. Its
-  total value is above `10^17` drops, and computing the loan ends in an error before the Open limit check.
-* Donation: a vault of `9·10^15` drops lent in two loans of `4.5·10^15` at a LateInterestRate of 100%. The first is
-  paid 20 years late, so AssetsTotal is `9.9·10^16` drops. A donation of `4.5·10^15` takes it above `10^17`, and the
-  Open limit check ends in an error. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -36,7 +29,7 @@ private def arGenesis : LendingLedger := { vault := arVault, shares := [], broke
 private lemma arGenesis_genesis : arGenesis.Genesis where
   created := ⟨none, none, arSchedule, none, false, .native, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨arVault.wf, arVault.valid⟩⟩
+    exact dite_eq_left ⟨arVault.wf, arVault.valid⟩⟩
   holds_asset := Or.inr (Or.inl rfl)
   no_holders := rfl
   no_brokers := rfl

@@ -2,13 +2,12 @@ import Mathlib.Tactic
 import XRPL.Model.Protocol.Number
 import XRPL.Properties.Protocol.Common.FixedWidth
 import XRPL.Properties.Protocol.Number.Common.Rounding.BitVec
+import XRPL.Properties.Protocol.Number.Common.DropDigitEquivalence
 
 /-! # Number internals with raw fixed-width arithmetic
 
-Each `…Spec` function is a Number internal as it was before the wrap checks: the same code with raw fixed-width
-operations, calling the other `Spec` helpers and the same checked functions otherwise. The proofs about the
-Number internals reason about these twins. A checked function `Refines` its twin: it gives the twin's result, or
-stops with `Error.wrap`. The `_eq_spec` lemmas show it gives the twin's result when nothing wraps. -/
+Each `…Spec` function is a Number internal without the wrap checks. The proofs reason about these twins, and the
+`_eq_spec` lemmas show that the checked function gives the twin's result when nothing wraps. -/
 
 namespace XRPL.Model.Protocol
 
@@ -33,17 +32,6 @@ lemma Refines.bind_ok {α β : Type} {A : Except Error α} {b : α} {K : α → 
   · rw [ok_bind]; exact hK
   · exact Or.inr rfl
 
-/-- Below the top exponent the same-sign add check passes. -/
-lemma checkSumAtTop_of_lt (z : UInt128) {e : Int} (h : e < maxExponent) : checkSumAtTop z e = .ok () := by
-  simp [checkSumAtTop, h]
-
-/-- A successful same-sign add passed its top-exponent check. -/
-lemma checkSumAtTop_bind_ok {α : Type} {z : UInt128} {e : Int} {k : Unit → Except Error α} {r : α}
-    (h : (checkSumAtTop z e >>= k) = .ok r) : k () = .ok r := by
-  cases hc : checkSumAtTop z e with
-  | error err => rw [hc] at h; cases h
-  | ok u => rw [hc, ok_bind] at h; exact h
-
 lemma Refines.ok_eq {α : Type} {new old : Except Error α} {r : α} (h : Refines new old) (hn : new = .ok r) :
     old = .ok r := by
   rcases h with rfl | rfl
@@ -55,12 +43,6 @@ lemma Refines.ne_error {α : Type} {new old : Except Error α} {e : Error} (h : 
   rcases h with rfl | rfl
   · exact hold
   · intro h'; cases h'; exact he rfl
-
-lemma Refines.eq_of_ne {α : Type} {new old : Except Error α} (h : Refines new old) (hn : new ≠ .error .wrap) :
-    new = old := by
-  rcases h with h | h
-  · exact h
-  · exact absurd h hn
 
 lemma UInt64.addChecked_refines (a b : UInt64) : Refines (a.addChecked b) (.ok (a + b)) := by
   unfold UInt64.addChecked; split
@@ -74,11 +56,6 @@ lemma UInt64.subChecked_refines (a b : UInt64) : Refines (a.subChecked b) (.ok (
 
 lemma UInt64.mulChecked_refines (a b : UInt64) : Refines (a.mulChecked b) (.ok (a * b)) := by
   unfold UInt64.mulChecked; split
-  · exact Refines.refl _
-  · exact Refines.wrap _
-
-lemma toUInt64Checked_refines (x : UInt128) : Refines (toUInt64Checked x) (.ok (toUInt64 x)) := by
-  unfold toUInt64Checked; split
   · exact Refines.refl _
   · exact Refines.wrap _
 
@@ -207,11 +184,11 @@ lemma Guard.bringIntoRange_eq_spec (negative : Bool) (m : UInt64) (e : Int) {min
   unfold Guard.bringIntoRange Guard.bringIntoRangeSpec
   by_cases h : m < minM ∧ m ≠ 0
   · have hlt : m.toNat < minM.toNat := UInt64.lt_iff_toNat_lt.mp h.1
-    rw [if_pos h, if_pos h, UInt64.mulChecked_of_lt (by rw [show (10 : UInt64).toNat = 10 from rfl]; omega),
+    rw [ite_eq_left h, ite_eq_left h, UInt64.mulChecked_of_lt (by rw [show (10 : UInt64).toNat = 10 from rfl]; omega),
       ok_bind, pure_eq, ok_bind]
     dsimp only
     split <;> rfl
-  · rw [if_neg h, if_neg h, pure_eq, ok_bind]
+  · rw [ite_eq_right h, ite_eq_right h, pure_eq, ok_bind]
     dsimp only
     split <;> rfl
 
@@ -219,13 +196,13 @@ lemma Guard.bringIntoRange_refines (negative : Bool) (m : UInt64) (e : Int) (min
     Refines (Guard.bringIntoRange negative m e minM) (.ok (Guard.bringIntoRangeSpec negative m e minM)) := by
   unfold Guard.bringIntoRange Guard.bringIntoRangeSpec
   by_cases h : m < minM ∧ m ≠ 0
-  · rw [if_pos h, if_pos h]
+  · rw [ite_eq_left h, ite_eq_left h]
     rcases UInt64.mulChecked_refines m 10 with h' | h'
     · rw [h', ok_bind, pure_eq, ok_bind]
       dsimp only
       split <;> exact Refines.refl _
     · rw [h', err_bind, err_bind]; exact Refines.wrap _
-  · rw [if_neg h, if_neg h, pure_eq, ok_bind]
+  · rw [ite_eq_right h, ite_eq_right h, pure_eq, ok_bind]
     dsimp only
     split <;> exact Refines.refl _
 
@@ -244,7 +221,7 @@ lemma Guard.doRoundUp_eq_spec (g : Guard) (negative : Bool) (m : UInt64) (e : In
   split_ifs with h1 h2 h3 h4 h5 <;>
     simp (disch := (simp only [UInt64.lt_iff_toNat_lt, UInt64.toNat_div, h10, h1u] at *; omega))
       only [Guard.bringIntoRange_eq_spec _ _ _ hmin, UInt64.addChecked_of_lt, ok_bind, pure_eq] <;>
-    first | rfl | simp_all
+    simp_all
 
 /-- `doNormalize_scaleUp` with a raw multiplication. -/
 def doNormalize_scaleUpSpec (minMantissa : UInt64) (m : UInt64) (e : Int) : UInt64 × Int :=
@@ -325,10 +302,6 @@ def doNormalize128Spec (negative : Bool) (mantissa : UInt128) (exponent : Int)
           | .error err => .error err
           | .ok res => .ok res.toNumber
 
-/-- `doDropDigit128` with raw narrowing. -/
-def Guard.doDropDigit128Spec (g : Guard) (mantissa : UInt128) (exponent : Int) : Guard × UInt128 × Int :=
-  (g.push (toUInt64 (mantissa % 10)), mantissa / 10, exponent + 1)
-
 /-- The `recover` loop of `operator_add` with raw arithmetic. -/
 def recoverSpec (upperLimit : UInt128) (m : UInt128) (e : Int) (g : Guard) (fuel : Nat) :
     UInt128 × Int × Guard :=
@@ -354,61 +327,65 @@ def Number.operator_mulSpec (x y : Number) (mode : rounding_mode) : Except Error
     | .error err => .error err
     | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode
 
-/-- `operator_add` with raw arithmetic. -/
-def Number.operator_addSpec (x y : Number) (mode : rounding_mode) : Except Error Number := do
-  if y.operator_eq Number.zero then return x
-  else if x.operator_eq Number.zero then return y
-  else if x.operator_eq (y.operator_neg) then return Number.zero
+/-- `adjustExpand` with a raw multiplication. -/
+def adjustExpandSpec (upperLimit expandM : UInt128) (expandE shrinkE : Int) : UInt128 × Int :=
+  if shrinkE < expandE ∧ minExponent < expandE ∧ expandM < upperLimit then
+    adjustExpandSpec upperLimit (expandM * 10) (expandE - 1) shrinkE
+  else (expandM, expandE)
+termination_by (expandE - shrinkE).toNat
+decreasing_by omega
+
+/-- `adjust` with a raw multiplication, and the digit drop without its early exit. -/
+def adjustSpec (upperLimit expandM : UInt128) (expandE : Int) (shrinkM : UInt64) (shrinkE : Int) (g : Guard) :
+    UInt128 × Int × UInt64 × Guard :=
+  let (shrinkM, shrinkE, g) := adjustShrinkZeros g shrinkM shrinkE expandE
+  let (expandM, expandE) := adjustExpandSpec upperLimit expandM expandE shrinkE
+  let (shrinkM, _, g) := alignDownSpec shrinkM shrinkE g expandE
+  (expandM, expandE, shrinkM, g)
+
+/-- The aligned operands of `operator_add`: both mantissas on one exponent, and the guard of the digits dropped from
+the operand with the smaller exponent. -/
+def Number.addAlignSpec (x y : Number) : UInt128 × UInt128 × Int × Guard :=
+  if x.exponent_ < y.exponent_ then
+    let g := if x.negative_ then Guard.new.set_negative else Guard.new
+    let (ym, e, xm, g) :=
+      adjustSpec (toUInt128 largeRange.min * 1000) (toUInt128 y.mantissa_) y.exponent_ x.mantissa_ x.exponent_ g
+    (toUInt128 xm, ym, e, g)
+  else if x.exponent_ > y.exponent_ then
+    let g := if y.negative_ then Guard.new.set_negative else Guard.new
+    let (xm, e, ym, g) :=
+      adjustSpec (toUInt128 largeRange.min * 1000) (toUInt128 x.mantissa_) x.exponent_ y.mantissa_ y.exponent_ g
+    (xm, toUInt128 ym, e, g)
   else
-    let xn := x.negative_
-    let xm := x.mantissa_
-    let xe := x.exponent_
-    let yn := y.negative_
-    let ym := y.mantissa_
-    let ye := y.exponent_
-    let (xm, xe, ym, _ye, g) :=
-      if xe < ye then
-        let g := if xn then Guard.new.set_negative else Guard.new
-        let (xm', xe', g') := Number.operator_add.alignDown xm xe g ye
-        (xm', xe', ym, ye, g')
-      else if xe > ye then
-        let g := if yn then Guard.new.set_negative else Guard.new
-        let (ym', _ye', g') := Number.operator_add.alignDown ym ye g xe
-        (xm, xe, ym', xe, g')
-      else
-        let g := if xn then Guard.new.set_negative else Guard.new
-        (xm, xe, ym, ye, g)
-    if xn == yn then
-      let zm128 : UInt128 := toUInt128 xm + toUInt128 ym
-      checkSumAtTop zm128 xe
-      let (zm, xe, g) :=
-        if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
-          let (g', zm128', xe') := g.doDropDigit128Spec zm128 xe
-          (toUInt64 zm128', xe', g')
-        else (toUInt64 zm128, xe, g)
-      match g.doRoundUp xn zm xe largeRange.min largeRange.max mode .overflow with
-      | .error err => .error err
-      | .ok res => .ok res.toNumber
+    let g := if (x.mantissa_ < y.mantissa_ && x.negative_) || (y.mantissa_ < x.mantissa_ && y.negative_) then
+      Guard.new.set_negative else Guard.new
+    (toUInt128 x.mantissa_, toUInt128 y.mantissa_, x.exponent_, g)
+
+/-- `operator_add` with raw arithmetic. -/
+def Number.operator_addSpec (x y : Number) (mode : rounding_mode) : Except Error Number :=
+  if y.operator_eq Number.zero then .ok x
+  else if x.operator_eq Number.zero then .ok y
+  else if x.operator_eq (y.operator_neg) then .ok Number.zero
+  else
+    let (xm, ym, xe, g) := Number.addAlignSpec x y
+    if x.negative_ == y.negative_ then
+      doNormalize128 x.negative_ (xm + ym) xe largeRange.min largeRange.max mode (!g.empty)
     else
-      let (zm128, zn, ze) :=
-        if xm > ym then (toUInt128 xm - toUInt128 ym, xn, xe)
-        else (toUInt128 ym - toUInt128 xm, yn, xe)
-      let upperLimit : UInt128 := toUInt128 largeRange.min * 1000
-      let (zm128, ze, g) := recoverSpec upperLimit zm128 ze g 40
-      let stickyTail := !g.empty
-      let zm128 := if g.empty then zm128 else zm128 - 1
-      doNormalize128 zn zm128 ze largeRange.min largeRange.max mode stickyTail
+      let (zm, zn) := if xm > ym then (xm - ym, x.negative_) else (ym - xm, y.negative_)
+      let (zm, ze, g) := recoverSpec (toUInt128 largeRange.min * 1000) zm xe g 40
+      let zm := if g.empty then zm else zm - 1
+      doNormalize128 zn zm ze largeRange.min largeRange.max mode (!g.empty)
 
 lemma doNormalize_scaleUp_eq_spec {minM : UInt64} (m : UInt64) (e : Int) (hmin : minM.toNat ≤ 10 ^ 18) :
     doNormalize_scaleUp minM m e = .ok (doNormalize_scaleUpSpec minM m e) := by
   induction m, e using doNormalize_scaleUpSpec.induct minM with
   | case1 m e h ih =>
     have hlt : m.toNat < minM.toNat := UInt64.lt_iff_toNat_lt.mp h.1
-    rw [doNormalize_scaleUp, doNormalize_scaleUpSpec, if_pos h, if_pos h,
+    rw [doNormalize_scaleUp, doNormalize_scaleUpSpec, ite_eq_left h, ite_eq_left h,
       UInt64.mulChecked_of_lt (by rw [show (10 : UInt64).toNat = 10 from rfl]; omega), ok_bind]
     exact ih
   | case2 m e h =>
-    rw [doNormalize_scaleUp, doNormalize_scaleUpSpec, if_neg h, if_neg h]
+    rw [doNormalize_scaleUp, doNormalize_scaleUpSpec, ite_eq_right h, ite_eq_right h]
 
 lemma doNormalize_eq_spec (negative : Bool) (m : UInt64) (e : Int) {minM : UInt64} (maxM : UInt64)
     (mode : rounding_mode) (hmin : minM.toNat ≤ 10 ^ 18) :
@@ -429,38 +406,39 @@ lemma scaleDown128_eq_spec (m : UInt128) (e : Int) (g : Guard) :
     scaleDown128 m e g = .ok (scaleDown128Spec m e g) := by
   induction m, e, g using scaleDown128Spec.induct with
   | case1 m e g h d ih =>
-    rw [scaleDown128, scaleDown128Spec, dif_pos h, dif_pos h, toUInt64Checked_of_lt (toNat_umod_ten_lt m),
+    rw [scaleDown128, scaleDown128Spec, dite_eq_left h, dite_eq_left h, toUInt64Checked_of_lt (toNat_umod_ten_lt m),
       ok_bind]
     exact ih
   | case2 m e g h =>
     have hle : m.toNat ≤ (toUInt128 maxRepUp).toNat := not_lt.mp h
     have hup : maxRepUp.toNat = 2 ^ 63 + 2 := by decide
     rw [toNat_toUInt128] at hle
-    rw [scaleDown128, scaleDown128Spec, dif_neg h, dif_neg h, toUInt64Checked_of_lt (by omega), ok_bind]
+    rw [scaleDown128, scaleDown128Spec, dite_eq_right h, dite_eq_right h, toUInt64Checked_of_lt (by omega), ok_bind]
     rfl
 
 lemma doNormalize_scaleDown128_eq_spec (maxM : UInt64) (m : UInt128) (e : Int) (g : Guard) :
     doNormalize_scaleDown128 maxM m e g = doNormalize_scaleDown128Spec maxM m e g := by
   induction m, e, g using doNormalize_scaleDown128Spec.induct maxM with
   | case1 m e g h he =>
-    rw [doNormalize_scaleDown128, doNormalize_scaleDown128Spec, dif_pos h, dif_pos h, if_pos he, if_pos he]
+    rw [doNormalize_scaleDown128, doNormalize_scaleDown128Spec, dite_eq_left h, dite_eq_left h, ite_eq_left he,
+      ite_eq_left he]
   | case2 m e g h he ih =>
-    rw [doNormalize_scaleDown128, doNormalize_scaleDown128Spec, dif_pos h, dif_pos h, if_neg he, if_neg he,
-      toUInt64Checked_of_lt (toNat_umod_ten_lt m), ok_bind]
+    rw [doNormalize_scaleDown128, doNormalize_scaleDown128Spec, dite_eq_left h, dite_eq_left h, ite_eq_right he,
+      ite_eq_right he, toUInt64Checked_of_lt (toNat_umod_ten_lt m), ok_bind]
     exact ih
   | case3 m e g h =>
-    rw [doNormalize_scaleDown128, doNormalize_scaleDown128Spec, dif_neg h, dif_neg h]
+    rw [doNormalize_scaleDown128, doNormalize_scaleDown128Spec, dite_eq_right h, dite_eq_right h]
 
 /-- The mantissa `doNormalize_scaleDown128Spec` returns is at most `maxMantissa`. -/
 lemma doNormalize_scaleDown128Spec_le {maxM : UInt64} {m m' : UInt128} {e e' : Int} {g g' : Guard}
     (h : doNormalize_scaleDown128Spec maxM m e g = .ok (m', e', g')) : m' ≤ toUInt128 maxM := by
   induction m, e, g using doNormalize_scaleDown128Spec.induct maxM with
   | case1 m e g hm he =>
-    rw [doNormalize_scaleDown128Spec, dif_pos hm, if_pos he] at h; cases h
+    rw [doNormalize_scaleDown128Spec, dite_eq_left hm, ite_eq_left he] at h; cases h
   | case2 m e g hm he ih =>
-    rw [doNormalize_scaleDown128Spec, dif_pos hm, if_neg he] at h; exact ih h
+    rw [doNormalize_scaleDown128Spec, dite_eq_left hm, ite_eq_right he] at h; exact ih h
   | case3 m e g hm =>
-    rw [doNormalize_scaleDown128Spec, dif_neg hm] at h
+    rw [doNormalize_scaleDown128Spec, dite_eq_right hm] at h
     cases h
     exact BitVec.not_lt.mp hm
 
@@ -471,11 +449,11 @@ lemma doNormalize128_scaleUp_eq_spec (minM : UInt64) (m : UInt128) (e : Int) :
     have hlt : m.toNat < (toUInt128 minM).toNat := h.1
     have hmin := minM.toNat_lt
     rw [toNat_toUInt128] at hlt
-    rw [doNormalize128.scaleUp, doNormalize128_scaleUpSpec, if_pos h, if_pos h,
+    rw [doNormalize128.scaleUp, doNormalize128_scaleUpSpec, ite_eq_left h, ite_eq_left h,
       BitVec.mulChecked_of_lt (by rw [show (10 : BitVec 128).toNat = 10 from rfl]; omega), ok_bind]
     exact ih
   | case2 m e h =>
-    rw [doNormalize128.scaleUp, doNormalize128_scaleUpSpec, if_neg h, if_neg h]
+    rw [doNormalize128.scaleUp, doNormalize128_scaleUpSpec, ite_eq_right h, ite_eq_right h]
 
 /-- `doNormalize128` never wraps: it scales a 128-bit mantissa up while it is below a 64-bit minimum, and
 narrows only after scaling down to a 64-bit maximum. -/
@@ -502,12 +480,6 @@ lemma doNormalize128_eq_spec (negative : Bool) (m : UInt128) (e : Int) (minM max
     have := BitVec.le_def.mp hle
     rw [toNat_toUInt128] at this; exact this
   rw [toUInt64Checked_of_lt (by omega)]
-  rfl
-
-lemma Guard.doDropDigit128_eq_spec (g : Guard) (m : UInt128) (e : Int) :
-    g.doDropDigit128 m e = .ok (g.doDropDigit128Spec m e) := by
-  unfold Guard.doDropDigit128 Guard.doDropDigit128Spec
-  rw [toUInt64Checked_of_lt (toNat_umod_ten_lt m), ok_bind]
   rfl
 
 /-- `operator_mul` never wraps: the product of two 64-bit mantissas fits 128 bits. -/
@@ -561,10 +533,10 @@ lemma doNormalize_scaleUp_refines (minM m : UInt64) (e : Int) :
     Refines (doNormalize_scaleUp minM m e) (.ok (doNormalize_scaleUpSpec minM m e)) := by
   induction m, e using doNormalize_scaleUpSpec.induct minM with
   | case1 m e h ih =>
-    rw [doNormalize_scaleUp, doNormalize_scaleUpSpec, if_pos h, if_pos h]
+    rw [doNormalize_scaleUp, doNormalize_scaleUpSpec, ite_eq_left h, ite_eq_left h]
     exact Refines.bind_ok (UInt64.mulChecked_refines _ _) ih
   | case2 m e h =>
-    rw [doNormalize_scaleUp, doNormalize_scaleUpSpec, if_neg h, if_neg h]
+    rw [doNormalize_scaleUp, doNormalize_scaleUpSpec, ite_eq_right h, ite_eq_right h]
     exact Refines.refl _
 
 lemma doNormalize_refines (negative : Bool) (m : UInt64) (e : Int) (minM maxM : UInt64) (mode : rounding_mode) :
@@ -596,8 +568,38 @@ lemma recover_refines (u m : UInt128) (e : Int) (g : Guard) (fuel : Nat) :
         (Refines.bind_ok (BitVec.subChecked_refines _ _) (ih _ _ _))
     · exact Refines.refl _
 
+/-- `adjustExpand` multiplies only a mantissa below `upperLimit`, so it never wraps when ten times the limit fits. -/
+lemma adjustExpand_eq_spec (u m : UInt128) (ee se : Int) (hu : u.toNat * 10 < 2 ^ 128) :
+    adjustExpand u m ee se = .ok (adjustExpandSpec u m ee se) := by
+  rw [adjustExpand, adjustExpandSpec]
+  split
+  · rename_i h
+    have hlt : m.toNat < u.toNat := BitVec.lt_def.mp h.2.2
+    rw [BitVec.mulChecked_of_lt (by rw [show (10 : BitVec 128).toNat = 10 from rfl]; omega), ok_bind]
+    exact adjustExpand_eq_spec u _ _ se hu
+  · rfl
+termination_by (ee - se).toNat
+decreasing_by omega
+
+/-- `adjust` gives its raw twin when ten times the limit fits. -/
+lemma adjust_eq_spec (u em : UInt128) (ee : Int) (sm : UInt64) (se : Int) (g : Guard)
+    (hu : u.toNat * 10 < 2 ^ 128) : adjust u em ee sm se g = .ok (adjustSpec u em ee sm se g) := by
+  unfold adjust adjustSpec
+  generalize adjustShrinkZeros g sm se ee = s
+  obtain ⟨sm', se', g'⟩ := s
+  dsimp only
+  rw [adjustExpand_eq_spec u em ee se' hu, ok_bind]
+  generalize adjustExpandSpec u em ee se' = x
+  obtain ⟨em', ee'⟩ := x
+  dsimp only
+  rw [doDropDigitWithTargetU64_eq_spec]
+  generalize alignDownSpec sm' se' g' ee' = d
+  obtain ⟨d1, d2, d3⟩ := d
+  rfl
+
 lemma Number.operator_add_refines (x y : Number) (mode : rounding_mode) :
     Refines (x.operator_add y mode) (x.operator_addSpec y mode) := by
+  have hu : (toUInt128 largeRange.min * 1000).toNat * 10 < 2 ^ 128 := by decide
   unfold Number.operator_add Number.operator_addSpec
   split
   · exact Refines.refl _
@@ -605,24 +607,30 @@ lemma Number.operator_add_refines (x y : Number) (mode : rounding_mode) :
   · exact Refines.refl _
   split
   · exact Refines.refl _
-  dsimp (config := { iota := false, proj := false, etaStruct := .none }) only
-  generalize (if x.exponent_ < y.exponent_ then _ else _ : UInt64 × Int × UInt64 × Int × Guard) = t
-  obtain ⟨xm, xe, ym, ye, g⟩ := t
+  dsimp only
+  refine Refines.bind_ok (b := Number.addAlignSpec x y) ?_ ?_
+  · unfold Number.addAlignSpec
+    split
+    · rw [adjust_eq_spec _ _ _ _ _ _ hu, ok_bind]; exact Refines.refl _
+    split
+    · rw [adjust_eq_spec _ _ _ _ _ _ hu, ok_bind]; exact Refines.refl _
+    · exact Refines.refl _
+  generalize Number.addAlignSpec x y = a
+  obtain ⟨xm, ym, xe, g⟩ := a
   dsimp only
   split
-  · refine Refines.bind_ok (BitVec.addChecked_refines _ _) ?_
-    refine Refines.bind (Refines.refl _) fun _ _ => ?_
-    refine Refines.bind_ok ?_ (Refines.refl _)
-    split
-    · rw [Guard.doDropDigit128_eq_spec, ok_bind]
-      exact Refines.bind_ok (toUInt64Checked_refines _) (Refines.refl _)
-    · exact Refines.bind_ok (toUInt64Checked_refines _) (Refines.refl _)
-  · refine Refines.bind_ok (b := if xm > ym then (toUInt128 xm - toUInt128 ym, x.negative_, xe)
-        else (toUInt128 ym - toUInt128 xm, y.negative_, xe)) ?_ ?_
+  · exact Refines.bind_ok (BitVec.addChecked_refines _ _) (Refines.refl _)
+  · refine Refines.bind_ok (b := if xm > ym then (xm - ym, x.negative_) else (ym - xm, y.negative_)) ?_ ?_
     · split
       · exact Refines.bind_ok (BitVec.subChecked_refines _ _) (Refines.refl _)
       · exact Refines.bind_ok (BitVec.subChecked_refines _ _) (Refines.refl _)
-    · refine Refines.bind_ok (recover_refines _ _ _ _ _) ?_
+    · generalize (if xm > ym then (xm - ym, x.negative_) else (ym - xm, y.negative_)) = d
+      obtain ⟨d1, d2⟩ := d
+      dsimp only
+      refine Refines.bind_ok (recover_refines _ _ _ _ _) ?_
+      generalize recoverSpec (toUInt128 largeRange.min * 1000) d1 xe g 40 = r
+      obtain ⟨r1, r2, r3⟩ := r
+      dsimp only
       refine Refines.bind_ok ?_ (Refines.refl _)
       split_ifs
       all_goals first

@@ -77,8 +77,7 @@ class VaultOldFindings_test : public LeanSuite
     jtx::Account const depositor_{"depositor"};
     jtx::Account const holder_{"holder"};
 
-    // Funds the accounts of the staged deposit and withdraw tests. Returns an MPT that owner_ and
-    // depositor_ hold.
+    // Funds the staged deposit and withdraw tests. Returns an MPT held by owner_ and depositor_.
     Asset
     setupStagingAssets(jtx::Env& env)
     {
@@ -98,8 +97,7 @@ class VaultOldFindings_test : public LeanSuite
         return mpt.raw();
     }
 
-    // Funds the accounts of the staged clawback tests. issuer_ can claw back its USD and the
-    // returned MPT from holder_.
+    // Funds the staged clawback tests. issuer_ can claw back USD and the returned MPT from holder_.
     Asset
     setupClawbackAssets(jtx::Env& env)
     {
@@ -224,8 +222,7 @@ class VaultOldFindings_test : public LeanSuite
         return {cpp, lean};
     }
 
-    // The result of a VaultCreate with the fields of `args`, on a throwaway view of the open
-    // ledger.
+    // The result of a VaultCreate with the fields of `args` on a throwaway view of the open ledger.
     static TER
     applyCreate(
         jtx::Env& env,
@@ -242,8 +239,7 @@ class VaultOldFindings_test : public LeanSuite
         return xrpl::apply(env.app(), view, *env.jt(tx).stx, TapUnlimited, env.journal).ter;
     }
 
-    // FV_M2_1: STAmount operator+ wraps to a negative amount when 1 drop is added to INT64_MAX
-    // drops.
+    // FV_M2_1: STAmount operator+ wraps to a negative amount when adding 1 drop to INT64_MAX.
     void
     testXrpAddOverflow()
     {
@@ -342,8 +338,7 @@ class VaultOldFindings_test : public LeanSuite
             "model deposit lowered the share price");
     }
 
-    // FV_M2_3: VaultDeposit variant. A 4 drop deposit at 5 drops per 3 shares is charged the same
-    // amount by the model and C++.
+    // FV_M2_3: a 4 drop deposit at 5 drops per 3 shares costs the same in the model and in C++.
     void
     testDepositOvervaluedShares(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
     {
@@ -356,8 +351,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(ter == tesSUCCESS, "cpp=" + transToken(ter));
     }
 
-    // FV_M2_3: VaultWithdraw variant. One share at 5 drops per 3 shares pays the same amount in
-    // the model and C++.
+    // FV_M2_3: one share at 5 drops per 3 shares pays the same in the model and in C++.
     void
     testWithdrawOvervaluedShares(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
     {
@@ -370,8 +364,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(ter == tesSUCCESS, "cpp=" + transToken(ter));
     }
 
-    // FV_M2_3: VaultClawback variant. Clawing back 2 units at 5 units per 3 shares recovers the
-    // same amount in the model and C++.
+    // FV_M2_3: a clawback of 2 units at 5 units per 3 shares is the same in the model and in C++.
     void
     testClawbackOvervaluedShares(jtx::Env& env, Keylet const& vault)
     {
@@ -386,8 +379,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(cpp.ter == tesSUCCESS, "cpp=" + transToken(cpp.ter));
     }
 
-    // FV_M2_4: a 1e-6 withdrawal below the 1e-5 ULP of a staged AssetsTotal near 1e10 is rejected
-    // with tecPRECISION_LOSS.
+    // FV_M2_4: a 1e-6 withdrawal below the 1e-5 ULP of AssetsTotal near 1e10 is rejected.
     void
     testWithdrawPrecisionLossStaged(
         jtx::Env& env,
@@ -586,8 +578,7 @@ class VaultOldFindings_test : public LeanSuite
             "model clawback lowered the share price");
     }
 
-    // FV_M2_9: a sole holder's withdrawal of all shares overshoots AssetsAvailable and fails with
-    // tecINSUFFICIENT_FUNDS.
+    // FV_M2_9: a sole holder's withdrawal of all shares overshoots AssetsAvailable and fails.
     void
     testWithdrawOvershoot()
     {
@@ -662,8 +653,7 @@ class VaultOldFindings_test : public LeanSuite
             "model clawback recovered more than requested");
     }
 
-    // FV_M2_12: VaultWithdraw variant. Withdrawing one share worth less than the AssetsTotal ULP
-    // is rejected with tecPRECISION_LOSS.
+    // FV_M2_12: a withdrawal of one share worth less than the AssetsTotal ULP is rejected.
     void
     testWithdrawDustDebit(
         jtx::Env& env,
@@ -686,8 +676,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(ter == tecPRECISION_LOSS, "cpp=" + transToken(ter));
     }
 
-    // FV_M2_12: VaultClawback variant. A 2e-6 clawback below the ULP of the staged AssetsTotal is
-    // rejected with tecPRECISION_LOSS.
+    // FV_M2_12: a 2e-6 clawback below the ULP of the staged AssetsTotal is rejected.
     void
     testClawbackDustDebit(
         jtx::Env& env,
@@ -708,8 +697,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(cpp.ter == tecPRECISION_LOSS, "cpp=" + transToken(cpp.ter));
     }
 
-    // FV_M2_12: VaultClawback variant. A 1e-6 clawback below the 1e-5 ULP of a staged AssetsTotal
-    // near 1e10 is rejected with tecPRECISION_LOSS.
+    // FV_M2_12: a 1e-6 clawback below the 1e-5 ULP of AssetsTotal near 1e10 is rejected.
     void
     testClawbackPrecisionLossStaged(jtx::Env& env, Keylet const& vault, Number const& assetsTotal)
     {
@@ -726,8 +714,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(cpp.ter == tecPRECISION_LOSS, "cpp=" + transToken(cpp.ter));
     }
 
-    // FV_M2_13: a sole shareholder's withdrawal of all shares with LossUnrealized outstanding is
-    // rejected with tecHAS_OBLIGATIONS.
+    // FV_M2_13: a sole holder's full withdrawal with LossUnrealized outstanding is rejected.
     void
     testWithdrawFinalWithLoss(
         jtx::Env& env,
@@ -754,8 +741,26 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(ter == tecHAS_OBLIGATIONS, "cpp=" + transToken(ter));
     }
 
-    // FV_M2_15: an IOU deposit whose new AssetsTotal is past the Open limit of 9e15 base units is
-    // rejected with tecLIMIT_EXCEEDED.
+    // FV_M2_14: a donation succeeds when LossUnrealized equals AssetsTotal - AssetsAvailable.
+    void
+    testDonationWithLoss(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
+    {
+        testcase("FV_M2_14 donation with LossUnrealized at AssetsTotal - AssetsAvailable");
+        // 1. Stage AssetsAvailable 1,000,006 and AssetsDeployed and LossUnrealized of 999,995.
+        STAmount const loss = vaultUnits(env, vault, 999'995);
+        StagedAmounts const staged{
+            .available = vaultUnits(env, vault, 1'000'006),
+            .deployed = loss,
+            .loss = loss,
+            .sharesTotal = 1'000'000,
+        };
+        // 2. The owner donates 50 base units.
+        TER const ter =
+            checkDeposit(*this, env, vault, owner, staged, vaultUnits(env, vault, 50), true);
+        BEAST_EXPECTS(ter == tesSUCCESS, "cpp=" + transToken(ter));
+    }
+
+    // FV_M2_15: an IOU deposit that takes AssetsTotal past the Open limit of 9e15 units fails.
     void
     testDepositPastOpenLimit(
         jtx::Env& env,
@@ -780,8 +785,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(ter == tecLIMIT_EXCEEDED, "cpp=" + transToken(ter));
     }
 
-    // FV_M2_15: VaultWithdraw variant. A 6e-6 withdrawal below the 1e-5 ULP of an AssetsTotal
-    // staged at 1.2e10, past the Open limit, is rejected with tecPRECISION_LOSS.
+    // FV_M2_15: a 6e-6 withdrawal below the ULP of AssetsTotal 1.2e10, past the Open limit, fails.
     void
     testWithdrawAssetsStaged(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
     {
@@ -804,8 +808,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(ter == tecPRECISION_LOSS, "cpp=" + transToken(ter));
     }
 
-    // FV_M2_16: all shares but one are withdrawn from a scale 0 vault staged at 1e17, past the Open
-    // limit. The model and C++ agree.
+    // FV_M2_16: withdrawing all shares but one of a vault at 1e17 agrees with the model.
     void
     testWithdrawDrainsVault(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
     {
@@ -822,8 +825,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(ter == tesSUCCESS, "cpp=" + transToken(ter));
     }
 
-    // FV_M2_17: a full clawback from a sole holder with LossUnrealized 1'000 recovers
-    // AssetsAvailable and keeps the lost part backed by shares.
+    // FV_M2_17: a full clawback with LossUnrealized 1'000 keeps the lost part backed by shares.
     void
     testClawbackAllWithLoss()
     {
@@ -849,8 +851,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECT(sleShares->at(sfOutstandingAmount) == 1'000);
     }
 
-    // FV_M2_18: a full clawback of a 19 digit AssetsTotal burns every share, leaves a rounding
-    // remainder and fails with tecINVARIANT_FAILED instead of tecPRECISION_LOSS.
+    // FV_M2_18: a full clawback of a 19 digit AssetsTotal leaves a remainder and fails.
     void
     testClawbackAllWithRemainder()
     {
@@ -911,8 +912,7 @@ class VaultOldFindings_test : public LeanSuite
                 " stored=" + to_string(stored));
     }
 
-    // FV_M2_19: VaultCreate rejects an AssetsMaximum with more than 16 digits instead of rounding
-    // it.
+    // FV_M2_19: VaultCreate rejects an AssetsMaximum of more than 16 digits instead of rounding it.
     void
     testCreateAssetsMaximumOver16Digits(jtx::Env& env, jtx::Account const& owner, Asset const& iou)
     {
@@ -934,8 +934,7 @@ class VaultOldFindings_test : public LeanSuite
             "cpp=" + transToken(cppTer) + " expected " + transToken(tecPRECISION_LOSS));
     }
 
-    // A deposit moves the vault totals by exactly the amount the depositor pays, in C++ and in the
-    // model.
+    // A deposit moves the vault totals by exactly the amount paid, in C++ and in the model.
     void
     testDepositAppliedDelta()
     {
@@ -1000,8 +999,7 @@ class VaultOldFindings_test : public LeanSuite
                 (chargeRounded.amount ? to_string(Number{*chargeRounded.amount}) : "none"));
     }
 
-    // A withdrawal moves the vault totals by exactly the payout the holder receives, in C++ and in
-    // the model.
+    // A withdrawal moves the vault totals by exactly the payout, in C++ and in the model.
     void
     testWithdrawAppliedDelta()
     {
@@ -1063,8 +1061,7 @@ class VaultOldFindings_test : public LeanSuite
                 to_string(Number{receivedRounded}));
     }
 
-    // A clawback moves the vault total by exactly the amount the issuer recovers, in C++ and in
-    // the model.
+    // A clawback moves the vault total by exactly the recovery, in C++ and in the model.
     void
     testClawbackAppliedDelta()
     {
@@ -1122,8 +1119,7 @@ class VaultOldFindings_test : public LeanSuite
                 to_string(Number{recoveryRounded}));
     }
 
-    // One share of an MPT vault worth 0.3 base units pays nothing, so the withdrawal is rejected
-    // with tecPRECISION_LOSS.
+    // A withdrawal of one MPT share worth 0.3 base units pays nothing and is rejected.
     void
     testWithdrawZeroPayout(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
     {
@@ -1146,8 +1142,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(ter == tecPRECISION_LOSS, "cpp=" + transToken(ter));
     }
 
-    // On a vault whose whole total is an unrealized loss, with two holders, a withdrawal by shares
-    // burns the shares for nothing and a withdrawal by assets is rejected.
+    // On a fully impaired vault a withdrawal by shares pays nothing, one by assets is rejected.
     void
     testWithdrawFromFullyImpairedVault(
         jtx::Env& env,
@@ -1175,8 +1170,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(assetsTer == tecPRECISION_LOSS, "cpp=" + transToken(assetsTer));
     }
 
-    // A holder that owns half the shares redeems one share more than it owns. The vault could pay
-    // it, the holder's balance cannot.
+    // A holder of half the shares redeems one share more than it owns, which the vault could pay.
     void
     testWithdrawMoreSharesThanHeld(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
     {
@@ -1194,8 +1188,7 @@ class VaultOldFindings_test : public LeanSuite
         BEAST_EXPECTS(ter == tecINSUFFICIENT_FUNDS, "cpp=" + transToken(ter));
     }
 
-    // A withdrawal from a vault nobody deposited into. It has no shares, so nobody is the sole
-    // holder.
+    // A withdrawal from a vault without shares, so nobody is the sole holder.
     void
     testWithdrawFromEmptyVault(bool byShares, TER expected)
     {
@@ -1215,8 +1208,7 @@ class VaultOldFindings_test : public LeanSuite
         compareWithdraw(env, vaultKeylet, holder, amount, expected);
     }
 
-    // Model gap: an EarlyExitFeeRate, even 0, on an open-ended vault. C++ preflight returns
-    // temMALFORMED and the model creates the vault without the rate.
+    // Model gap: the model creates an open-ended vault with an EarlyExitFeeRate, C++ rejects it.
     void
     testCreateOpenEndedEarlyExitFee(jtx::Env& env, jtx::Account const& owner, Asset const& iou)
     {
@@ -1239,8 +1231,7 @@ class VaultOldFindings_test : public LeanSuite
         }
     }
 
-    // Model gap: an AssetsMaximum past the largest amount of the asset. C++ preflight returns
-    // temMALFORMED and the model creates the vault.
+    // Model gap: the model accepts an AssetsMaximum past the asset's range, C++ rejects it.
     void
     testCreateMaximumPastAssetRange(
         jtx::Env& env,
@@ -1356,6 +1347,7 @@ class VaultOldFindings_test : public LeanSuite
         testClawbackPrecisionLossStaged(clawbackEnv, clawbackIouDefaultScaleVault, Number{1'000'000'000'000'001LL, -5});  // FV_M2_12
         testClawbackPrecisionLossStaged(clawbackEnv, clawbackIouDefaultScaleVault, Number{1'000'000'000'000'000LL, -5});  // FV_M2_12
         testWithdrawFinalWithLoss(env, iouDefaultScaleVault, issuer_, Number{100}, Number{10});  // FV_M2_13
+        testDonationWithLoss(env, mptVault, owner_);  // FV_M2_14
         testDepositPastOpenLimit(env, iouDefaultScaleVault, issuer_, Number{9'999'999'999'999'999LL, -6}, Number{1, -5});  // FV_M2_15
         testDepositPastOpenLimit(env, iouMaxScaleVault, issuer_, Number{8'999'999'999'999'999LL, -10}, Number{5});         // FV_M2_15
         testWithdrawAssetsStaged(env, iouDefaultScaleVault, issuer_);  // FV_M2_15

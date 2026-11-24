@@ -4,10 +4,8 @@ import XRPL.Properties.Lending.Ledger.Common.IntegralPrecision
 
 /-! # associateAsset on the lending ledger
 
-C++ rounds the amounts a transaction writes to the vault's asset with `associateAsset`. On a reachable ledger
-the asset stores the vault's amounts, every broker's DebtTotal and every loan's outstanding amounts exactly, but a
-default can leave a CoverAvailable it rounds. The theorems leave out AssetsTotal, which the model computes from the
-other amounts, and DebtMaximum, which only LoanBrokerSet writes after checking it is on the base grid. -/
+C++ rounds the amounts a transaction writes to the vault's asset with `associateAsset`. On a reachable ledger the
+asset stores the vault, broker and loan amounts exactly, but a default can leave a CoverAvailable it rounds. -/
 
 namespace XRPL.Model
 

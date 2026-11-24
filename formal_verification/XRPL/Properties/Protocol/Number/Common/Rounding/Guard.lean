@@ -55,8 +55,8 @@ the fraction `0`. -/
 lemma g0_represents_zero (negative : Bool) :
     represents (if negative then Guard.new.set_negative else Guard.new) 0 := by
   cases negative
-  · simp only [Bool.false_eq_true, if_false]; exact represents_new
-  · simp only [if_true]
+  · simp only [Bool.false_eq_true, ite_false]; exact represents_new
+  · simp only [ite_true]
     obtain ⟨x_rep, hx_nn, hx_lt, hf_eq, hxbit, hall⟩ := represents_new
     refine ⟨x_rep, hx_nn, hx_lt, ?_, ?_, ?_⟩
     · have : Guard.new.set_negative.digits_ = Guard.new.digits_ := rfl
@@ -700,7 +700,7 @@ lemma round_to_nearest_def {g : Guard} (hne : ¬ g.empty) :
        else if g.digits_ < 0x5000_0000_0000_0000 then -1
        else if g.xbit_ then 1 else 0) := by
   unfold Guard.round
-  rw [if_neg hne]
+  rw [ite_eq_right hne]
 
 /-- For a non-empty guard holding fraction `f`, `to_nearest` `round` is `1` when `f > 1/2`, `-1` when `f < 1/2` and
 `0` when `f = 1/2`. -/
@@ -716,7 +716,7 @@ theorem round_correct {g : Guard} {f : ℚ} (hne : ¬ g.empty) (hg : represents 
     linarith
   rw [round_to_nearest_def hne]
   by_cases hgt : g.digits_ > 0x5000_0000_0000_0000
-  · rw [if_pos hgt]
+  · rw [ite_eq_left hgt]
     have hdec := (hex_gt_iff_dec_gt g.digits_ hall).mp hgt
     have hq : (decimalValue g.digits_ : ℚ) > 5 * 10 ^ 15 := by exact_mod_cast hdec
     have hpos : ((decimalValue g.digits_ : ℚ) - 5 * 10 ^ 15) / 10 ^ 16 > 0 :=
@@ -725,9 +725,9 @@ theorem round_correct {g : Guard} {f : ℚ} (hne : ¬ g.empty) (hg : represents 
     refine ⟨⟨fun _ => fpos, fun _ => rfl⟩, ?_, ?_⟩
     · exact ⟨fun h => absurd h (by decide), fun h => absurd (lt_asymm h) (not_not.mpr fpos)⟩
     · exact ⟨fun h => absurd h (by decide), fun h => absurd fpos (by rw [h]; exact lt_irrefl _)⟩
-  · rw [if_neg hgt]
+  · rw [ite_eq_right hgt]
     by_cases hlt : g.digits_ < 0x5000_0000_0000_0000
-    · rw [if_pos hlt]
+    · rw [ite_eq_left hlt]
       have hdec := (hex_lt_iff_dec_lt g.digits_ hall).mp hlt
       have hq' : (decimalValue g.digits_ : ℚ) ≤ 5 * 10 ^ 15 - 1 := by
         have h_nat : decimalValue g.digits_ + 1 ≤ 5 * 10 ^ 15 := hdec
@@ -746,14 +746,14 @@ theorem round_correct {g : Guard} {f : ℚ} (hne : ¬ g.empty) (hg : represents 
       refine ⟨?_, ⟨fun _ => fneg, fun _ => rfl⟩, ?_⟩
       · exact ⟨fun h => absurd h (by decide), fun h => absurd (lt_asymm h) (not_not.mpr fneg)⟩
       · exact ⟨fun h => absurd h (by decide), fun h => absurd fneg (by rw [h]; exact lt_irrefl _)⟩
-    · rw [if_neg hlt]
+    · rw [ite_eq_right hlt]
       have hne : decimalValue g.digits_ = 5 * 10 ^ 15 :=
         (hex_eq_iff_dec_eq g.digits_ hall).mp ⟨hgt, hlt⟩
       have hneq : ((decimalValue g.digits_ : ℚ) - 5 * 10 ^ 15) / 10 ^ 16 = 0 := by
         have : (decimalValue g.digits_ : ℚ) = 5 * 10 ^ 15 := by exact_mod_cast hne
         rw [this]; simp
       by_cases hxb : g.xbit_ = true
-      · rw [if_pos hxb]
+      · rw [ite_eq_left hxb]
         have hxp : x > 0 := hxbit.mp hxb
         have fpos : f > 1 / 2 := by clear hgt hlt; linarith [key]
         refine ⟨⟨fun _ => fpos, fun _ => rfl⟩, ?_, ?_⟩
@@ -761,7 +761,7 @@ theorem round_correct {g : Guard} {f : ℚ} (hne : ¬ g.empty) (hg : represents 
                  fun h => absurd (lt_asymm h) (not_not.mpr fpos)⟩
         · exact ⟨fun h => absurd h (by decide),
                  fun h => absurd fpos (by rw [h]; exact lt_irrefl _)⟩
-      · rw [if_neg hxb]
+      · rw [ite_eq_right hxb]
         have hxb' : g.xbit_ = false := Bool.bool_iff_false.mp hxb
         have hx0 : x = 0 := by
           have hnp : ¬ (x > 0) := fun hp => by
@@ -795,7 +795,7 @@ private lemma round_neg_two_iff_empty (g : Guard) : g.round .to_nearest = -2 ↔
   constructor
   · intro h; by_contra he; rw [round_to_nearest_def he] at h
     revert h; split_ifs <;> decide
-  · intro he; unfold Guard.round; rw [if_pos he]
+  · intro he; unfold Guard.round; rw [ite_eq_left he]
 
 /-- If the `to_nearest` `round` is `1`, the guard's fraction is above `1/2`. -/
 lemma represents_round_eq_one {g : Guard} {f : ℚ} (hg : represents g f)

@@ -26,7 +26,7 @@ private lemma LendingLedger.Reachable.deployed_ne_zero {l : LendingLedger} (hr :
     · exact absurd ((Number.toRat_eq_zero_iff_eq_zero e.loan.wf.principalOutstanding_norm).mp h.symm) hpo
   have hle := l.principalIf_le_sum (fun _ => true) j
   rw [he] at hle
-  simp only [LoanEntry.principalIf, if_true] at hle
+  simp only [LoanEntry.principalIf, ite_true] at hle
   have had : 0 < l.vault.assetsDeployed.toRat := by rw [hr.debtInv.deployed]; linarith
   cases hne : l.vault.assetsDeployed.operator_ne Number.zero
   · rw [Number.operator_ne_false_iff_eq'] at hne

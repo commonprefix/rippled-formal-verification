@@ -3,24 +3,10 @@ import XRPL.Properties.Vault.Common.DepositDefs
 
 /-! # Witnesses for the deposit share count and charge
 
-Each run's result is computed by the model and checked by `native_decide`. Every vault comes from a
-reachable history: a create, a deposit, then a donation.
+Deposits on reachable vaults that issue more than one share fewer than the ideal, more shares than the ideal, and
+charge above and below the issued shares' worth. -/
 
-* Share shortfall: a scale-10 vault of `10873.632` assets and `100038414774144` shares, deposit
-  `100000.0000113088`. The ideal sits `4.1·10⁻⁴` above a whole share, the product rounds down by
-  almost half a step and the quotient just below the whole share, which is truncated: more than one
-  share short.
-* Share overshoot: a scale-10 vault of `100000.0005` assets and `100001000500005` shares, deposit
-  `100000.0000899901`. The ideal sits just below a whole share and both stages round up onto it, so
-  the deposit issues more shares than the ideal.
-* IOU charge above the worth: a scale-0 vault of `3·10^15` assets and `2·10^15` shares, deposit `1000000000000004`:
-  `666666666666669` shares, worth `1000000000000003.5`, charged `1000000000000004`. The 16-digit price rounds the
-  tie to even, up onto the next base unit, and the floor keeps it.
-* Integral charge below the worth: 5 assets and 2 shares, deposit `3`: one share, worth `2.5`, charged `2`.
-* IOU charge below the worth: a scale-0 vault of `1999999999999999` assets and `10^15` shares, deposit `2`: one share,
-  worth `1.999999999999999`, charged `1`. The floor onto the base grid drops the fraction. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.DepTightWit
 

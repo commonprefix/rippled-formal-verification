@@ -48,7 +48,7 @@ lemma STAmount.roundToExponent_towards_zero_of_grid (c : STAmount) (s : ℤ) (hc
   have hval : r.toRat = c.toRat := by
     simp only [RoundsToRepresentableAt] at hrnd
     change r.toRat = _ at hrnd
-    rw [hrnd, if_pos h0, hkv, mul_div_assoc, div_self hp.ne', mul_one, Int.floor_intCast]
+    rw [hrnd, ite_eq_left h0, hkv, mul_div_assoc, div_self hp.ne', mul_one, Int.floor_intCast]
   have hrF : r.FracCanonZero := STAmount.roundToExponent_fczr c r s .towards_zero hcz hr
   have hr0 : r.mValue ≠ 0 := by
     intro h
@@ -112,14 +112,14 @@ lemma Vault.checkOpenLimit_of_clamped (v : Vault) (charge : STAmount) (h : v.Cla
       rw [clampToSumExponent_integral A _ _ hint']
       congr 1
       by_cases hn : a.negative = true
-      · rw [if_pos hn]
+      · rw [ite_eq_left hn]
         by_cases hz : a.mValue = 0
         · unfold STAmount.operator_neg; simp [hz]
         · have hpos : a.operator_neg.negative = false := by
             unfold STAmount.operator_neg STAmount.negative at *
             simp [hz, hn]
-          rw [if_neg (by simp [hpos])]
-      · rw [if_neg hn, if_neg hn]
+          rw [ite_eq_right (by simp [hpos])]
+      · rw [ite_eq_right hn, ite_eq_right hn]
     · right
       have hfr : a.integral = false := by simpa using hint
       obtain ⟨haF, ha0⟩ := ha hfr
@@ -137,23 +137,23 @@ lemma Vault.checkOpenLimit_of_clamped (v : Vault) (charge : STAmount) (h : v.Cla
         · exact STAmount.CanonicalOrZero.toNumber_ok (Or.inr (by simp [STAmount.isZero, hz]))
       have hmag : (if charge.negative = true then charge.operator_neg else charge) = charge := by
         by_cases hn : charge.negative = true
-        · rw [if_pos hn]
+        · rw [ite_eq_left hn]
           by_cases hz : charge.mValue = 0
           · unfold STAmount.operator_neg; simp [hz]
           · exact absurd hn (by simp [STAmount.negative, STAmount.mIsNegative_false_of_nonneg charge hcb.1 hz])
-        · rw [if_neg hn]
+        · rw [ite_eq_right hn]
       refine ⟨cn, hcN, ?_⟩
       rw [hvnt]
       cases hps : postSumExponent A cn v.baseExponent .fractional with
       | error err =>
-        simp only [clampToSumExponent, hcfr, Bool.false_eq_true, if_false, hmag, hcN, hcnt, hps, bind,
+        simp only [clampToSumExponent, hcfr, Bool.false_eq_true, ite_false, hmag, hcN, hcnt, hps, bind,
           Except.bind, pure, Except.pure]
       | ok e =>
         obtain ⟨k, hk⟩ := clampToSumExponent_on_own_grid A a charge v.baseExponent cn e hA hA0 haF ha0
           hbr.1 hbr.2 hcl hcN hps
         obtain ⟨-, -, he_hi⟩ := postSumExponent_range A cn v.baseExponent .fractional e hbr.1 hbr.2 hps
         have he_lo : v.baseExponent ≤ e := (postSumExponent_range A cn v.baseExponent .fractional e hbr.1 hbr.2 hps).1
-        simp only [clampToSumExponent, hcfr, Bool.false_eq_true, if_false, hmag, hcN, hcnt, hps, bind,
+        simp only [clampToSumExponent, hcfr, Bool.false_eq_true, ite_false, hmag, hcN, hcnt, hps, bind,
           Except.bind, pure, Except.pure]
         exact STAmount.roundToExponent_towards_zero_of_grid charge e hcF hcb.1 ⟨k, hk⟩
           (by have := v.baseExponent_bounds.1; omega) he_hi

@@ -2,11 +2,8 @@ import XRPL.Properties.Protocol.STAmount.Constructors.Common.FromMantissaProofs
 
 /-! # An XRP or MPT amount made from a mantissa and an exponent is rounded in the requested mode
 
-`STAmount.checked` on XRP or MPT should round `mantissa * 10 ^ exponent` to a whole amount less than one away, on
-the side the mode asks for. Two shortcuts in the code break this. An exponent of -20 or less returns zero before
-any rounding, and a mantissa above the largest int64 loses its last digit. The theorems assume an exponent above
--20 (`hexp`) and a mantissa up to `maxRep`, the largest int64 (`hm`). The `_attained` witnesses show what happens
-without them. -/
+An exponent of -20 or less gives zero before rounding, and a mantissa above the largest int64 loses its last digit.
+The theorems assume `hexp` and `hm` against these, and the `_attained` witnesses show what happens without them. -/
 
 namespace XRPL.Model.Protocol
 

@@ -53,7 +53,7 @@ private lemma doRoundUp_value_to_nearest_maxRepUp (g : Guard) (ze : Int) (loc : 
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = (maxRepCuspTarget : ℚ) * 10 ^ ze := by
   have h_pof : g.pushOverflowSpec maxRepUp .to_nearest = g := by
     unfold Guard.pushOverflowSpec
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
   have h_top : (g.push (maxRepUp % 10)).digits_.toNat < 5764607523034234880 := by
     rw [toNat_push_digits, show (maxRepUp % 10).toNat = 0 from by decide]
     have := UInt64.toNat_lt_size g.digits_
@@ -68,7 +68,7 @@ private lemma doRoundUp_value_to_nearest_maxRepUp (g : Guard) (ze : Int) (loc : 
   rw [h_pof] at hok
   simp only [show ¬ (maxRepUp < largeRange.max ∧ maxRepUp < maxRep) from by decide,
     show ¬ (maxRep < maxRepUp ∧ maxRepUp < maxRepUp) from by decide, h_ru', Bool.false_eq_true,
-    if_false] at hok
+    ite_false] at hok
   split_ifs at hok
   · obtain rfl := Except.ok.inj hok
     rw [bringIntoRange_value_q false (maxRepUp / 10) (ze + 1) hne,
@@ -93,7 +93,7 @@ private lemma round_push_six (g : Guard) : (g.push 6).round .to_nearest = 1 := b
       exact he.1
     rw [h0] at hd
     simp at hd
-  rw [round_to_nearest_def hne, if_pos]
+  rw [round_to_nearest_def hne, ite_eq_left]
   rw [GT.gt, UInt64.lt_iff_toNat_lt,
     show (0x5000_0000_0000_0000 : UInt64).toNat = 5764607523034234880 from by decide]
   omega
@@ -122,18 +122,18 @@ private lemma pushOverflow_cusp_eq (g : Guard) (zm : UInt64)
     · exact Or.inr (UInt64.toNat_inj.mp h)
   unfold Guard.pushOverflowSpec
   rcases h_zm with rfl | rfl
-  · rw [if_pos (by decide)]
+  · rw [ite_eq_left (by decide)]
     dsimp only
-    rw [if_pos (by decide : (9223372036854775808 : UInt64) % 10 < 9)]
+    rw [ite_eq_left (by decide : (9223372036854775808 : UInt64) % 10 < 9)]
     by_cases h : g.round .to_nearest = 1 ∨ g.round .to_nearest = 0
-    · rw [if_pos (Or.inr h), if_pos (by rcases h with h | h <;> rw [h] <;> decide)]
+    · rw [ite_eq_left (Or.inr h), ite_eq_left (by rcases h with h | h <;> rw [h] <;> decide)]
       congr 1
     · push Not at h
-      rw [if_neg (by simp [h.1, h.2]), if_neg (by simp [h.1, h.2])]
+      rw [ite_eq_right (by simp [h.1, h.2]), ite_eq_right (by simp [h.1, h.2])]
       congr 1
-  · rw [if_pos (by decide)]
+  · rw [ite_eq_left (by decide)]
     dsimp only
-    rw [if_neg (by decide : ¬ (9223372036854775809 : UInt64) % 10 < 9), if_pos (Or.inl (by decide))]
+    rw [ite_eq_right (by decide : ¬ (9223372036854775809 : UInt64) % 10 < 9), ite_eq_left (Or.inl (by decide))]
     congr 1
 
 
@@ -217,7 +217,7 @@ lemma doRoundUp_nearest_frame (result : Number) (truth : ℚ)
     · -- Kept at `maxRep`: there was no round-up, so `zm = maxRep + 1` and `f ≤ 1/2`.
       have h_cond : ¬ (zm.toNat = maxRepNat + 2 ∨ g.round .to_nearest = 1 ∨ g.round .to_nearest = 0) := by
         intro h
-        rw [h_push, if_pos h, round_push_six] at hb
+        rw [h_push, ite_eq_left h, round_push_six] at hb
         simp at hb
       push Not at h_cond
       obtain ⟨h_ne2, h_ne1, _⟩ := h_cond
@@ -236,7 +236,7 @@ lemma doRoundUp_nearest_frame (result : Number) (truth : ℚ)
     · -- Moved up to `maxRepUp`: there was a round-up, so `zm + f ≥ maxRep + 3/2`.
       have h_cond : zm.toNat = maxRepNat + 2 ∨ g.round .to_nearest = 1 ∨ g.round .to_nearest = 0 := by
         by_contra h
-        rw [h_push, if_neg h] at hb
+        rw [h_push, ite_eq_right h] at hb
         rcases round_push_three g with h3 | h3 <;> rw [h3] at hb <;> simp at hb
       have h_mid : (maxRepNat : ℚ) + 3 / 2 ≤ zm.toNat + f := by
         rcases h_cond with h | h | h

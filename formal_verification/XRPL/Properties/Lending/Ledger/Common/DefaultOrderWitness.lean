@@ -4,11 +4,9 @@ import XRPL.Properties.Lending.Ledger.Common.ManageReachable
 
 /-! # Witnesses for the order of two defaults
 
-Reachable runs where two defaults give a different vault or broker in the two orders, each breaking one hypothesis
-of `defaults_comm`: a liquidation amount that caps a default, a coarsened vault, and a CoverAvailable above `2^63`
-base units. -/
+Reachable runs where two defaults in the two orders give a different vault or broker (FV_M4_18, FV_M4_28). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -95,7 +93,7 @@ private def dlGenesis : LendingLedger := { vault := dlVault, shares := [], broke
 private lemma dlGenesis_genesis : dlGenesis.Genesis where
   created := ⟨some 0, none, dlSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨dlVault.wf, dlVault.valid⟩⟩
+    exact dite_eq_left ⟨dlVault.wf, dlVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl
@@ -212,7 +210,7 @@ private def dvGenesis : LendingLedger := { vault := dvVault, shares := [], broke
 private lemma dvGenesis_genesis : dvGenesis.Genesis where
   created := ⟨some 10, none, dvSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨dvVault.wf, dvVault.valid⟩⟩
+    exact dite_eq_left ⟨dvVault.wf, dvVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

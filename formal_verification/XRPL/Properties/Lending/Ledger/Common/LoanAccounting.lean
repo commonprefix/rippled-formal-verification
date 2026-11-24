@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.LoanAccountingDefs
 import XRPL.Properties.Lending.Ledger.Common.LoanRuns
 import XRPL.Properties.Lending.Loan.Common.PaymentCount
@@ -7,10 +8,8 @@ import XRPL.Properties.Lending.Loan.Common.ManageProofs
 
 /-! # Where a loan's outstanding amounts go
 
-Along a sequence of transactions, the loan at one slot changes only through the transactions on that loan. A payment
-takes each scheduled instalment it pays off the loan exactly, an overpayment then re-amortizes it, a full payment
-clears it and a default writes it off. LoanAccept, impair and unimpair change none of PrincipalOutstanding,
-TotalValueOutstanding, ManagementFeeOutstanding and PaymentRemaining. -/
+Along a sequence of transactions the loan at one slot changes only through its own transactions: payments take off
+their instalments exactly, an overpayment re-amortizes, a full payment clears and a default writes off. -/
 
 namespace XRPL.Model.Lending
 

@@ -18,7 +18,7 @@ def Guard.RoundsLike (g : Guard) (f : ℚ) : Prop :=
 lemma Guard.roundsLike_of_represents {g : Guard} {f : ℚ} (hg : represents g f) : g.RoundsLike f := by
   by_cases he : g.empty = true
   · have hf0 : f = 0 := represents_empty_eq_zero he hg
-    have hr : g.round .to_nearest = -2 := by unfold Guard.round; rw [if_pos he]
+    have hr : g.round .to_nearest = -2 := by unfold Guard.round; rw [ite_eq_left he]
     unfold Guard.RoundsLike
     rw [hf0, hr]
     exact ⟨⟨fun _ => rfl, fun _ => he⟩, ⟨fun h => absurd h (by decide), fun h => by norm_num at h⟩,

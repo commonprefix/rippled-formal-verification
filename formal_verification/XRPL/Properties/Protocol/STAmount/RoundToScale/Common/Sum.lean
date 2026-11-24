@@ -54,7 +54,7 @@ lemma lift_toRat (s : STAmount) (h_hi : s.mValue.toNat < 10 ^ 16) :
     push_cast
     rw [show (s.mValue.toNat : ℚ) * 1000 * (10 : ℚ) ^ (s.mOffset - 3)
         = (s.mValue.toNat : ℚ) * ((1000 : ℚ) * (10 : ℚ) ^ (s.mOffset - 3)) from by ring,
-        h_pow, if_pos rfl]
+        h_pow, ite_eq_left rfl]
     ring
 
 /-- Nat floor-division by 1000, as an integer floor. -/
@@ -71,9 +71,9 @@ private lemma nat_ceilDiv_cast (a : ℕ) :
   have h := Rat.ceil_intCast_div_natCast (a : ℤ) 1000
   push_cast at h ⊢
   by_cases hmod : a % 1000 = 0
-  · rw [if_neg (by exact fun hh => hh hmod)]
+  · rw [ite_eq_right (by exact fun hh => hh hmod)]
     omega
-  · rw [if_pos hmod]
+  · rw [ite_eq_left hmod]
     omega
 
 set_option maxHeartbeats 3200000 in
@@ -158,7 +158,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
     intro h
     have h_neg_neg : v2n.operator_neg.negative_ = !v2n.negative_ := by
       unfold Number.operator_neg
-      rw [if_neg (by
+      rw [ite_eq_right (by
         intro hb
         exact hv2_mant (by exact_mod_cast beq_iff_eq.mp hb))]
     unfold Number.operator_eq at h
@@ -260,9 +260,9 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
   have hσ_abs : |σ| = A := by
     rw [hσ_signed]
     rcases hn : neg with _ | _
-    · simp only [Bool.false_eq_true, if_false, one_mul]
+    · simp only [Bool.false_eq_true, ite_false, one_mul]
       exact abs_of_pos hA_pos
-    · simp only [if_true]
+    · simp only [ite_true]
       rw [show (-1 : ℚ) * A = -A from by ring, abs_neg]
       exact abs_of_pos hA_pos
   set Fσ : ℤ := ⌊A / 10 ^ E⌋ with hFσ_def
@@ -345,7 +345,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
       · have h := Number.operator_add_rounded_towards_zero v1n v2n n₁ hv1_norm hv2_norm h_add
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
-        rw [if_pos (by rw [hσ_pos_eq]; exact le_of_lt hA_pos : σ ≥ 0)] at hn'_eq
+        rw [ite_eq_left (by rw [hσ_pos_eq]; exact le_of_lt hA_pos : σ ≥ 0)] at hn'_eq
         exact ⟨Fσ, by rw [hn'_val, h_floor_val n' hn'_eq]; norm_num,
           fun h => rounding_mode.noConfusion h, fun _ => rfl,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h⟩
@@ -354,7 +354,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
         exact ⟨Fσ, by rw [hn'_val, h_floor_val n' hn'_eq]; norm_num,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
-          fun _ => by rw [if_neg (by exact Bool.noConfusion)],
+          fun _ => by rw [ite_eq_right (by exact Bool.noConfusion)],
           fun h => rounding_mode.noConfusion h⟩
       · have h := Number.operator_add_rounded_upward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
         rw [← hσ_def] at h
@@ -362,10 +362,10 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         exact ⟨Cσ, by rw [hn'_val, h_ceil_val n' hn'_eq]; norm_num,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
           fun h => rounding_mode.noConfusion h,
-          fun _ => by rw [if_neg (by exact Bool.noConfusion)]⟩
+          fun _ => by rw [ite_eq_right (by exact Bool.noConfusion)]⟩
     · -- negative σ
       have hσ_neg_eq : -σ = A := by
-        rw [hσ_signed, hn, if_pos rfl]
+        rw [hσ_signed, hn, ite_eq_left rfl]
         ring
       have h_floor_val : ∀ n', Number.lower σ = some n' →
           n'.toRat = -((Cσ : ℚ) * 10 ^ E) := by
@@ -404,33 +404,33 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
       · have h := Number.operator_add_rounded_to_nearest v1n v2n n₁ hv1_norm hv2_norm h_add
         rw [← hσ_def] at h
         rcases h with ⟨n', hn'_eq, hn'_val⟩ | ⟨n', hn'_eq, hn'_val⟩
-        · exact ⟨Cσ, by rw [hn'_val, h_floor_val n' hn'_eq, if_pos rfl]; ring,
+        · exact ⟨Cσ, by rw [hn'_val, h_floor_val n' hn'_eq, ite_eq_left rfl]; ring,
             fun _ => Or.inr rfl, fun h => rounding_mode.noConfusion h,
             fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h⟩
-        · exact ⟨Fσ, by rw [hn'_val, h_ceil_val n' hn'_eq, if_pos rfl]; ring,
+        · exact ⟨Fσ, by rw [hn'_val, h_ceil_val n' hn'_eq, ite_eq_left rfl]; ring,
             fun _ => Or.inl rfl, fun h => rounding_mode.noConfusion h,
             fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h⟩
       · have h := Number.operator_add_rounded_towards_zero v1n v2n n₁ hv1_norm hv2_norm h_add
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
-        rw [if_neg (not_le.mpr hσ_lt)] at hn'_eq
-        exact ⟨Fσ, by rw [hn'_val, h_ceil_val n' hn'_eq, if_pos rfl]; ring,
+        rw [ite_eq_right (not_le.mpr hσ_lt)] at hn'_eq
+        exact ⟨Fσ, by rw [hn'_val, h_ceil_val n' hn'_eq, ite_eq_left rfl]; ring,
           fun h => rounding_mode.noConfusion h, fun _ => rfl,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h⟩
       · have h := Number.operator_add_rounded_downward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
-        exact ⟨Cσ, by rw [hn'_val, h_floor_val n' hn'_eq, if_pos rfl]; ring,
+        exact ⟨Cσ, by rw [hn'_val, h_floor_val n' hn'_eq, ite_eq_left rfl]; ring,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
-          fun _ => by rw [if_pos rfl],
+          fun _ => by rw [ite_eq_left rfl],
           fun h => rounding_mode.noConfusion h⟩
       · have h := Number.operator_add_rounded_upward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
-        exact ⟨Fσ, by rw [hn'_val, h_ceil_val n' hn'_eq, if_pos rfl]; ring,
+        exact ⟨Fσ, by rw [hn'_val, h_ceil_val n' hn'_eq, ite_eq_left rfl]; ring,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
           fun h => rounding_mode.noConfusion h,
-          fun _ => by rw [if_pos rfl]⟩
+          fun _ => by rw [ite_eq_left rfl]⟩
   obtain ⟨M₁, hM_val, hM_tn, hM_tz, hM_dn, hM_up⟩ := hM_spec
   -- Bounds on M₁ (uniform across modes).
   have hM_lo : (10 ^ 18 : ℤ) ≤ M₁ := by
@@ -458,9 +458,9 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
       exact_mod_cast this
     have hcast : ((M₁ℕ : ℕ) : ℚ) = (M₁ : ℚ) := by exact_mod_cast hM₁ℕ_cast
     rcases hn : neg with _ | _
-    · simp only [Bool.false_eq_true, if_false, one_mul]
+    · simp only [Bool.false_eq_true, ite_false, one_mul]
       rw [abs_of_pos (by positivity), hcast]
-    · simp only [if_true]
+    · simp only [ite_true]
       rw [show (-1 : ℚ) * (M₁ : ℚ) * 10 ^ E = -((M₁ : ℚ) * 10 ^ E) from by ring,
           abs_neg, abs_of_pos (by positivity), hcast]
   obtain ⟨h_n₁_mant, h_n₁_exp⟩ := Number.normalized_rep_of_abs n₁ h_n₁_norm M₁ℕ E
@@ -482,7 +482,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
       · exfalso
         have h1 : 0 ≤ n₁.toRat := Number.toRat_nonneg_of_nonnegative n₁ hb
         have h2 : n₁.toRat = -((M₁ : ℚ) * 10 ^ E) := by
-          rw [hM_val, hn, if_pos rfl]
+          rw [hM_val, hn, ite_eq_left rfl]
           ring
         have hM₁_pos : (0 : ℚ) < (M₁ : ℚ) := by
           have : (0 : ℤ) < M₁ := by omega
@@ -501,8 +501,8 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
     unfold IOUAmount.ofNumber IOUAmount.fromNumber
     rw [h_ntr]
     simp only []
-    rw [if_neg (by show ¬ s > cMaxOffset; unfold cMaxOffset; omega),
-        if_neg (by show ¬ s < cMinOffset; unfold cMinOffset; omega)]
+    rw [ite_eq_right (by show ¬ s > cMaxOffset; unfold cMaxOffset; omega),
+        ite_eq_right (by show ¬ s < cMinOffset; unfold cMinOffset; omega)]
   have h_sumI : sumI = ⟨if n₁.negative_ then -m₁₆.toInt64 else m₁₆.toInt64, s⟩ :=
     Except.ok.inj (h_of.symm.trans h_of_explicit)
   have h_m₁₆_lo : 10 ^ 15 ≤ m₁₆.toNat := by
@@ -690,9 +690,9 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
     · rw [h_m₁₆_dn rfl, h_n₁_mantN, h_n₁_neg]
       have h_dn := hM_dn rfl
       rcases hn : neg with _ | _ <;> rw [hn] at h_dn
-      · simp only [Bool.false_eq_true, if_false] at h_dn
+      · simp only [Bool.false_eq_true, ite_false] at h_dn
         rw [hM₁ℕ_div_F h_dn,
-            if_neg (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero]
+            ite_eq_right (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero]
         have h2 := hFe_floor_cast
         have h4 : ⌊V / 10 ^ s⌋ < 10 ^ 15 := by
           apply Int.floor_lt.mpr
@@ -700,7 +700,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
           push_cast
           linarith
         omega
-      · simp only [if_true] at h_dn
+      · simp only [ite_true] at h_dn
         rw [hM₁ℕ_div_C h_dn]
         have h2 := hCe_ceil_cast
         have h3 : ⌈V / 10 ^ s⌉ ≤ 10 ^ 15 := by
@@ -709,21 +709,21 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
           push_cast
           linarith
         by_cases hmod : M₁ℕ % 1000 ≠ 0
-        · rw [if_pos ⟨rfl, hmod⟩]
+        · rw [ite_eq_left ⟨rfl, hmod⟩]
           have h5 := hM₁ℕ_mod_C h_dn
           have h6 : Ce.toNat % 1000 ≠ 0 := by omega
-          rw [if_pos h6] at h2
+          rw [ite_eq_left h6] at h2
           omega
         · push Not at hmod
-          rw [if_neg (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero]
+          rw [ite_eq_right (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero]
           have h5 := hM₁ℕ_mod_C h_dn
           have h6 : Ce.toNat % 1000 = 0 := by omega
-          rw [if_neg (by intro hh; exact hh h6)] at h2
+          rw [ite_eq_right (by intro hh; exact hh h6)] at h2
           omega
     · rw [h_m₁₆_up rfl, h_n₁_mantN, h_n₁_neg]
       have h_up := hM_up rfl
       rcases hn : neg with _ | _ <;> rw [hn] at h_up
-      · simp only [Bool.false_eq_true, if_false] at h_up
+      · simp only [Bool.false_eq_true, ite_false] at h_up
         rw [hM₁ℕ_div_C h_up]
         have h2 := hCe_ceil_cast
         have h3 : ⌈V / 10 ^ s⌉ ≤ 10 ^ 15 := by
@@ -732,20 +732,20 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
           push_cast
           linarith
         by_cases hmod : M₁ℕ % 1000 ≠ 0
-        · rw [if_pos ⟨rfl, hmod⟩]
+        · rw [ite_eq_left ⟨rfl, hmod⟩]
           have h5 := hM₁ℕ_mod_C h_up
           have h6 : Ce.toNat % 1000 ≠ 0 := by omega
-          rw [if_pos h6] at h2
+          rw [ite_eq_left h6] at h2
           omega
         · push Not at hmod
-          rw [if_neg (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero]
+          rw [ite_eq_right (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero]
           have h5 := hM₁ℕ_mod_C h_up
           have h6 : Ce.toNat % 1000 = 0 := by omega
-          rw [if_neg (by intro hh; exact hh h6)] at h2
+          rw [ite_eq_right (by intro hh; exact hh h6)] at h2
           omega
-      · simp only [if_true] at h_up
+      · simp only [ite_true] at h_up
         rw [hM₁ℕ_div_F h_up,
-            if_neg (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero]
+            ite_eq_right (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero]
         have h2 := hFe_floor_cast
         have h4 : ⌊V / 10 ^ s⌋ < 10 ^ 15 := by
           apply Int.floor_lt.mpr
@@ -789,11 +789,11 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         have h2 := hCe_ceil_cast
         by_cases hmod : Ce.toNat % 1000 = 0
         · right
-          rw [if_neg (by intro hh; exact hh hmod)] at h2
+          rw [ite_eq_right (by intro hh; exact hh hmod)] at h2
           omega
         · left
           have h7 := h_FC_succ (h_not_int_of_Ce hmod)
-          rw [if_pos hmod] at h2
+          rw [ite_eq_left hmod] at h2
           omega
       · -- fired on the ceil branch: remainder nonzero.
         right
@@ -806,7 +806,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         have h6 : Ce.toNat % 1000 ≠ 0 := by omega
         rw [hM₁ℕ_div_C hM] at h
         have h2 := hCe_ceil_cast
-        rw [if_pos h6] at h2
+        rw [ite_eq_left h6] at h2
         omega
   · -- towards_zero.
     intro hmode
@@ -821,24 +821,24 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
     rw [h_n₁_mantN, h_n₁_neg] at h_m
     have h_dn := hM_dn rfl
     rcases hn : neg with _ | _ <;> rw [hn] at h_dn h_m
-    · simp only [Bool.false_eq_true, if_false] at h_dn ⊢
-      rw [if_neg (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero,
+    · simp only [Bool.false_eq_true, ite_false] at h_dn ⊢
+      rw [ite_eq_right (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero,
           hM₁ℕ_div_F h_dn] at h_m
       have h2 := hFe_floor_cast
       omega
-    · simp only [if_true] at h_dn ⊢
+    · simp only [ite_true] at h_dn ⊢
       rw [hM₁ℕ_div_C h_dn] at h_m
       have h2 := hCe_ceil_cast
       have h5 := hM₁ℕ_mod_C h_dn
       by_cases hmod : M₁ℕ % 1000 ≠ 0
-      · rw [if_pos ⟨rfl, hmod⟩] at h_m
+      · rw [ite_eq_left ⟨rfl, hmod⟩] at h_m
         have h6 : Ce.toNat % 1000 ≠ 0 := by omega
-        rw [if_pos h6] at h2
+        rw [ite_eq_left h6] at h2
         omega
       · push Not at hmod
-        rw [if_neg (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero] at h_m
+        rw [ite_eq_right (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero] at h_m
         have h6 : Ce.toNat % 1000 = 0 := by omega
-        rw [if_neg (by intro hh; exact hh h6)] at h2
+        rw [ite_eq_right (by intro hh; exact hh h6)] at h2
         omega
   · -- upward.
     intro hmode
@@ -847,22 +847,22 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
     rw [h_n₁_mantN, h_n₁_neg] at h_m
     have h_up := hM_up rfl
     rcases hn : neg with _ | _ <;> rw [hn] at h_up h_m
-    · simp only [Bool.false_eq_true, if_false] at h_up ⊢
+    · simp only [Bool.false_eq_true, ite_false] at h_up ⊢
       rw [hM₁ℕ_div_C h_up] at h_m
       have h2 := hCe_ceil_cast
       have h5 := hM₁ℕ_mod_C h_up
       by_cases hmod : M₁ℕ % 1000 ≠ 0
-      · rw [if_pos ⟨rfl, hmod⟩] at h_m
+      · rw [ite_eq_left ⟨rfl, hmod⟩] at h_m
         have h6 : Ce.toNat % 1000 ≠ 0 := by omega
-        rw [if_pos h6] at h2
+        rw [ite_eq_left h6] at h2
         omega
       · push Not at hmod
-        rw [if_neg (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero] at h_m
+        rw [ite_eq_right (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero] at h_m
         have h6 : Ce.toNat % 1000 = 0 := by omega
-        rw [if_neg (by intro hh; exact hh h6)] at h2
+        rw [ite_eq_right (by intro hh; exact hh h6)] at h2
         omega
-    · simp only [if_true] at h_up ⊢
-      rw [if_neg (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero,
+    · simp only [ite_true] at h_up ⊢
+      rw [ite_eq_right (by intro ⟨h, _⟩; exact Bool.noConfusion h), Nat.add_zero,
           hM₁ℕ_div_F h_up] at h_m
       have h2 := hFe_floor_cast
       omega

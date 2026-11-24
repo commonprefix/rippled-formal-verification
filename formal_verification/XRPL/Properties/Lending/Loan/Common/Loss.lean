@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Impaired
 import XRPL.Properties.Lending.Loan.Common.PayMonotone
 import XRPL.Properties.Lending.Loan.Common.Reserved
@@ -181,7 +182,7 @@ lemma Loan.canManage_impair_not_impaired (loan : Loan) (now : UInt32)
     · cases h
     split at h
     · cases h
-    rw [if_pos (by simp [hi])] at h
+    rw [ite_eq_left (by simp [hi])] at h
     cases h
 
 /-- Unimpair needs an impaired loan. -/
@@ -195,7 +196,7 @@ lemma Loan.canManage_unimpair_impaired (loan : Loan) (now : UInt32)
     split at h
     · cases h
     rename_i hd
-    rw [if_neg (by simp [hi]), if_pos (by simp [hi, hd])] at h
+    rw [ite_eq_right (by simp [hi]), ite_eq_left (by simp [hi, hd])] at h
     cases h
   · rfl
 

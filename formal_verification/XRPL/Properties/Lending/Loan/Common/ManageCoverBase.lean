@@ -121,7 +121,7 @@ lemma Loan.defaultCover_at_base (loan : Loan) (v : Vault) (dc minimumCover liqui
         rw [this]
     -- the integral credit is the amount itself
     unfold sumRoundAndSubtract at hst
-    rw [if_pos hint] at hst
+    rw [ite_eq_left hint] at hst
     obtain ⟨x, hx, hst⟩ := bind_ok_peel _ _ _ hst
     have hxs : x = st := Except.ok.inj hst
     subst hxs
@@ -252,7 +252,6 @@ lemma Loan.manageDefault_cover_lower_bound_at_base (minimumCover liquidationAmou
   obtain ⟨hblo, -, hbint⟩ := Vault.baseExponent_bounds v
   refine numberExponent_at_base _ _ _ e r.pool'.wf.assetsAvailable_norm r.pool'.exact.assetsAvailable_nonneg
     (by omega) hbint ?_ he
-  change r.pool'.assetsAvailable.toRat < _
   rw [haa', hdc]
   linarith
 

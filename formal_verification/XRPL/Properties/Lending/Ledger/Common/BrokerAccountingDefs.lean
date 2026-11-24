@@ -2,10 +2,8 @@ import XRPL.Properties.Lending.Ledger.Common.VaultAccountingDefs
 
 /-! # What each transaction moves in or out of SharesTotal and one broker
 
-Each `…Of` reads one amount off the operation a transaction runs on the ledger `l`, and is zero for every other
-kind of transaction. The broker amounts count only the transactions on broker `j`: its own cover transactions, a
-LoanSet on it and the transactions on its loans. The sum of the same name adds the amount up along a sequence of
-transactions, each read on the ledger it runs on. -/
+Each `…Of` reads one amount off the operation a transaction runs and is zero for other transactions. The sum of the
+same name adds it up along a sequence. -/
 
 namespace XRPL.Model.Lending
 
@@ -213,12 +211,6 @@ def LendingLedger.newLoans (l : LendingLedger) (j : Nat) (txs : List LendingTx) 
 /-- The number of deleted loans of broker `j` over the transactions `txs` applied in order from `l`. -/
 def LendingLedger.deletedLoans (l : LendingLedger) (j : Nat) (txs : List LendingTx) : ℚ :=
   l.runSum (fun l₀ => l₀.deletedLoansOf j) txs
-
-/-- Every VaultDeposit along the transactions `txs` from `start` keeps SharesTotal plus the shares it issues within
-the share MPT maximum `2^63 − 1`, which C++ accountSend enforces and the model does not run. -/
-def LendingLedger.SharesFitAlong (start : LendingLedger) (txs : List LendingTx) : Prop :=
-  ∀ (pre : List LendingTx) (l : LendingLedger) (tx : LendingTx), pre ++ [tx] <+: txs →
-    LendingLedger.Reaches start pre l → l.vault.sharesTotal.toRat + l.sharesCreatedOf tx ≤ 2 ^ 63 - 1
 
 /-- Broker `j`'s cover is never coarsened along `txs` from `start`: before each step its CoverAvailable plus what the
 step pays in (a deposit, a fee, or a default's cover that rounds below zero) stays below `10^16` base units. -/

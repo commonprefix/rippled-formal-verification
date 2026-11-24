@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 LoanPay adds a fee to a cover below its minimum with no Open-zone check. On an IOU vault a later default then
 leaves a cover of 17 digits. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -26,7 +26,7 @@ private def rcGenesis : LendingLedger := { vault := rcVault, shares := [], broke
 private lemma rcGenesis_genesis : rcGenesis.Genesis where
   created := ⟨some 10, none, rcSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨rcVault.wf, rcVault.valid⟩⟩
+    exact dite_eq_left ⟨rcVault.wf, rcVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

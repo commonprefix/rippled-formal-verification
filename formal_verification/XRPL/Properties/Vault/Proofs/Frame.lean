@@ -8,10 +8,8 @@ import XRPL.Properties.Protocol.Number.Totality
 
 /-! # What each operation writes
 
-A successful `deposit`, `withdraw` or `clawback` writes only `assetsAvailable` and
-`sharesTotal`: the cash-only balance change adds zero to every other balance, which keeps
-it as it is. `burnShares` writes only `sharesTotal`, and `update` only `assetsMaximum` and
-`depositBlocked`. -/
+`deposit`, `withdraw` and `clawback` write only `assetsAvailable` and `sharesTotal`. `burnShares` writes only
+`sharesTotal`, and `update` only `assetsMaximum` and `depositBlocked`. -/
 
 namespace XRPL.Model.SingleAssetVault
 

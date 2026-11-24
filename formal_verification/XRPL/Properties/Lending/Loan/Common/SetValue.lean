@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.SetMonotone
 import XRPL.Properties.Lending.Loan.Common.Grid
 import XRPL.Properties.Protocol.Number.AtExponent
@@ -323,13 +324,13 @@ lemma STAmount.roundToExponent_nonneg_units (value result : STAmount) (s : ℤ) 
   have hval_nn : 0 ≤ value.toRat := by rw [STAmount.toRat_of_nonneg value hneg]; positivity
   have h_abs : |value.toRat| = value.toRat := abs_of_nonneg hval_nn
   unfold STAmount.roundToExponent at hok
-  rw [if_neg (by rw [h_int]; exact Bool.false_ne_true),
-      if_neg (by
+  rw [ite_eq_right (by rw [h_int]; exact Bool.false_ne_true),
+      ite_eq_right (by
         show ¬ value.isZero = true
         unfold STAmount.isZero
         rw [beq_eq_false_iff_ne.mpr h_mv_ne]
         exact Bool.false_ne_true),
-      if_neg (show ¬ value.exponent ≥ s from not_le.mpr hev)] at hok
+      ite_eq_right (show ¬ value.exponent ≥ s from not_le.mpr hev)] at hok
   rw [show STAmount.checked value.mNumericType kMinValue s value.negative mode
         = .ok ⟨value.mNumericType, kMinValue, s, value.mIsNegative⟩ from by
       rw [hc.is_fractional]
@@ -466,8 +467,8 @@ lemma STAmount.roundToExponent_nonneg_units (value result : STAmount) (s : ℤ) 
       subst h_pack₂
       exact ⟨by rw [hr_val, hw_val], hr_c.is_fractional, Or.inr hr_c⟩
   refine ⟨k, hres.1, hres.2.1, hres.2.2, fun h => by rw [← h_abs]; exact h_tn h,
-    fun h => by have := h_dn h; rw [hneg, if_neg Bool.false_ne_true, h_abs] at this; exact this,
-    fun h => by have := h_up h; rw [hneg, if_neg Bool.false_ne_true, h_abs] at this; exact this⟩
+    fun h => by have := h_dn h; rw [hneg, ite_eq_right Bool.false_ne_true, h_abs] at this; exact this,
+    fun h => by have := h_up h; rw [hneg, ite_eq_right Bool.false_ne_true, h_abs] at this; exact this⟩
 
 /-- Rounding to a fractional amount at a scale is faithful. When the `ofNumber` step lands at or
 below the scale, the result is a whole number of steps of `10^s` and never jumps over a grid point. -/
@@ -488,7 +489,7 @@ lemma STAmount.roundToNumericType_frac_grid (x T : Number) (mode : rounding_mode
     simp only at hok
     have hty := STAmount.ofNumber_mNumericType _ _ _ st hof
     have hint : st.integral = false := by unfold STAmount.integral; rw [hty]; rfl
-    rw [if_neg (by rw [hint]; decide)] at hok
+    rw [ite_eq_right (by rw [hint]; decide)] at hok
     cases hr : STAmount.roundToExponent st s mode with
     | error e => rw [hr] at hok; exact absurd hok (by simp)
     | ok r =>
@@ -578,7 +579,7 @@ lemma STAmount.roundToNumericType_int_grid (nt : NumericType) (hnt : nt.isIntegr
     have hT : st.toNumber mode = .ok T := by
       cases s with
       | none => exact hok
-      | some s => simp only [hint, if_true] at hok; exact hok
+      | some s => simp only [hint, ite_true] at hok; exact hok
     obtain ⟨iv, hrep, hval⟩ := STAmount.ofNumber_integral_toRat nt x mode st hnt hneg hof
     obtain ⟨hiv0, -⟩ := Number.to_rep_nonneg_range x mode iv hneg hrep
     have hic := (STAmount.ofNumber_integral_canonical nt x mode st hnt hof).1
@@ -649,7 +650,7 @@ private lemma UInt32.toUInt64_toInt64_toInt (n : UInt32) : n.toInt64.toInt = (n.
 
 /-- An `Int64` other than the smallest converts to a `Number` of the same value. -/
 lemma Number.ofInt64_toRat_of_ne (m : Int64) (hm : m ≠ Int64.minValue) :
-    (Number.ofInt64 m).toRat = (m.toInt : ℚ) := by
+    (Number.ofInt64 m .to_nearest).toRat = (m.toInt : ℚ) := by
   obtain ⟨w, hw, hv, -⟩ := Number.from_rep_exact m 0 .to_nearest hm (by unfold minExponent; norm_num)
     (by unfold maxExponent; norm_num)
   unfold Number.ofInt64
@@ -657,8 +658,27 @@ lemma Number.ofInt64_toRat_of_ne (m : Int64) (hm : m ≠ Int64.minValue) :
   show w.toRat = _
   rw [hv, zpow_zero, mul_one]
 
+/-- An `Int64` other than the smallest converts to the same `Number` in every rounding mode. -/
+lemma Number.ofInt64_mode (m : Int64) (hm : m ≠ Int64.minValue) (mode : rounding_mode) :
+    Number.ofInt64 m mode = Number.ofInt64 m .to_nearest := by
+  obtain ⟨w, hw, hv, hn⟩ := Number.from_rep_exact m 0 mode hm (by unfold minExponent; norm_num)
+    (by unfold maxExponent; norm_num)
+  obtain ⟨w', hw', hv', hn'⟩ := Number.from_rep_exact m 0 .to_nearest hm (by unfold minExponent; norm_num)
+    (by unfold maxExponent; norm_num)
+  unfold Number.ofInt64
+  rw [hw, hw']
+  show w = w'
+  exact Number.isNormalized.toRat_inj hn hn' (by rw [hv, hv'])
+
+/-- A count is not the smallest `Int64`. -/
+lemma UInt32.toInt64_ne_minValue (n : UInt32) : n.toInt64 ≠ Int64.minValue := by
+  intro h
+  have h1 := congrArg Int64.toInt h
+  rw [UInt32.toUInt64_toInt64_toInt, show Int64.minValue.toInt = -2 ^ 63 from by decide] at h1
+  omega
+
 /-- A count converts to a `Number` of the same value. -/
-lemma Number.ofInt64_count (n : UInt32) : (Number.ofInt64 n.toInt64).toRat = (n.toNat : ℚ) := by
+lemma Number.ofInt64_count (n : UInt32) : (Number.ofInt64 n.toInt64 .to_nearest).toRat = (n.toNat : ℚ) := by
   have hne : n.toInt64 ≠ Int64.minValue := by
     intro h
     have h1 := congrArg Int64.toInt h
@@ -801,7 +821,7 @@ lemma STAmount.roundToNumericType_frac_of_grid (x T : Number) (mode : rounding_m
   simp only at hok
   have hty := STAmount.ofNumber_mNumericType _ _ _ st hof
   have hint : st.integral = false := by unfold STAmount.integral; rw [hty]; rfl
-  rw [if_neg (by rw [hint]; decide)] at hok
+  rw [ite_eq_right (by rw [hint]; decide)] at hok
   have hsneg := STAmount.mIsNegative_false_of_nonneg st h0 hst
   cases hr : STAmount.roundToExponent st s mode with
   | error e => rw [hr] at hok; exact absurd hok (by simp)
@@ -845,7 +865,7 @@ lemma STAmount.roundToNumericType_frac_of_zero (x T : Number) (mode : rounding_m
   simp only at hok
   have hty := STAmount.ofNumber_mNumericType _ _ _ st hof
   have hint : st.integral = false := by unfold STAmount.integral; rw [hty]; rfl
-  rw [if_neg (by rw [hint]; decide), STAmount.roundToExponent_eq_self st s mode
+  rw [ite_eq_right (by rw [hint]; decide), STAmount.roundToExponent_eq_self st s mode
     (Or.inr (Or.inl (by unfold STAmount.isZero; simp [hst])))] at hok
   simp only at hok
   rw [STAmount.toNumber_zero_fractional st mode hint hst, Except.ok.injEq] at hok
@@ -928,7 +948,7 @@ lemma computeLoanProperties_inv (principal : Number) (ir : TenthBips32) (interva
     ∃ rate amount amountSt ti,
       loanPeriodicRate ir interval = .ok rate ∧
       loanPeriodicPayment principal rate n = .ok props.periodicPayment ∧
-      props.periodicPayment.operator_mul (Number.ofInt64 n.toInt64) (valueMode rate) = .ok amount ∧
+      props.periodicPayment.operator_mul (Number.ofInt64 n.toInt64 .to_nearest) (valueMode rate) = .ok amount ∧
       STAmount.ofNumber nt amount (valueMode rate) = .ok amountSt ∧
       props.loanScale = max minScale amountSt.exponent ∧
       STAmount.roundToNumericType nt amount (valueMode rate) (some props.loanScale) =
@@ -943,6 +963,8 @@ lemma computeLoanProperties_inv (principal : Number) (ir : TenthBips32) (interva
   obtain ⟨pp, hpp, h⟩ := bind_ok_peel _ _ _ h
   dsimp only at h
   obtain ⟨amount, hamount, h⟩ := bind_ok_peel _ _ _ h
+  -- the count converts to the same `Number` in the mode of the product
+  rw [Number.ofInt64_mode _ (UInt32.toInt64_ne_minValue n)] at hamount
   obtain ⟨amountSt, hst, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨tvo, htvo, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨rp, hrp, h⟩ := bind_ok_peel _ _ _ h
@@ -972,7 +994,7 @@ lemma LoanProperties.checkGuards_ok_inv (props : LoanProperties) (principal : Nu
     rw [hg] at h
     simp only [bind, Except.bind] at h
     by_cases hgs : g.isTesSuccess = true
-    · simp only [hgs, Bool.not_true, Bool.false_eq_true, if_false] at h
+    · simp only [hgs, Bool.not_true, Bool.false_eq_true, ite_false] at h
       have hg' : g = .tesSUCCESS := (TER.isTesSuccess_iff g).mp hgs
       subst hg'
       simp only [pure, Except.pure] at h
@@ -999,7 +1021,7 @@ lemma LoanProperties.checkGuards_ok_inv (props : LoanProperties) (principal : Nu
             bne_eq_false_iff_eq, gt_iff_lt, not_lt] at h1 h2
           refine ⟨ti, rfl, fun hir => h1 hir, fun hir => h2 hir, by omega, hsan.1.1, by omega, by omega⟩
     · simp only [Bool.not_eq_true] at hgs
-      simp only [hgs, Bool.not_false, if_true, pure, Except.pure, Except.ok.injEq] at h
+      simp only [hgs, Bool.not_false, ite_true, pure, Except.pure, Except.ok.injEq] at h
       rw [h] at hgs; exact absurd hgs (by decide)
 
 /-- The base exponent of a vault is between `-10` and `0`. -/
@@ -1017,8 +1039,8 @@ rounds a positive value to nearest, well above the smallest `Number`. -/
 private lemma loanPeriodicRate_pos (ir : TenthBips32) (interval : UInt32) (rate : Number) (hir : ir ≠ 0)
     (hint : interval ≠ 0) (h : loanPeriodicRate ir interval = .ok rate) : 0 < rate.toRat := by
   have heq : loanPeriodicRate ir interval =
-      ((Number.ofInt64 interval.toInt64).operator_mul ir.toNumber .to_nearest >>=
-        (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
+      ((Number.ofInt64 interval.toInt64 .to_nearest).operator_mul (ir.toNumber .to_nearest) .to_nearest >>=
+        (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest)) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
@@ -1028,10 +1050,10 @@ private lemma loanPeriodicRate_pos (ir : TenthBips32) (interval : UInt32) (rate 
   have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toInt64
   have hY := Number.ofInt64_isNormalized (31536000 : Int64)
   have hIv := Number.ofInt64_count interval
-  have hBv : (Number.ofInt64 ir.toInt64).toRat = (ir.toNat : ℚ) := Number.ofInt64_count ir
-  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64).toRat = 100000 := by
+  have hBv : (Number.ofInt64 ir.toInt64 .to_nearest).toRat = (ir.toNat : ℚ) := Number.ofInt64_count ir
+  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64 .to_nearest).toRat = 100000 := by
     rw [Number.ofInt64_count]; rfl
-  have hYv : (Number.ofInt64 31536000).toRat = 31536000 := by
+  have hYv : (Number.ofInt64 31536000 .to_nearest).toRat = 31536000 := by
     rw [Number.ofInt64_toRat_of_ne _ (by decide)]; rfl
   have hpN := Number.operator_mul_isNormalized _ _ p _ hI hB hp
   have htN := Number.operator_div_isNormalized _ _ t _ hpN hU ht
@@ -1129,7 +1151,7 @@ private lemma Loan.create_value_ceil (broker : LoanBroker) (v : Vault) (principa
   have hrN := loanPeriodicRate_isNormalized _ _ rate hrt
   have hmode : valueMode rate = .upward := by
     unfold valueMode
-    rw [if_neg]
+    rw [ite_eq_right]
     intro heq
     rw [(Number.operator_eq_iff rate Number.zero hrN Number.zero_isNormalized).mp heq, Number.toRat_zero] at hrate0
     exact lt_irrefl _ hrate0
@@ -1150,7 +1172,7 @@ private lemma Loan.create_value_ceil (broker : LoanBroker) (v : Vault) (principa
     rw [← htvo, Number.toRat_zero] at htv0'
     exact lt_irrefl _ htv0'
   have hR := Number.operator_mul_rounded_upward _ _ amount hppN hN hamt hamt0
-  set t := props.periodicPayment.toRat * (Number.ofInt64 schedule.paymentTotal.toInt64).toRat with ht
+  set t := props.periodicPayment.toRat * (Number.ofInt64 schedule.paymentTotal.toInt64 .to_nearest).toRat with ht
   have ht0 : 0 ≤ t := by rw [ht, hNv]; positivity
   have hta : t ≤ amount.toRat := by obtain ⟨n', hn', hv⟩ := hR; rw [hv]; exact Number.le_upper _ _ hn'
   -- the scale is the LoanScale, between `-10` and `80`
@@ -1320,8 +1342,9 @@ lemma Loan.create_covers_principal_proof (broker : LoanBroker) (v : Vault) (prin
 private lemma loanPeriodicRate_zero (interval : UInt32) (rate : Number) (h : loanPeriodicRate 0 interval = .ok rate) :
     rate = Number.zero := by
   have heq : loanPeriodicRate 0 interval =
-      ((Number.ofInt64 interval.toInt64).operator_mul (0 : TenthBips32).toNumber .to_nearest >>=
-        (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
+      ((Number.ofInt64 interval.toInt64 .to_nearest).operator_mul ((0 : TenthBips32).toNumber .to_nearest)
+          .to_nearest >>=
+        (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest)) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
@@ -1330,7 +1353,7 @@ private lemma loanPeriodicRate_zero (interval : UInt32) (rate : Number) (h : loa
   have hB := Number.ofInt64_isNormalized (0 : TenthBips32).toInt64
   have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toInt64
   have hY := Number.ofInt64_isNormalized (31536000 : Int64)
-  have hBv : (Number.ofInt64 (0 : TenthBips32).toInt64).toRat = 0 := by
+  have hBv : (Number.ofInt64 (0 : TenthBips32).toInt64 .to_nearest).toRat = 0 := by
     rw [Number.ofInt64_count]; rfl
   have hmode : rounding_mode.to_nearest = .to_nearest ∨ rounding_mode.to_nearest = .upward ∨
       rounding_mode.to_nearest = .downward := Or.inl rfl
@@ -1353,7 +1376,7 @@ private lemma loanPeriodicRate_zero (interval : UInt32) (rate : Number) (h : loa
 private lemma loanPeriodicPayment_zero_rate (principal : Number) (n : UInt32) (pp : Number)
     (hp : principal.isNormalized) (hp0 : principal.toRat ≠ 0) (hn : n ≠ 0)
     (h : loanPeriodicPayment principal Number.zero n = .ok pp) :
-    principal.operator_div (Number.ofInt64 n.toInt64) .to_nearest = .ok pp := by
+    principal.operator_div (Number.ofInt64 n.toInt64 .to_nearest) .to_nearest = .ok pp := by
   have hpe : principal.operator_eq Number.zero = false := by
     cases hq : principal.operator_eq Number.zero
     · rfl
@@ -1361,7 +1384,7 @@ private lemma loanPeriodicPayment_zero_rate (principal : Number) (n : UInt32) (p
       hp0)
   have hne : (n == 0) = false := by simpa using hn
   unfold loanPeriodicPayment at h
-  simp only [hpe, hne, Bool.or_false, Bool.false_eq_true, if_false] at h
+  simp only [hpe, hne, Bool.or_false, Bool.false_eq_true, ite_false] at h
   exact h
 
 /-- With InterestRate `0` the total value is PrincipalRequested. `PP × n` lands within half a 16-digit
@@ -1512,7 +1535,7 @@ lemma computeLoanProperties_zero_rate_value (principal : Number) (interval n : U
     rw [hst'] at htvo
     have hty := STAmount.ofNumber_mNumericType _ _ _ amountSt hst'
     have hsint : amountSt.integral = true := by unfold STAmount.integral; rw [hty]; rfl
-    simp only [hsint, if_true] at htvo
+    simp only [hsint, ite_true] at htvo
     have hic := (STAmount.ofNumber_integral_canonical _ _ _ amountSt hint' hst').1
     have hsz : amountSt.mValue.toNat ≤ 2 ^ 63 - 1 := by
       by_cases hz : amountSt.mValue = 0
@@ -1594,7 +1617,7 @@ lemma Loan.create_zero_rate_proof (broker : LoanBroker) (v : Vault) (principal :
     have := hex.periodicPayment_pos; simp only [RawLoan.toExact] at this; rwa [hPP] at this
   have hppne : props.periodicPayment ≠ Number.zero := fun h => by
     rw [h, Number.toRat_zero] at hpp0; exact lt_irrefl _ hpp0
-  have hdiv : principal.operator_div (Number.ofInt64 schedule.paymentTotal.toInt64) .to_nearest =
+  have hdiv : principal.operator_div (Number.ofInt64 schedule.paymentTotal.toInt64 .to_nearest) .to_nearest =
       .ok props.periodicPayment := by
     rcases loanPeriodicPayment_cases _ _ _ _ hpp hppne with ⟨-, hd⟩ | ⟨hz, -⟩
     · exact hd
@@ -1699,19 +1722,19 @@ lemma computeManagementFee_bounds (nt : NumericType) (ti mfo : Number) (K : ℕ)
   have hs3 : minExponent + 18 ≤ ls - 3 ∧ ls - 3 ≤ maxExponent - 1 := by unfold minExponent maxExponent; omega
   -- the fee is the floor at LoanScale of `(I × rate) / 10^5`, each step to nearest
   have heq : computeManagementFee nt ti mgmt ls =
-      (ti.operator_mul mgmt.toTenthBips32.toNumber .to_nearest >>=
-        (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
+      (ti.operator_mul (mgmt.toTenthBips32.toNumber .to_nearest) .to_nearest >>=
+        (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest)) >>=
         (fun raw => STAmount.roundToNumericType nt raw .downward (some ls)) := rfl
   rw [heq] at h
   obtain ⟨raw, hraw, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨y, hy, hraw⟩ := bind_ok_peel _ _ _ hraw
   have hRB := Number.ofInt64_isNormalized mgmt.toTenthBips32.toInt64
-  have hRBv : (Number.ofInt64 mgmt.toTenthBips32.toInt64).toRat = (R : ℚ) := by
+  have hRBv : (Number.ofInt64 mgmt.toTenthBips32.toInt64 .to_nearest).toRat = (R : ℚ) := by
     rw [Number.ofInt64_count]
     show ((mgmt.toUInt32.toNat : ℕ) : ℚ) = _
     rw [UInt16.toNat_toUInt32]
   have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toInt64
-  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64).toRat = 100000 := by
+  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64 .to_nearest).toRat = 100000 := by
     rw [Number.ofInt64_count]; rfl
   have hyN := Number.operator_mul_isNormalized _ _ y _ htiN hRB hy
   have hrawN := Number.operator_div_isNormalized _ _ raw _ hyN hU hraw

@@ -319,12 +319,12 @@ theorem RawLoan.to_lawful_ok {rl : RawLoan} {loan : Loan}
 theorem RawLoan.to_lawful_ok_of {rl : RawLoan} (hwf : rl.WF) (hvalid : rl.Valid) :
     ∃ loan, rl.to_lawful = .ok loan ∧ loan.toRawLoan = rl := by
   refine ⟨⟨rl, hwf, hvalid⟩, ?_, rfl⟩
-  unfold RawLoan.to_lawful; rw [dif_pos ⟨hwf, hvalid⟩]
+  unfold RawLoan.to_lawful; rw [dite_eq_left ⟨hwf, hvalid⟩]
 
 /-- A raw state that is not well-formed and valid fails the re-validation with `notLawful`. -/
 theorem RawLoan.to_lawful_not_lawful {rl : RawLoan} (h : ¬ (rl.WF ∧ rl.Valid)) :
     rl.to_lawful = .error .notLawful := by
-  unfold RawLoan.to_lawful; rw [dif_neg h]
+  unfold RawLoan.to_lawful; rw [dite_eq_right h]
 
 /-- A lawful loan's grace period ends within the ledger clock: its due date is on the schedule, and the schedule
 with the grace period fits. -/

@@ -2,16 +2,9 @@ import XRPL.Properties.Lending.Ledger.Common.ReachableProofs
 
 /-! # Witnesses for a LoanSet that ends in an exception
 
-Runs from a new closed-ended vault, checked by `native_decide`. The model ends in an error where C++ throws while
-it builds an amount of the asset above the asset's maximum (`10^17` drops, `2^63 - 1` MPT units).
+LoanSets whose total value is above the largest XRP or MPT amount end in an error (FV_M4_51, FV_M4_61). -/
 
-* Total value, XRP: a vault of `3.3·10^15` drops, a loan of all of it at 100% with one payment after `943000000`
-  seconds. PeriodicPayment × PaymentTotal is above `10^17` drops.
-* Total value, MPT: a loan of `9·10^15` units in 20 payments at a LateInterestRate of 100%, each paid 15 years
-  late, leaves `1.4·10^18` units in the vault. A loan of `1.4·10^18` at 100% with one payment after `470000000`
-  seconds has a PeriodicPayment above `2^63 - 1`. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -43,7 +36,7 @@ private def nsMptGenesis : LendingLedger :=
 private lemma nsXrpGenesis_genesis : nsXrpGenesis.Genesis where
   created := ⟨none, none, nsSchedule, none, false, .native, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨nsXrpVault.wf, nsXrpVault.valid⟩⟩
+    exact dite_eq_left ⟨nsXrpVault.wf, nsXrpVault.valid⟩⟩
   holds_asset := Or.inr (Or.inl rfl)
   no_holders := rfl
   no_brokers := rfl
@@ -53,7 +46,7 @@ private lemma nsXrpGenesis_genesis : nsXrpGenesis.Genesis where
 private lemma nsMptGenesis_genesis : nsMptGenesis.Genesis where
   created := ⟨none, none, nsSchedule, none, false, .int64, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨nsMptVault.wf, nsMptVault.valid⟩⟩
+    exact dite_eq_left ⟨nsMptVault.wf, nsMptVault.valid⟩⟩
   holds_asset := Or.inr (Or.inr rfl)
   no_holders := rfl
   no_brokers := rfl

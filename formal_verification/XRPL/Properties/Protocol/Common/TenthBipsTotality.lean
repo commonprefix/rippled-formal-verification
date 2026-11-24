@@ -49,14 +49,14 @@ lemma tenthBipsOfValue_upward_ok (d : Number) (rate : TenthBips32) (L : Int) (hd
     (hrate : rate.toNat ≤ 100000) :
     ∃ r, tenthBipsOfValue d rate .upward = .ok r ∧ r.isNormalized ∧ 0 ≤ r.toRat ∧ r.toRat ≤ d.toRat ∧
       (r.mantissa_ ≠ 0 → (10 : ℚ) ^ (L - 5) ≤ r.toRat) := by
-  obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts rate
-  obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
-  have hu5 : kTenthBipsPerUnity.toNumber.toRat = 100000 := by rw [huv]; rfl
-  have hr5 : rate.toNumber.toRat ≤ 100000 := by rw [hrv]; exact_mod_cast hrate
-  have hr0 : 0 ≤ rate.toNumber.toRat := by rw [hrv]; positivity
-  have hu0 : kTenthBipsPerUnity.toNumber.mantissa_ ≠ 0 := by
+  obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts rate .upward
+  obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity .upward
+  have hu5 : (kTenthBipsPerUnity.toNumber .upward).toRat = 100000 := by rw [huv]; rfl
+  have hr5 : (rate.toNumber .upward).toRat ≤ 100000 := by rw [hrv]; exact_mod_cast hrate
+  have hr0 : 0 ≤ (rate.toNumber .upward).toRat := by rw [hrv]; positivity
+  have hu0 : (kTenthBipsPerUnity.toNumber .upward).mantissa_ ≠ 0 := by
     intro h; rw [Number.toRat_eq_zero_of_mantissa_zero _ h] at hu5; norm_num at hu5
-  have huz : kTenthBipsPerUnity.toNumber.operator_eq Number.zero = false :=
+  have huz : (kTenthBipsPerUnity.toNumber .upward).operator_eq Number.zero = false :=
     Number.operator_eq_zero_false_of_mantissa_ne _ hu0
   -- a zero value or a zero rate gives zero
   by_cases hd0 : d.mantissa_ = 0
@@ -64,8 +64,8 @@ lemma tenthBipsOfValue_upward_ok (d : Number) (rate : TenthBips32) (L : Int) (hd
     exact ⟨Number.zero, tenthBipsOfValue_zero rate, Number.zero_isNormalized, by rw [Number.toRat_zero],
       by rw [Number.toRat_zero], fun h => absurd rfl h⟩
   have hdz : d.operator_eq Number.zero = false := Number.operator_eq_zero_false_of_mantissa_ne _ hd0
-  by_cases hrz : rate.toNumber.mantissa_ = 0
-  · have hrzero : rate.toNumber = Number.zero := Number.eq_zero_of_mantissa_zero _ hrn hrz
+  by_cases hrz : (rate.toNumber .upward).mantissa_ = 0
+  · have hrzero : (rate.toNumber .upward) = Number.zero := Number.eq_zero_of_mantissa_zero _ hrn hrz
     have hzz : Number.zero.operator_eq Number.zero = true :=
       (Number.operator_eq_iff _ _ Number.zero_isNormalized Number.zero_isNormalized).mpr rfl
     refine ⟨Number.zero, ?_, Number.zero_isNormalized, by rw [Number.toRat_zero], by rw [Number.toRat_zero]; exact h0,
@@ -75,7 +75,7 @@ lemma tenthBipsOfValue_upward_ok (d : Number) (rate : TenthBips32) (L : Int) (hd
     rw [hrzero]
     simp [Number.operator_mul, Number.operator_div, hdz, hzz, huz, bind, Except.bind, pure, Except.pure]
   have hd' : (10 : ℚ) ^ L ≤ d.toRat := hlo hd0
-  have hrate1 : (1 : ℚ) ≤ rate.toNumber.toRat := by
+  have hrate1 : (1 : ℚ) ≤ (rate.toNumber .upward).toRat := by
     rw [hrv]
     have : rate.toNat ≠ 0 := by
       intro h; apply hrz
@@ -88,7 +88,7 @@ lemma tenthBipsOfValue_upward_ok (d : Number) (rate : TenthBips32) (L : Int) (hd
   have hre1 := Number.exponent_gt_of_abs_ge _ hrn hrz (-19) (by
     rw [abs_of_nonneg hr0]; norm_num; exact hrate1)
   have hre2 := Number.exponent_lt_of_abs_lt _ hrn hrz (-8) (by rw [abs_of_nonneg hr0]; norm_num; linarith)
-  obtain ⟨pr, hpr⟩ := Number.operator_mul_ok_of_normalized d rate.toNumber .upward hd hrn hd0 hrz
+  obtain ⟨pr, hpr⟩ := Number.operator_mul_ok_of_normalized d (rate.toNumber .upward) .upward hd hrn hd0 hrz
     (by unfold minExponent; omega) (by unfold maxExponent; omega)
   have hprn := Number.operator_mul_isNormalized _ _ _ _ hd hrn hpr
   have hneg : d.negative_ = false := Number.negative_false_of_nonneg d hd h0
@@ -141,7 +141,7 @@ lemma tenthBipsOfValue_upward_ok (d : Number) (rate : TenthBips32) (L : Int) (hd
   · intro hrr
     obtain ⟨n, hn, hv⟩ := Number.operator_div_rounded_upward _ _ _ hprn hun hr hrr
     obtain ⟨n', hn', hv'⟩ := Number.operator_mul_rounded_upward _ _ _ hd hrn hpr hp0
-    have h1 : d.toRat * rate.toNumber.toRat ≤ pr.toRat := by rw [hv']; exact Number.le_upper _ n' hn'
+    have h1 : d.toRat * (rate.toNumber .upward).toRat ≤ pr.toRat := by rw [hv']; exact Number.le_upper _ n' hn'
     have h2 : pr.toRat / 100000 ≤ r.toRat := by rw [hv, ← hu5]; exact Number.le_upper _ n hn
     have h3 : (10 : ℚ) ^ (L - 5) = 10 ^ L / 100000 := by
       rw [zpow_sub₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num

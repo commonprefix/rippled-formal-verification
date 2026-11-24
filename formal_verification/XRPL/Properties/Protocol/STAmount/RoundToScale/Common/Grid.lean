@@ -6,9 +6,8 @@ import XRPL.Properties.Protocol.STAmount.Common.OfNumberRounding
 
 /-! # `STAmount.roundToExponent` on a grid point
 
-An IOU amount that is a whole number of units at scale `s` is already on the `10^s` grid, so rounding
-it to the scale returns it unchanged. The reference-sum pipeline is exact at every step: the sum with
-`10^15` units is a 16-digit value, and the difference is the amount again. -/
+An IOU amount that is a whole number of units at scale `s` is on the `10^s` grid, so rounding it to the scale
+returns it unchanged. -/
 
 namespace XRPL.Model.Protocol
 
@@ -33,12 +32,12 @@ private lemma STAmount.repack_exact (x : Number) (mode : rounding_mode) (hx : x.
   have hntr := normalizeToRange_16_exact x mode hlo hhi hmod
     (by unfold minExponent; omega) (by unfold maxExponent; omega)
   rw [hneg] at hntr
-  simp only [Bool.false_eq_true, if_false] at hntr
+  simp only [Bool.false_eq_true, ite_false] at hntr
   have hof : IOUAmount.ofNumber x mode = .ok ⟨q.toInt64, x.exponent_ + 3⟩ := by
     unfold IOUAmount.ofNumber IOUAmount.fromNumber
     rw [hntr]
     simp only []
-    rw [if_neg (by unfold cMaxOffset; omega), if_neg (by unfold cMinOffset; omega)]
+    rw [ite_eq_right (by unfold cMaxOffset; omega), ite_eq_right (by unfold cMinOffset; omega)]
   -- the repack keeps the mantissa and the sign
   have hnatAbs : q.toInt64.toInt.natAbs = q.toNat := by
     simpa using signed_mantissa_natAbs false q hq_fit
@@ -108,8 +107,8 @@ lemma STAmount.roundToExponent_grid_self (value : STAmount) (s : ℤ) (k : ℕ)
   have hkMin : kMinValue.toNat = 10 ^ 15 := by decide
   -- the active branch: reference, sum, difference
   unfold STAmount.roundToExponent
-  rw [if_neg (by rw [h_int]; exact Bool.false_ne_true), if_neg (by rw [hz]; exact Bool.false_ne_true),
-    if_neg (not_le.mpr hexp)]
+  rw [ite_eq_right (by rw [h_int]; exact Bool.false_ne_true), ite_eq_right (by rw [hz]; exact Bool.false_ne_true),
+    ite_eq_right (not_le.mpr hexp)]
   have hchk : STAmount.checked value.mNumericType kMinValue s value.negative .to_nearest =
       .ok ⟨.fractional, kMinValue, s, false⟩ := by
     rw [hc.is_fractional]

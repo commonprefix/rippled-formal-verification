@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 The run of the C++ test VaultDustHoldersLocked on the lending ledger. Two holders own 10^9 shares each, an
 uncovered default leaves one base unit, and after RedemptionDate neither full redemption pays anything. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -26,7 +26,7 @@ private def dhGenesis : LendingLedger := { vault := dhVault, shares := [], broke
 private lemma dhGenesis_genesis : dhGenesis.Genesis where
   created := ⟨some 6, none, dhSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨dhVault.wf, dhVault.valid⟩⟩
+    exact dite_eq_left ⟨dhVault.wf, dhVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

@@ -7,9 +7,8 @@ import XRPL.Properties.Vault.Proofs.ShareWorth
 
 /-! # Vault reachability
 
-`Vault.Reachable v t` holds when `v` results from `Vault.create` and a sequence of successful vault
-transactions, the last at parent close time `t`. Vault transactions never lend, so a reachable vault
-keeps its cash in the Open zone, and every cash update on it is exact. -/
+`Vault.Reachable v t` holds when `v` results from `Vault.create` and successful vault transactions, the last at close
+time `t`. A reachable vault keeps its cash in the Open zone, so every cash update on it is exact. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -59,7 +58,6 @@ theorem Vault.vault_updates_exact (v : Vault) (t0 : UInt32) (hr : Vault.Reachabl
     fun assets holderShares waive hnn hc hhs r hok => ?_⟩
   · have hmax := Vault.maxValue_fits_of_canonical v amount hc hty
     obtain ⟨hA, hS⟩ := Vault.deposit_vault_updates_exact_proof v amount isDonation t t0 hpos hr hc hty hmax r hok
-      (Vault.Reachable.deposit_mint_fits_proof v t0 hr amount isDonation t hpos hc hty r hok)
     -- the charge is nonnegative
     obtain ⟨ra, amounts, -, hra, hcomp, -, -, -, hras, -⟩ := Vault.deposit_ok_reduces v amount isDonation t hpos r hok
     obtain ⟨hra1, hra2, -⟩ := v.roundedDepositAmount_form amount ra hc hty hra

@@ -19,7 +19,6 @@ lemma roundedDepositAmount_ok (v : Vault) (amountDeposit ra' : STAmount) (assets
   simp only [Vault.roundedDepositAmount, ExceptT.run, ExceptT.bind, ExceptT.mk, ExceptT.lift, ExceptT.pure,
     ExceptT.bindCont, bind, pure, Except.bind, Except.pure, Except.map, Functor.map, throw, throwThe,
     MonadExceptOf.throw, liftM, monadLift, MonadLift.monadLift, MonadLiftT.monadLift, ht, hr]
-  split <;> rfl
 
 /-- `roundedDepositAmount` propagates a `clampToSumExponent` error. -/
 private lemma roundedDepositAmount_err (v : Vault) (amountDeposit : STAmount) (assetsTotal : Number) (e : Error)

@@ -179,12 +179,12 @@ private lemma STAmount.ofNumber_integral_small (nt : NumericType) (x : Number) (
     st.mValue.toNat ≤ 2 ^ 63 - 1 := by
   obtain ⟨hc, -⟩ := STAmount.ofNumber_integral_canonical nt x mode st hi hof
   unfold STAmount.ofNumber at hof
-  rw [if_pos hi] at hof
+  rw [ite_eq_left hi] at hof
   have hwneg : (if decide (x.signum < 0) = true then x.operator_neg else x).negative_ = false := by
     rw [Number.signum_neg_decide]
     cases hn : x.negative_
     · simp [hn]
-    · simp only [if_true]
+    · simp only [ite_true]
       unfold Number.operator_neg
       split
       · rfl
@@ -203,7 +203,7 @@ private lemma STAmount.ofNumber_integral_small (nt : NumericType) (x : Number) (
     rw [STAmount.IntegralCanonical.toRat_eq_signedDrops st hc, STAmount.toRat_of_offset_zero _ rfl] at hexact
     have habs : st.mValue.toNat = iv.toUInt64.toNat := by
       have := congrArg (fun q : ℚ => |q|) hexact
-      simp only [STAmount.signedDrops, STAmount.unchecked] at this
+      dsimp +instances only [STAmount.signedDrops, STAmount.unchecked] at this
       split at this <;> split at this <;>
         simp only [Int.cast_neg, Int.cast_natCast, abs_neg, Nat.abs_cast, Nat.cast_inj] at this <;> exact_mod_cast this
     rw [habs]
@@ -238,7 +238,7 @@ lemma STAmount.roundToNumericType_onGrid (nt : NumericType) (x T : Number) (mode
     · -- an integral amount converts to an integer, a whole number of units at `s ≤ 0`
       obtain ⟨hc, hnt⟩ := STAmount.ofNumber_integral_canonical nt x mode st hi hof
       have hsti : st.integral = true := hc.is_integral
-      rw [if_pos hsti] at h
+      rw [ite_eq_left hsti] at h
       obtain ⟨k, hk⟩ := STAmount.toNumber_integral_int nt x mode st T hi hof h
       have hs0 := hint hi
       refine ⟨k * 10 ^ (-s).toNat, ?_⟩
@@ -253,7 +253,7 @@ lemma STAmount.roundToNumericType_onGrid (nt : NumericType) (x T : Number) (mode
       subst hnt
       have hfc := STAmount.ofNumber_fractional_fczr x mode st hof
       have hsti : st.integral = false := by unfold STAmount.integral; rw [hfc.1]; rfl
-      rw [if_neg (by rw [hsti]; decide)] at h
+      rw [ite_eq_right (by rw [hsti]; decide)] at h
       cases hr : STAmount.roundToExponent st s mode with
       | error e => rw [hr] at h; cases h
       | ok r =>

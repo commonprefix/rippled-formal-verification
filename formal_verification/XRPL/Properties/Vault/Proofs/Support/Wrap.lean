@@ -1,11 +1,11 @@
+import Lean.Meta.Tactic.Unfold
 import XRPL.Properties.Protocol.Common.Wrap
 import XRPL.Properties.Vault.Proofs.Support.Errors
 
 /-! # No vault helper wraps around
 
-The pricing, dust and cash-update steps of the vault transactions only pass on Protocol errors, and the
-`to_lawful` re-check fails only as notLawful. The balances of a lawful vault are normalized, and an amount the
-vault stores has a magnitude below `2^63` when the largest value of the vault's type does. -/
+The pricing, dust and cash-update steps only pass on Protocol errors, and `to_lawful` fails only as notLawful. The
+balances of a lawful vault are normalized, and its amounts fit when the largest value of its type does. -/
 
 namespace XRPL.Model.SingleAssetVault
 

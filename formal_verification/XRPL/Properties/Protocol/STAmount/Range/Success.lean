@@ -6,11 +6,8 @@ import XRPL.Properties.Protocol.STAmount.Range.Common.Witnesses
 
 /-! # When the `STAmount` operations return a result
 
-An operation should return a result exactly when its exact value, rounded once in the mode, is an amount of the
-type (`STAmount.RoundsInRange`). Where the code breaks this, the theorem carries one hypothesis that keeps the
-bug out, and an `_attained` witness shows the statement fails without it. XRP addition and subtraction never
-fail, so their theorems state that, and the witness is a returned sum outside the XRP range. `nt` is one of the
-three types in use: IOU, XRP and MPT. -/
+An operation should succeed exactly when its exact value, rounded once in the mode, is an amount of the type `nt`.
+Where the code breaks this, the theorem carries one hypothesis that keeps the bug out, and an `_attained` witness. -/
 
 namespace XRPL.Model.Protocol
 
@@ -54,16 +51,14 @@ theorem STAmount.checked_ok_iff_attained :
     ⟨NumericType.int64, 9223372036854775800, 0, false⟩, Or.inr (Or.inr rfl), STAmount.checked_range_witness,
     STAmount.checked_range_witness_out⟩
 
-/-- A positive IOU mantissa above the largest int64 that is accepted although it is out of range, and comes back
-negative: `2^64 - 1` at exponent 80 returns `-10^80`. -/
+/-- An IOU mantissa above the largest int64 that is in range: `2^63` at exponent 0. Reading it as an int64 wraps
+around (FV_M1_25). -/
 theorem STAmount.checked_ok_iff_iou_attained :
-    ∃ (m : UInt64) (e : Int) (mode : rounding_mode) (result : STAmount),
-      STAmount.checked .fractional m e false mode = .ok result ∧
-      ¬ STAmount.RoundsInRange .fractional mode (STAmount.unchecked .fractional m e false).toRat ∧
-      result.toRat < 0 :=
-  ⟨18446744073709551615, 80, .to_nearest, ⟨.fractional, 1000000000000000, 65, true⟩,
-    STAmount.checked_iou_range_witness, STAmount.checked_iou_range_witness_out,
-    STAmount.checked_iou_range_witness_neg⟩
+    ∃ (m : UInt64) (e : Int) (mode : rounding_mode),
+      STAmount.RoundsInRange .fractional mode (STAmount.unchecked .fractional m e false).toRat ∧
+      STAmount.checked .fractional m e false mode = .error .wrap :=
+  ⟨9223372036854775808, 0, .to_nearest, STAmount.checked_iou_range_witness_in,
+    STAmount.checked_iou_range_witness⟩
 
 /-- IOU addition returns a result exactly when the exact sum rounds into the IOU range. In `to_nearest` the
 exact sum must itself be a Number (`hfit`). -/
@@ -109,29 +104,13 @@ theorem STAmount.operator_add_ok_xrp_attained :
     STAmount.xrp_range_witness_canonical_right false, rfl, rfl, STAmount.operator_add_xrp_range_witness,
     STAmount.operator_add_xrp_range_witness_out⟩
 
-/-- Unless the exact sum is `-2^63` (`hmin`), MPT addition returns a result exactly when the sum is in the MPT
-range. -/
+/-- MPT addition returns a result exactly when the sum is in the MPT range. -/
 theorem STAmount.operator_add_ok_iff_mpt (v1 v2 : STAmount) (mode : rounding_mode)
     (h1 : v1.IntegralCanonical) (h2 : v2.IntegralCanonical)
-    (ht1 : v1.mNumericType = NumericType.int64) (ht2 : v2.mNumericType = NumericType.int64)
-    (hmin : v1.toRat + v2.toRat ≠ minInt64) :
+    (ht1 : v1.mNumericType = NumericType.int64) (ht2 : v2.mNumericType = NumericType.int64) :
     (∃ result, STAmount.operator_add v1 v2 mode = .ok result) ↔
       STAmount.RoundsInRange NumericType.int64 mode (v1.toRat + v2.toRat) :=
-  STAmount.operator_add_ok_iff_mpt_proof v1 v2 mode h1 h2 ht1 ht2 hmin
-
-/-- The MPT sum `-2^63` is returned as `-(2^63 - 8)` although it is out of range: `-(2^63 - 1) + -1`. -/
-theorem STAmount.operator_add_ok_iff_mpt_attained :
-    ∃ (v1 v2 : STAmount) (mode : rounding_mode) (result : STAmount),
-      v1.IntegralCanonical ∧
-      v2.IntegralCanonical ∧
-      v1.mNumericType = NumericType.int64 ∧
-      v2.mNumericType = NumericType.int64 ∧
-      STAmount.operator_add v1 v2 mode = .ok result ∧
-      ¬ STAmount.RoundsInRange NumericType.int64 mode (v1.toRat + v2.toRat) :=
-  ⟨⟨NumericType.int64, 9223372036854775807, 0, true⟩, ⟨NumericType.int64, 1, 0, true⟩, .to_nearest,
-    ⟨NumericType.int64, 9223372036854775800, 0, true⟩, STAmount.mpt_range_witness_canonical_left,
-    STAmount.mpt_range_witness_canonical_right true, rfl, rfl, STAmount.operator_add_mpt_range_witness,
-    STAmount.operator_add_mpt_range_witness_out⟩
+  STAmount.operator_add_ok_iff_mpt_proof v1 v2 mode h1 h2 ht1 ht2
 
 /-- IOU subtraction returns a result exactly when the exact difference rounds into the IOU range. In
 `to_nearest` the exact difference must itself be a Number (`hfit`). -/
@@ -155,9 +134,8 @@ theorem STAmount.operator_sub_ok_iff_iou_attained :
     STAmount.iou_range_witness_canonical_left, STAmount.iou_range_witness_canonical_right true,
     STAmount.operator_sub_iou_range_witness_in, .overflow, STAmount.operator_sub_iou_range_witness⟩
 
-/-- XRP subtraction always returns a result, because the difference is not checked against the largest XRP
-amount (FV_M1_24). So every difference in the XRP range returns a result, but a result does not mean it is in
-range. -/
+/-- XRP subtraction always returns a result, because the difference is not checked against the largest XRP amount
+(FV_M1_24). -/
 theorem STAmount.operator_sub_ok_xrp (v1 v2 : STAmount) (mode : rounding_mode)
     (h1 : v1.IntegralCanonical) (h2 : v2.IntegralCanonical)
     (ht1 : v1.mNumericType = NumericType.native) (ht2 : v2.mNumericType = NumericType.native) :
@@ -178,28 +156,12 @@ theorem STAmount.operator_sub_ok_xrp_attained :
     STAmount.xrp_range_witness_canonical_right true, rfl, rfl, STAmount.operator_sub_xrp_range_witness,
     STAmount.operator_sub_xrp_range_witness_out⟩
 
-/-- Unless the exact difference is `-2^63` (`hmin`), MPT subtraction returns a result exactly when the
-difference is in the MPT range. -/
+/-- MPT subtraction returns a result exactly when the difference is in the MPT range. -/
 theorem STAmount.operator_sub_ok_iff_mpt (v1 v2 : STAmount) (mode : rounding_mode)
     (h1 : v1.IntegralCanonical) (h2 : v2.IntegralCanonical)
-    (ht1 : v1.mNumericType = NumericType.int64) (ht2 : v2.mNumericType = NumericType.int64)
-    (hmin : v1.toRat - v2.toRat ≠ minInt64) :
+    (ht1 : v1.mNumericType = NumericType.int64) (ht2 : v2.mNumericType = NumericType.int64) :
     (∃ result, STAmount.operator_sub v1 v2 mode = .ok result) ↔
       STAmount.RoundsInRange NumericType.int64 mode (v1.toRat - v2.toRat) :=
-  STAmount.operator_sub_ok_iff_mpt_proof v1 v2 mode h1 h2 ht1 ht2 hmin
-
-/-- The MPT difference `-2^63` is returned as `-(2^63 - 8)` although it is out of range: `-(2^63 - 1) - 1`. -/
-theorem STAmount.operator_sub_ok_iff_mpt_attained :
-    ∃ (v1 v2 : STAmount) (mode : rounding_mode) (result : STAmount),
-      v1.IntegralCanonical ∧
-      v2.IntegralCanonical ∧
-      v1.mNumericType = NumericType.int64 ∧
-      v2.mNumericType = NumericType.int64 ∧
-      STAmount.operator_sub v1 v2 mode = .ok result ∧
-      ¬ STAmount.RoundsInRange NumericType.int64 mode (v1.toRat - v2.toRat) :=
-  ⟨⟨NumericType.int64, 9223372036854775807, 0, true⟩, ⟨NumericType.int64, 1, 0, false⟩, .to_nearest,
-    ⟨NumericType.int64, 9223372036854775800, 0, true⟩, STAmount.mpt_range_witness_canonical_left,
-    STAmount.mpt_range_witness_canonical_right false, rfl, rfl, STAmount.operator_sub_mpt_range_witness,
-    STAmount.operator_sub_mpt_range_witness_out⟩
+  STAmount.operator_sub_ok_iff_mpt_proof v1 v2 mode h1 h2 ht1 ht2
 
 end XRPL.Model.Protocol

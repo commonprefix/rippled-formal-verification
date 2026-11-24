@@ -3,9 +3,8 @@ import XRPL.Properties.Protocol.Common.FixedWidth
 
 /-! # Walking an operation's do-block
 
-`walk_ok` splits every hypothesis `h : e = .ok r` (or `e = .error x`) whose left side is a `match` or
-an `if` until none is left, so each goal is one path through the code. It follows the control flow
-rather than naming steps, so proofs survive a step being added or reordered. -/
+`walk_ok` splits every hypothesis `h : e = .ok r` whose left side is a `match` or an `if`, so each goal is one path
+through the code. Proofs then survive a step being added or reordered. -/
 
 namespace XRPL.Model.SingleAssetVault
 

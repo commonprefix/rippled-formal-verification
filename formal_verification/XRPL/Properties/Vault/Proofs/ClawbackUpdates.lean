@@ -2,9 +2,8 @@ import XRPL.Properties.Vault.Proofs.ClawbackRecovery
 
 /-! # The vault update a clawback makes
 
-A clawback subtracts its recovery from the cash and its destroyed shares from the share total. The
-share total is exact. On a reachable vault all the shares together are worth exactly the cash, so a
-clawback of every share recovers all of it and empties the vault. -/
+A clawback subtracts its recovery from the cash and its destroyed shares from the share total. On a reachable
+vault a clawback of every share recovers all the cash and empties the vault. -/
 
 namespace XRPL.Model.SingleAssetVault
 

@@ -50,7 +50,7 @@ lemma clean_guard_round (g : Guard) (h1 : g.digits_ = 0) (h2 : g.xbit_ = false)
     (mode : rounding_mode) : g.round mode = -2 := by
   have h_empty : g.empty = true := by unfold Guard.empty Guard.unrecoverable; rw [h1, h2]; decide
   unfold Guard.round
-  rw [if_pos h_empty]
+  rw [ite_eq_left h_empty]
 
 /-- Pushing the digit `0` onto a clean guard keeps it clean. -/
 lemma push_zero_clean (g : Guard) (h1 : g.digits_ = 0) (h2 : g.xbit_ = false) :
@@ -69,7 +69,7 @@ lemma shift_snd_clean (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt)
     (shiftSpec D off g).2.digits_ = 0 ∧ (shiftSpec D off g).2.xbit_ = false := by
   induction D, off, g using shiftSpec.induct with
   | case1 drops offset gg hneg ih =>
-    rw [shiftSpec, if_pos hneg]
+    rw [shiftSpec, ite_eq_left hneg]
     -- dropped digit is 0
     have hk : (-offset).toNat = (-(offset + 1)).toNat + 1 := by omega
     rw [hk, pow_succ'] at hdvd
@@ -96,7 +96,7 @@ lemma shift_snd_clean (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt)
     nth_rewrite 1 [← hdig0] at hpc2
     exact ih hdiv_nn hpc1 hpc2 hdiv_dvd
   | case2 drops offset gg hnneg =>
-    rw [shiftSpec, if_neg hnneg]
+    rw [shiftSpec, ite_eq_right hnneg]
     exact ⟨hg1, hg2⟩
 
 /-- The external mantissa is nonpositive when negative, nonnegative otherwise. -/
@@ -105,10 +105,10 @@ lemma Number.mantissa_sign (n : Number) :
     (n.negative_ = false → 0 ≤ n.mantissa.toInt) := by
   rw [Number.mantissa_toInt n]
   refine ⟨fun h => ?_, fun h => ?_⟩
-  · rw [if_pos h]
+  · rw [ite_eq_left h]
     apply mul_nonpos_of_nonpos_of_nonneg (by norm_num)
     split <;> positivity
-  · rw [if_neg (by rw [h]; decide), one_mul]
+  · rw [ite_eq_right (by rw [h]; decide), one_mul]
     split <;> positivity
 
 /-- The `Int64` magnitude formed at the start of `to_rep`
@@ -119,11 +119,11 @@ lemma magnitude_toInt (n : Number) :
   have hlt : (n.mantissa.toInt.natAbs : ℤ) < 2 ^ 63 := by rw [maxRep_val] at hbound; omega
   rcases Number.mantissa_sign n with ⟨hsneg, hsnn⟩
   by_cases hneg : n.negative_
-  · rw [if_pos hneg, Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
+  · rw [ite_eq_left hneg, Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
     have hnp : n.mantissa.toInt ≤ 0 := hsneg hneg
     rw [Int.ofNat_natAbs_of_nonpos hnp] at hlt ⊢
     constructor <;> [omega; (push_cast; omega)]
-  · rw [if_neg hneg]
+  · rw [ite_eq_right hneg]
     have hnn : 0 ≤ n.mantissa.toInt := hsnn (by simpa using hneg)
     rw [Int.natAbs_of_nonneg hnn]
 
@@ -134,10 +134,10 @@ lemma grow_ok_eq (D D' : Int64) (off : Int) (h0 : 0 ≤ D.toInt)
     (D'.toInt : ℤ) = D.toInt * 10 ^ off.toNat := by
   induction D, off using growSpec.induct with
   | case1 drops offset hpos hover =>
-    rw [growSpec, if_pos hpos, if_pos hover] at hok
+    rw [growSpec, ite_eq_left hpos, ite_eq_left hover] at hok
     exact absurd hok (by simp)
   | case2 drops offset hpos hover ih =>
-    rw [growSpec, if_pos hpos, if_neg hover] at hok
+    rw [growSpec, ite_eq_left hpos, ite_eq_right hover] at hok
     have hguard : drops.toInt ≤ (maxRep.toNat : ℤ) / 10 := by
       have hle : drops ≤ maxRep.toInt64 / 10 := Int64.not_lt.mp hover
       have hb : (maxRep.toInt64 / 10).toInt = (maxRep.toNat : ℤ) / 10 := by decide
@@ -151,7 +151,7 @@ lemma grow_ok_eq (D D' : Int64) (off : Int) (h0 : 0 ≤ D.toInt)
     rw [hoff, pow_succ]
     ring
   | case3 drops offset hnpos =>
-    rw [growSpec, if_neg hnpos] at hok
+    rw [growSpec, ite_eq_right hnpos] at hok
     have hd : drops = D' := by injection hok
     have hoff : offset.toNat = 0 := by omega
     rw [← hd, hoff, pow_zero, mul_one]
@@ -164,10 +164,10 @@ lemma grow_ok_le_maxRep (D D' : Int64) (off : Int) (h0 : 0 ≤ D.toInt)
     D'.toInt ≤ (maxRep.toNat : ℤ) := by
   induction D, off using growSpec.induct with
   | case1 drops offset hpos hover =>
-    rw [growSpec, if_pos hpos, if_pos hover] at hok
+    rw [growSpec, ite_eq_left hpos, ite_eq_left hover] at hok
     exact absurd hok (by simp)
   | case2 drops offset hpos hover ih =>
-    rw [growSpec, if_pos hpos, if_neg hover] at hok
+    rw [growSpec, ite_eq_left hpos, ite_eq_right hover] at hok
     have hguard : drops.toInt ≤ (maxRep.toNat : ℤ) / 10 := by
       have hle : drops ≤ maxRep.toInt64 / 10 := Int64.not_lt.mp hover
       have hb : (maxRep.toInt64 / 10).toInt = (maxRep.toNat : ℤ) / 10 := by decide
@@ -181,7 +181,7 @@ lemma grow_ok_le_maxRep (D D' : Int64) (off : Int) (h0 : 0 ≤ D.toInt)
       omega
     exact ih h0' h_le' hok
   | case3 drops offset hnpos =>
-    rw [growSpec, if_neg hnpos] at hok
+    rw [growSpec, ite_eq_right hnpos] at hok
     have hd : drops = D' := by injection hok
     rw [← hd]
     exact h_le
@@ -192,7 +192,7 @@ lemma shift_fst_eq (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt) :
     ((shiftSpec D off g).fst).toInt = D.toInt / 10 ^ (-off).toNat := by
   induction D, off, g using shiftSpec.induct with
   | case1 drops offset gg hneg ih =>
-    rw [shiftSpec, if_pos hneg]
+    rw [shiftSpec, ite_eq_left hneg]
     have hdiv : (drops / 10).toInt = drops.toInt / 10 := toInt_div_ten_of_nonneg drops h0
     have h0' : 0 ≤ (drops / 10).toInt := by
       rw [hdiv]; exact Int.ediv_nonneg h0 (by norm_num)
@@ -201,7 +201,7 @@ lemma shift_fst_eq (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt) :
     have hk : (-offset).toNat = (-(offset + 1)).toNat + 1 := by omega
     rw [hk, pow_succ', Int.ediv_ediv_of_nonneg (by norm_num)]
   | case2 drops offset gg hnneg =>
-    rw [shiftSpec, if_neg hnneg]
+    rw [shiftSpec, ite_eq_right hnneg]
     have hk : (-offset).toNat = 0 := by omega
     rw [hk, pow_zero, Int.ediv_one]
 
@@ -211,7 +211,7 @@ lemma start_guard_round (mode : rounding_mode) (neg : Bool) :
     (if neg then Guard.new.set_negative else Guard.new).round mode = -2 := by
   have h_empty : (if neg then Guard.new.set_negative else Guard.new).empty = true := by
     cases neg <;> decide
-  unfold Guard.round; rw [if_pos h_empty]
+  unfold Guard.round; rw [ite_eq_left h_empty]
 
 
 /-- A non-negative `Int64` is not the smallest one, so negating it is exact. -/
@@ -223,7 +223,7 @@ private lemma grow_eq_spec (D : Int64) (off : Int) (h0 : 0 ≤ D.toInt) :
     Number.to_rep.grow D off = growSpec D off := by
   induction D, off using growSpec.induct with
   | case1 drops offset hpos hover =>
-    rw [Number.to_rep.grow, growSpec, if_pos hpos, if_pos hover, if_pos hpos, if_pos hover]
+    rw [Number.to_rep.grow, growSpec, ite_eq_left hpos, ite_eq_left hover, ite_eq_left hpos, ite_eq_left hover]
   | case2 drops offset hpos hover ih =>
     have hguard : drops.toInt ≤ (maxRep.toNat : ℤ) / 10 := by
       have hle : drops ≤ maxRep.toInt64 / 10 := Int64.not_lt.mp hover
@@ -232,11 +232,11 @@ private lemma grow_eq_spec (D : Int64) (off : Int) (h0 : 0 ≤ D.toInt) :
       rw [hb] at this; exact this
     have hmul := toInt_mul_ten_of_le drops h0 hguard
     have hmax : (maxRep.toNat : ℤ) / 10 * 10 < 2 ^ 63 := by rw [maxRep_val]; norm_num
-    rw [Number.to_rep.grow, growSpec, if_pos hpos, if_neg hover, if_pos hpos, if_neg hover,
+    rw [Number.to_rep.grow, growSpec, ite_eq_left hpos, ite_eq_right hover, ite_eq_left hpos, ite_eq_right hover,
       Int64.mulChecked_of_bounds (by rw [int64_ten_toInt]; omega) (by rw [int64_ten_toInt]; omega), ok_bind]
     exact ih (by rw [hmul]; positivity)
   | case3 drops offset hnpos =>
-    rw [Number.to_rep.grow, growSpec, if_neg hnpos, if_neg hnpos]
+    rw [Number.to_rep.grow, growSpec, ite_eq_right hnpos, ite_eq_right hnpos]
 
 /-- `to_rep` gives the same result as `to_repSpec` on every `Number`: its sign flips, digit drops,
 multiplications and conversions never wrap. -/
@@ -293,10 +293,10 @@ lemma Number.to_rep_eq_spec (n : Number) (mode : rounding_mode) : n.to_rep mode 
   obtain ⟨hD2nn, hD2le⟩ := hD2
   dsimp only
   by_cases hb : (g1.round mode == 1 || g1.round mode == 0 && D2 % 2 == 1) = true
-  · rw [if_pos hb, if_pos hb]
+  · rw [ite_eq_left hb, ite_eq_left hb]
     by_cases hovf : D2 ≥ maxRep.toInt64
-    · rw [if_pos hovf, if_pos hovf]
-    · rw [if_neg hovf, if_neg hovf]
+    · rw [ite_eq_left hovf, ite_eq_left hovf]
+    · rw [ite_eq_right hovf, ite_eq_right hovf]
       have hlt : D2.toInt < (maxRep.toNat : ℤ) := by
         have := (Int64.lt_iff_toInt_lt).mp (Int64.not_le.mp hovf)
         rwa [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at this
@@ -307,12 +307,12 @@ lemma Number.to_rep_eq_spec (n : Number) (mode : rounding_mode) : n.to_rep mode 
       rw [Int64.addChecked_of_bounds (by rw [int64_one_toInt]; omega)
         (by rw [int64_one_toInt]; rw [maxRep_val] at hlt; omega), ok_bind]
       by_cases hneg : n.negative_
-      · rw [if_pos hneg, if_pos hneg, Int64.negChecked_of_ne (ne_minValue_of_nonneg (by rw [hadd]; omega))]
-      · rw [if_neg hneg, if_neg hneg]; rfl
-  · rw [if_neg hb, if_neg hb]
+      · rw [ite_eq_left hneg, ite_eq_left hneg, Int64.negChecked_of_ne (ne_minValue_of_nonneg (by rw [hadd]; omega))]
+      · rw [ite_eq_right hneg, ite_eq_right hneg]; rfl
+  · rw [ite_eq_right hb, ite_eq_right hb]
     by_cases hneg : n.negative_
-    · rw [if_pos hneg, if_pos hneg, Int64.negChecked_of_ne (ne_minValue_of_nonneg hD2nn)]
-    · rw [if_neg hneg, if_neg hneg]; rfl
+    · rw [ite_eq_left hneg, ite_eq_left hneg, Int64.negChecked_of_ne (ne_minValue_of_nonneg hD2nn)]
+    · rw [ite_eq_right hneg, ite_eq_right hneg]; rfl
 
 /-- A successful `to_rep` on a normalized `Number` returns an integer less than 1 away from `n.toRat`. -/
 theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
@@ -324,7 +324,7 @@ theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : 
   simp only at hok
   by_cases hz : (n.mantissa == 0) = true
   · -- zero magnitude: result is 0 and value is 0
-    rw [if_pos hz] at hok
+    rw [ite_eq_left hz] at hok
     have hr : r = 0 := by injection hok with h; exact h.symm
     have hmant : n.mantissa.toInt = 0 := by
       rw [beq_iff_eq] at hz
@@ -334,7 +334,7 @@ theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : 
     rw [hr, htr]
     have : (0 : Int64).toInt = 0 := by decide
     rw [this]; norm_num
-  · rw [if_neg hz] at hok
+  · rw [ite_eq_right hz] at hok
     -- magnitude facts
     have hmant_ne : n.mantissa.toInt ≠ 0 := by
       intro hc
@@ -352,7 +352,7 @@ theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : 
     by_cases hexp : n.exponent < 0
     · -- offset < 0: shift floor + guard round-up by at most 1
       have hge : ¬ n.exponent ≥ 0 := by omega
-      rw [if_pos hexp, if_neg hge] at hok
+      rw [ite_eq_left hexp, ite_eq_right hge] at hok
       simp only at hok
       set D0 : Int64 := if n.negative_ then -n.mantissa else n.mantissa with hD0def
       set g0 : Guard := if n.negative_ then Guard.new.set_negative else Guard.new with hg0def
@@ -400,8 +400,8 @@ theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : 
       -- n.toRat = sign * |n.toRat|
       have hsign_toRat : n.toRat = (if n.negative_ then -1 else 1) * |n.toRat| := by
         by_cases hneg : n.negative_
-        · rw [if_pos hneg, abs_of_nonpos (Number.toRat_nonpos_of_negative n hneg)]; ring
-        · rw [if_neg hneg, abs_of_nonneg (Number.toRat_nonneg_of_nonnegative n (by simpa using hneg))]; ring
+        · rw [ite_eq_left hneg, abs_of_nonpos (Number.toRat_nonpos_of_negative n hneg)]; ring
+        · rw [ite_eq_right hneg, abs_of_nonneg (Number.toRat_nonneg_of_nonnegative n (by simpa using hneg))]; ring
       have hDf_nn : 0 ≤ sp.1.toInt := by rw [hDf]; exact Int.ediv_nonneg (by positivity) (by positivity)
       -- key reduction: |r.toInt - toRat| = |mg - |toRat|| where mg is the magnitude
       have hkey : ∀ (mg : Int64), 0 ≤ mg.toInt →
@@ -412,21 +412,21 @@ theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : 
         have hrInt : (r.toInt : ℚ) = s * (mg.toInt : ℚ) := by
           rw [hrmg, hsdef]
           by_cases hneg : n.negative_
-          · rw [if_pos hneg, if_pos hneg, toInt_neg_of_nonneg _ hmg_nn]; push_cast; ring
-          · rw [if_neg hneg, if_neg hneg, one_mul]
+          · rw [ite_eq_left hneg, ite_eq_left hneg, toInt_neg_of_nonneg _ hmg_nn]; push_cast; ring
+          · rw [ite_eq_right hneg, ite_eq_right hneg, one_mul]
         have hdiff : (r.toInt : ℚ) - n.toRat = s * ((mg.toInt : ℚ) - |n.toRat|) := by
           rw [hrInt]; nth_rewrite 1 [hsign_toRat]; ring
         have habs_s : |s| = 1 := by rw [hsdef]; by_cases hneg : n.negative_ <;>
-          [rw [if_pos hneg]; rw [if_neg hneg]] <;> norm_num
+          [rw [ite_eq_left hneg]; rw [ite_eq_right hneg]] <;> norm_num
         rw [hdiff, abs_mul, habs_s, one_mul]
       -- the shifted magnitude is below maxRep
       -- case on the round-up boolean
       by_cases hb : (sp.2.round mode == 1 || sp.2.round mode == 0 && sp.1 % 2 == 1) = true
       · -- round up: r = ±(Df + 1)
-        rw [if_pos hb] at hok
+        rw [ite_eq_left hb] at hok
         by_cases hovf : sp.1 ≥ maxRep.toInt64
-        · rw [if_pos hovf] at hok; exact absurd hok (by simp)
-        · rw [if_neg hovf] at hok
+        · rw [ite_eq_left hovf] at hok; exact absurd hok (by simp)
+        · rw [ite_eq_right hovf] at hok
           have hr : r = (if n.negative_ then -(sp.1 + 1) else sp.1 + 1) := by
             injection hok with h; exact h.symm
           -- Df + 1 is nonneg and exact
@@ -441,7 +441,7 @@ theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : 
           have hmg_nn : 0 ≤ (sp.1 + 1).toInt := by rw [hadd]; omega
           -- round-up implies a nonzero digit was dropped: magM % 10^k ≠ 0
           have hg0_clean : g0.digits_ = 0 ∧ g0.xbit_ = false := by
-            rw [hg0def]; by_cases hneg : n.negative_ <;> [rw [if_pos hneg]; rw [if_neg hneg]] <;>
+            rw [hg0def]; by_cases hneg : n.negative_ <;> [rw [ite_eq_left hneg]; rw [ite_eq_right hneg]] <;>
               exact ⟨rfl, rfl⟩
           have hdvd_ne : (magM : ℤ) % 10 ^ k ≠ 0 := by
             intro hdvd
@@ -465,14 +465,14 @@ theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : 
           rw [abs_lt]
           constructor <;> linarith
       · -- no round up: r = ±Df
-        rw [if_neg hb] at hok
+        rw [ite_eq_right hb] at hok
         have hr : r = (if n.negative_ then -sp.1 else sp.1) := by injection hok with h; exact h.symm
         rw [hkey sp.1 hDf_nn hr]
         rw [abs_lt]
         constructor <;> linarith
     · -- offset ≥ 0: grow is exact, and the guard is empty so there is no round-up
       have hexp' : n.exponent ≥ 0 := not_lt.mp hexp
-      rw [if_neg hexp, if_pos hexp'] at hok
+      rw [ite_eq_right hexp, ite_eq_left hexp'] at hok
       cases hgrow : growSpec (if n.negative_ then -n.mantissa else n.mantissa) n.exponent with
       | error e => rw [hgrow] at hok; exact absurd hok (by simp)
       | ok drops =>
@@ -481,7 +481,7 @@ theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : 
         -- drops ≤ maxRep and the guard is empty
         rw [start_guard_round] at hok
         -- the empty guard rounds to the sentinel -2, so the round-up condition is false
-        rw [if_neg (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && drops % 2 == 1) = true from by
+        rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && drops % 2 == 1) = true from by
           simp)] at hok
         have hr : r = (if n.negative_ then -drops else drops) := by injection hok with h; exact h.symm
         -- exact: drops.toInt = magM * 10^exp
@@ -493,14 +493,14 @@ theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : 
             = (if n.negative_ then -1 else 1) * (n.mantissa.toInt.natAbs : ℤ) := by
           rcases Number.mantissa_sign n with ⟨hsn, hsp⟩
           by_cases hneg : n.negative_
-          · rw [if_pos hneg, Int.ofNat_natAbs_of_nonpos (hsn hneg)]; ring
-          · rw [if_neg hneg, Int.natAbs_of_nonneg (hsp (by simpa using hneg))]; ring
+          · rw [ite_eq_left hneg, Int.ofNat_natAbs_of_nonpos (hsn hneg)]; ring
+          · rw [ite_eq_right hneg, Int.natAbs_of_nonneg (hsp (by simpa using hneg))]; ring
         have hrInt : (r.toInt : ℤ) = n.mantissa.toInt * 10 ^ n.exponent.toNat := by
           have hrsign : (r.toInt : ℤ) = (if n.negative_ then -1 else 1) * drops.toInt := by
             rw [hr]
             by_cases hneg : n.negative_
-            · rw [if_pos hneg, toInt_neg_of_nonneg _ hdrops_nn, if_pos hneg]; ring
-            · rw [if_neg hneg, if_neg hneg]; ring
+            · rw [ite_eq_left hneg, toInt_neg_of_nonneg _ hdrops_nn, ite_eq_left hneg]; ring
+            · rw [ite_eq_right hneg, ite_eq_right hneg]; ring
           rw [hrsign, hdrops]
           conv_rhs => rw [hsign]
           ring
@@ -522,12 +522,12 @@ theorem Number.to_rep_exact_of_exponent_nonneg_proof (n : Number) (mode : roundi
   unfold Number.to_repSpec at hok
   simp only at hok
   by_cases hz : (n.mantissa == 0) = true
-  · rw [if_pos hz] at hok
+  · rw [ite_eq_left hz] at hok
     have hr : r = 0 := by injection hok with h; exact h.symm
     have hmant : n.mantissa.toInt = 0 := by rw [beq_iff_eq] at hz; rw [hz]; decide
     have htr : n.toRat = 0 := by rw [← Number.mantissa_mul_exponent_eq_toRat n hn, hmant]; norm_num
     rw [hr, htr]; decide
-  · rw [if_neg hz] at hok
+  · rw [ite_eq_right hz] at hok
     have hmant_ne : n.mantissa.toInt ≠ 0 := by
       intro hc; apply hz; rw [beq_iff_eq]
       exact Int64.toInt_inj.mp (by rw [hc]; decide)
@@ -536,7 +536,7 @@ theorem Number.to_rep_exact_of_exponent_nonneg_proof (n : Number) (mode : roundi
     have hD0_nonneg : 0 ≤ (if n.negative_ then -n.mantissa else n.mantissa).toInt := by
       rw [hmag]; positivity
     have hge : ¬ n.exponent < 0 := by omega
-    rw [if_neg hge, if_pos hexp] at hok
+    rw [ite_eq_right hge, ite_eq_left hexp] at hok
     cases hgrow : growSpec (if n.negative_ then -n.mantissa else n.mantissa) n.exponent with
     | error e => rw [hgrow] at hok; exact absurd hok (by simp)
     | ok drops =>
@@ -548,21 +548,21 @@ theorem Number.to_rep_exact_of_exponent_nonneg_proof (n : Number) (mode : roundi
       have hdrops_nn : 0 ≤ drops.toInt := by rw [hdrops]; positivity
       rw [start_guard_round] at hok
       -- the empty guard rounds to the sentinel -2, so the round-up condition is false
-      rw [if_neg (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && drops % 2 == 1) = true from by
+      rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && drops % 2 == 1) = true from by
         simp)] at hok
       have hr : r = (if n.negative_ then -drops else drops) := by injection hok with h; exact h.symm
       have hsign : n.mantissa.toInt
           = (if n.negative_ then -1 else 1) * (n.mantissa.toInt.natAbs : ℤ) := by
         rcases Number.mantissa_sign n with ⟨hsn, hsp⟩
         by_cases hneg : n.negative_
-        · rw [if_pos hneg, Int.ofNat_natAbs_of_nonpos (hsn hneg)]; ring
-        · rw [if_neg hneg, Int.natAbs_of_nonneg (hsp (by simpa using hneg))]; ring
+        · rw [ite_eq_left hneg, Int.ofNat_natAbs_of_nonpos (hsn hneg)]; ring
+        · rw [ite_eq_right hneg, Int.natAbs_of_nonneg (hsp (by simpa using hneg))]; ring
       have hrInt : (r.toInt : ℤ) = n.mantissa.toInt * 10 ^ n.exponent.toNat := by
         have hrsign : (r.toInt : ℤ) = (if n.negative_ then -1 else 1) * drops.toInt := by
           rw [hr]
           by_cases hneg : n.negative_
-          · rw [if_pos hneg, toInt_neg_of_nonneg _ hdrops_nn, if_pos hneg]; ring
-          · rw [if_neg hneg, if_neg hneg]; ring
+          · rw [ite_eq_left hneg, toInt_neg_of_nonneg _ hdrops_nn, ite_eq_left hneg]; ring
+          · rw [ite_eq_right hneg, ite_eq_right hneg]; ring
         rw [hrsign, hdrops]; conv_rhs => rw [hsign]
         ring
       have htoRat : n.toRat = (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent := by
@@ -582,16 +582,16 @@ lemma Number.to_rep_exact_of_exponent_zero_proof (neg : Bool) (m : UInt64) (mode
     omega
   have hnpre : ¬ (maxRep < m) := by rw [UInt64.lt_iff_toNat_lt]; omega
   have hmant : (Number.unchecked neg m 0).mantissa = (if neg then -m.toInt64 else m.toInt64) := by
-    simp only [Number.mantissa, Number.unchecked, gt_iff_lt, if_neg hnpre]
+    simp only [Number.mantissa, Number.unchecked, gt_iff_lt, ite_eq_right hnpre]
   have hexp : (Number.unchecked neg m 0).exponent = 0 := by
-    simp only [Number.exponent, Number.unchecked, gt_iff_lt, if_neg hnpre]
+    simp only [Number.exponent, Number.unchecked, gt_iff_lt, ite_eq_right hnpre]
   have hneg_ : (Number.unchecked neg m 0).negative_ = neg := rfl
   rw [Number.to_rep_eq_spec] at hok
   unfold Number.to_repSpec at hok
   simp only [hmant, hexp, hneg_] at hok
   by_cases hz : (if neg then -m.toInt64 else m.toInt64) == 0
   · -- magnitude zero ⟹ m = 0, so both sides vanish
-    rw [if_pos hz] at hok
+    rw [ite_eq_left hz] at hok
     have hr : r = 0 := by injection hok with h; exact h.symm
     rw [beq_iff_eq] at hz
     have hm0 : m.toNat = 0 := by
@@ -602,7 +602,7 @@ lemma Number.to_rep_exact_of_exponent_zero_proof (neg : Bool) (m : UInt64) (mode
       · cases neg <;> simp at h1
       · exact_mod_cast h1
     rw [hr]; simp [hm0]
-  · rw [if_neg hz] at hok
+  · rw [ite_eq_right hz] at hok
     -- the sign step recovers the (nonneg) magnitude `m.toInt64`
     have hmag : (if neg then -(if neg then -m.toInt64 else m.toInt64)
         else (if neg then -m.toInt64 else m.toInt64)) = m.toInt64 := by
@@ -610,14 +610,14 @@ lemma Number.to_rep_exact_of_exponent_zero_proof (neg : Bool) (m : UInt64) (mode
     rw [hmag] at hok
     have hm0_lt : (0 : Int) < 2 := by norm_num
     -- offset = 0: no shift, grow is the identity
-    simp only [lt_irrefl, if_false, ge_iff_le, le_refl, if_true] at hok
+    simp only [lt_irrefl, ite_false, ge_iff_le, le_refl, ite_true] at hok
     have hgrow : growSpec m.toInt64 0 = .ok m.toInt64 := by
       rw [growSpec]; simp
     rw [hgrow] at hok
     simp only at hok
     -- the guard is empty, so it never rounds up
     rw [start_guard_round] at hok
-    rw [if_neg (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && m.toInt64 % 2 == 1) = true from by
+    rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && m.toInt64 % 2 == 1) = true from by
       simp)] at hok
     have hr : r = (if neg then -m.toInt64 else m.toInt64) := by injection hok with h; exact h.symm
     rw [hr]
@@ -628,9 +628,9 @@ lemma Number.to_rep_exact_of_exponent_zero_proof (neg : Bool) (m : UInt64) (mode
 lemma Number.mantissa_range_of_nonneg (n : Number) (hneg : n.negative_ = false) :
     0 ≤ n.mantissa.toInt ∧ n.mantissa.toInt ≤ (maxRep.toNat : ℤ) := by
   unfold Number.mantissa
-  rw [if_neg (by rw [hneg]; decide)]
+  rw [ite_eq_right (by rw [hneg]; decide)]
   by_cases hgt : n.mantissa_ > maxRep
-  · rw [if_pos hgt]
+  · rw [ite_eq_left hgt]
     have hlt : (n.mantissa_ / 10).toNat < 2 ^ 63 := by
       rw [UInt64.toNat_div, uint64_ten_toNat]
       have := UInt64.toNat_lt_size n.mantissa_
@@ -640,7 +640,7 @@ lemma Number.mantissa_range_of_nonneg (n : Number) (hneg : n.negative_ = false) 
     rw [UInt64.toNat_div, uint64_ten_toNat, maxRep_val]
     have := UInt64.toNat_lt_size n.mantissa_
     rw [uint64_size_val] at this; omega
-  · rw [if_neg hgt]
+  · rw [ite_eq_right hgt]
     have hle : n.mantissa_.toNat ≤ maxRep.toNat :=
       UInt64.le_iff_toNat_le.mp (UInt64.not_lt.mp hgt)
     have hlt : n.mantissa_.toNat < 2 ^ 63 := by rw [maxRep_val] at hle; omega
@@ -656,20 +656,20 @@ lemma Number.to_rep_nonneg_range (n : Number) (mode : rounding_mode) (r : Int64)
   unfold Number.to_repSpec at hok
   simp only at hok
   by_cases hz : (n.mantissa == 0) = true
-  · rw [if_pos hz] at hok
+  · rw [ite_eq_left hz] at hok
     have hr : r = 0 := by injection hok with h; exact h.symm
     rw [hr]
     refine ⟨by decide, ?_⟩
     rw [show (0 : Int64).toInt = 0 from by decide, maxRep_val]
     norm_num
-  · rw [if_neg hz] at hok
+  · rw [ite_eq_right hz] at hok
     -- the start magnitude is in [0, maxRep]
     have hD0_range := Number.mantissa_range_of_nonneg n hneg
     rw [hneg] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     by_cases hexp : n.exponent < 0
     · have hge : ¬ n.exponent ≥ 0 := by omega
-      rw [if_pos hexp, if_neg hge] at hok
+      rw [ite_eq_left hexp, ite_eq_right hge] at hok
       simp only at hok
       set sp := shiftSpec n.mantissa n.exponent Guard.new with hspdef
       have hDf := shift_fst_eq n.mantissa n.exponent Guard.new hD0_range.1
@@ -683,14 +683,14 @@ lemma Number.to_rep_nonneg_range (n : Number) (mode : rounding_mode) (r : Int64)
           _ ≤ (maxRep.toNat : ℤ) := hD0_range.2
       rcases hb : (sp.2.round mode == 1 || (sp.2.round mode == 0 && sp.1 % 2 == 1)) with _ | _
       · rw [hb] at hok
-        simp only [Bool.false_eq_true, if_false] at hok
+        simp only [Bool.false_eq_true, ite_false] at hok
         have hr : r = sp.1 := by injection hok with h; exact h.symm
         rw [hr]; exact ⟨hsp_nn, hsp_le⟩
       · rw [hb] at hok
-        simp only [if_true] at hok
+        simp only [ite_true] at hok
         by_cases hovf : sp.1 ≥ maxRep.toInt64
-        · rw [if_pos hovf] at hok; exact absurd hok (by simp)
-        · rw [if_neg hovf] at hok
+        · rw [ite_eq_left hovf] at hok; exact absurd hok (by simp)
+        · rw [ite_eq_right hovf] at hok
           have hovf' : sp.1.toInt < (maxRep.toNat : ℤ) := by
             have := (Int64.lt_iff_toInt_lt).mp (Int64.not_le.mp hovf)
             rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at this
@@ -703,7 +703,7 @@ lemma Number.to_rep_nonneg_range (n : Number) (mode : rounding_mode) (r : Int64)
           rw [hr, hadd]
           exact ⟨by omega, by omega⟩
     · have hexp' : n.exponent ≥ 0 := not_lt.mp hexp
-      rw [if_neg hexp, if_pos hexp'] at hok
+      rw [ite_eq_right hexp, ite_eq_left hexp'] at hok
       cases hgrow : growSpec n.mantissa n.exponent with
       | error e => rw [hgrow] at hok; exact absurd hok (by simp)
       | ok drops =>
@@ -717,7 +717,7 @@ lemma Number.to_rep_nonneg_range (n : Number) (mode : rounding_mode) (r : Int64)
         rw [show Guard.new.round mode = -2 from by
           have := start_guard_round mode false
           simpa using this] at hok
-        rw [if_neg (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && drops % 2 == 1) = true from by
+        rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && drops % 2 == 1) = true from by
           simp)] at hok
         have hr : r = drops := by injection hok with h; exact h.symm
         rw [hr]; exact ⟨h_drops_nn, h_drops_le⟩

@@ -20,7 +20,7 @@ lemma recover_noop_exit {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : �
     (h : ¬ (m < upperLimit ∧ ¬ g.empty)) :
     recoverSpec upperLimit m e g (fuel + 1) = (m, e, g) := by
   rw [recoverSpec.eq_def]
-  simp only [if_neg h]
+  simp only [ite_eq_right h]
 
 /-- Step case: when fuel > 0 and the loop condition holds, `recover` unrolls
 one `Guard.pop` step. -/
@@ -29,7 +29,7 @@ lemma recover_step {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : ℕ}
     recoverSpec upperLimit m e g (fuel + 1)
       = recoverSpec upperLimit (m * 10 - toUInt128 g.pop.2) (e - 1) g.pop.1 fuel := by
   rw [recoverSpec.eq_def]
-  simp only [if_pos (And.intro h1 h2)]
+  simp only [ite_eq_left (And.intro h1 h2)]
 
 /-- `recover` keeps the guard's sticky bit `xbit_`, since `Guard.pop` does not change it. -/
 theorem recover_xbit (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :

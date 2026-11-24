@@ -14,24 +14,24 @@ lemma Number.normalize_towards_zero_witness :
   all_goals try min_fit
   unfold doNormalizeSpec
   rw [show (((10000000000000000009 : UInt64) : UInt64) == 0) = false from rfl]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [show doNormalize_scaleUpSpec largeRange.min (10000000000000000009 : UInt64) 0
         = ((10000000000000000009 : UInt64), (0 : Int)) by
-        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
+        unfold doNormalize_scaleUpSpec; rw [ite_eq_right (by decide)]]
   rw [show doNormalize_scaleDown largeRange.max (10000000000000000009 : UInt64) (0 : Int) Guard.new
         = .ok ((1000000000000000000 : UInt64), (1 : Int), Guard.new.push 9) by
-        rw [doNormalize_scaleDown, dif_pos (by decide), if_neg (by decide)]
+        rw [doNormalize_scaleDown, dite_eq_left (by decide), ite_eq_right (by decide)]
         rw [show (10000000000000000009 : UInt64) / 10 = (1000000000000000000 : UInt64) from by decide,
             show (10000000000000000009 : UInt64) % 10 = (9 : UInt64) from by decide,
             show ((0 : Int) + 1) = (1 : Int) from by norm_num]
-        rw [doNormalize_scaleDown, dif_neg (by decide)]]
+        rw [doNormalize_scaleDown, dite_eq_right (by decide)]]
   simp only []
   rw [show ((1 : Int) < minExponent || (1000000000000000000 : UInt64) < largeRange.min) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [show doNormalize_capAtMaxRep (1000000000000000000 : UInt64) (1 : Int) (Guard.new.push 9)
         = .ok ((1000000000000000000 : UInt64), (1 : Int), Guard.new.push 9) from by
       unfold doNormalize_capAtMaxRep
-      rw [if_neg (by decide)]]
+      rw [ite_eq_right (by decide)]]
   simp only []
   have h_rup : (Guard.new.push 9).doRoundUp false (1000000000000000000 : UInt64) (1 : Int)
       largeRange.min largeRange.max .towards_zero .normalize2 =

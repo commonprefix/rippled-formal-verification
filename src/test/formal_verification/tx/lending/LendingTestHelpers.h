@@ -612,7 +612,6 @@ applyLoanSet(jtx::Env& env, OpenView& view, BrokerFixture const& f, LoanParams c
     AppliedLoanTx a = loanTxBefore(
         view, f, loanTemplate(readBroker(view, f), p, p.startDate.value_or(closeTime)));
     Number const before = holding(view, f.borrower, f.asset.raw());
-    Number const ownerBefore = holding(view, f.owner, f.asset.raw());
     a.ter = p.startDate ? applyOn(env, view, loanSetTx(f, p))
                         : applyOn(
                               env,
@@ -623,7 +622,6 @@ applyLoanSet(jtx::Env& env, OpenView& view, BrokerFixture const& f, LoanParams c
     a.post = a.ter == tesSUCCESS ? readLoan(view, loan, f, p) : a.pre;
     a.poolAfter = readVaultState(view, f.vaultKeylet, f.asset.raw());
     a.toBorrower = holding(view, f.borrower, f.asset.raw()) - before;
-    a.toBroker = holding(view, f.owner, f.asset.raw()) - ownerBefore;
     return a;
 }
 
@@ -652,12 +650,10 @@ applyLoanAccept(
 {
     AppliedLoanTx a = loanTxBefore(view, f, readLoan(view, loan, f, p));
     Number const before = holding(view, f.borrower, f.asset.raw());
-    Number const ownerBefore = holding(view, f.owner, f.asset.raw());
     a.ter = applyOn(env, view, jtx::loan::accept(f.borrower, loan.key));
     a.post = readLoan(view, loan, f, p);
     a.poolAfter = readVaultState(view, f.vaultKeylet, f.asset.raw());
     a.toBorrower = holding(view, f.borrower, f.asset.raw()) - before;
-    a.toBroker = holding(view, f.owner, f.asset.raw()) - ownerBefore;
     return a;
 }
 

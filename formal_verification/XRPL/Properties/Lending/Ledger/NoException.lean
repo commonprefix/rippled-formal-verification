@@ -15,11 +15,8 @@ import XRPL.Properties.Lending.Ledger.Lawful
 
 /-! # Every transaction returns a result code
 
-A transaction on a reachable ledger ends in a result code, success or a rejection, and never in a model error. A
-model error is a C++ exception, which leaves the transaction with `tefEXCEPTION`. Where the code throws, the theorem
-carries the hypothesis that keeps the exception out, and an `_attained` witness shows the error without it. The other
-hypotheses are balances of the asset, which C++ keeps in accounts and the model does not run, or ranges the proof
-stops at. -/
+On a reachable ledger a transaction ends in a result code, never in a model error (a C++ exception, `tefEXCEPTION`).
+Where C++ throws, the theorem carries the hypothesis that keeps it out and an `_attained` witness shows the error. -/
 
 namespace XRPL.Model
 
@@ -335,5 +332,24 @@ theorem Lending.loanPay_no_exception_total_attained :
       (10 : ℚ) ^ 17 < l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + q.amounts.interestPaid.toRat ∧
       (l.apply (.loanPay i .late amount)).run = .error .outOfRange :=
   LendingLedger.loanPay_total_out_of_range_witness
+
+/-- Witness for `loanPay_no_exception`: on a reachable MPT ledger a late payment that takes AssetsAvailable +
+AssetsDeployed above the largest MPT amount ends in an error, while every other condition holds. -/
+theorem Lending.loanPay_no_exception_mpt_attained :
+    ∃ (l : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (q : UnsettledPayment SingleAssetVault.Vault),
+      l.Reachable ∧
+      l.LoanAt i loan ∧
+      l.vault.numericType = NumericType.int64 ∧
+      (LendingTx.loanPay i .late amount).preflight l = .tesSUCCESS ∧
+      loan.nextPaymentDueDate < l.now ∧
+      loan.broker.coverAvailable.toRat < 10 ^ 96 ∧
+      l.FeeFits i .late amount ∧
+      (loan.payInstalments l.vault .late amount l.now).run = .ok (.ok q) ∧
+      l.vault.assetsAvailable.toRat + q.amounts.principalPaid.toRat + q.amounts.interestPaid.toRat + 1 ≤
+        l.vault.numericType.maxValue.toNat ∧
+      (l.vault.numericType.maxValue.toNat : ℚ) <
+        l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + q.amounts.interestPaid.toRat ∧
+      (l.apply (.loanPay i .late amount)).run = .error .overflow :=
+  LendingLedger.loanPay_total_out_of_range_mpt_witness
 
 end XRPL.Model

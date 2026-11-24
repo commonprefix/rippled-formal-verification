@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 Loan D of 3, two instalments of 1.5, is created just before loan A's payment 800 days late takes AssetsAvailable past
 `10^16` base units. The vault then credits only whole units: 3 for both instalments together, 1 for each apart. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

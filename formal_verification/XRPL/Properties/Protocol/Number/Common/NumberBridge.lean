@@ -9,9 +9,8 @@ import XRPL.Properties.Protocol.Number.Sub.RoundsToRepresentable
 
 /-! # `to_nearest` add and sub on the `Number` grid
 
-A `to_nearest` sum or difference never moves past a normalized value that bounds the exact result, keeps a
-non-negative value non-negative, and is exact on small integers. There is no monotonicity lemma, because
-`RoundsToRepresentable` accepts either neighbour for `to_nearest`. -/
+A `to_nearest` sum or difference never passes a normalized value that bounds the exact result, keeps a non-negative
+value non-negative, and is exact on small integers. -/
 
 namespace XRPL.Model.Protocol
 
@@ -211,7 +210,7 @@ lemma Number.operator_add_isNormalized (x y result : Number) (mode : rounding_mo
   · have h_result : result = x := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_pos hy_guard] at hok
+      rw [ite_eq_left hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     rw [h_result]; exact hx
   -- Zero-`x` guard: result = y.
@@ -219,7 +218,7 @@ lemma Number.operator_add_isNormalized (x y result : Number) (mode : rounding_mo
   · have h_result : result = y := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_pos hx_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_left hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     rw [h_result]; exact hy
   -- Exact cancellation: result = Number.zero, excluded by `hresult`.
@@ -227,7 +226,7 @@ lemma Number.operator_add_isNormalized (x y result : Number) (mode : rounding_mo
   · have h_result : result = Number.zero := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_right hx_guard, ite_eq_left heq_guard] at hok
       exact (Except.ok.inj
         (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
     exact absurd (show result.mantissa_ = 0 by rw [h_result]; rfl) hresult

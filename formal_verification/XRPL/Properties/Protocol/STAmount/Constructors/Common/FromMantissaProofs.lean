@@ -67,11 +67,11 @@ lemma STAmount.checked_integral_rounds (nt : NumericType) (m : UInt64) (e : Int)
     show (if neg = true then (-1 : ℚ) else 1) * (m.toNat : ℚ) * 10 ^ e = _
     ring
   rw [STAmount.checked] at hok
-  dsimp only [STAmount.unchecked, STAmount.canonicalize, STAmount.integral] at hok
-  rw [if_pos hint] at hok
+  dsimp +instances only [STAmount.unchecked, STAmount.canonicalize, STAmount.integral] at hok
+  rw [ite_eq_left hint] at hok
   by_cases hz : m = 0
   · -- a zero mantissa gives the zero amount
-    rw [if_pos (by rw [hz]; rfl)] at hok
+    rw [ite_eq_left (by rw [hz]; rfl)] at hok
     have hres : result.toRat = 0 := by
       rw [← Except.ok.inj hok]
       exact STAmount.toRat_zero_aux _ rfl rfl
@@ -83,10 +83,10 @@ lemma STAmount.checked_integral_rounds (nt : NumericType) (m : UInt64) (e : Int)
   · have hkeep : ¬ (m == 0 || decide (e ≤ -20)) = true := by
       simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq]
       exact fun h => h.elim hz (by omega)
-    rw [if_neg hkeep] at hok
+    rw [ite_eq_right hkeep] at hok
     by_cases hmoff : e > nt.maxOffset
-    · rw [if_pos hmoff] at hok; exact absurd hok (by simp)
-    rw [if_neg hmoff] at hok
+    · rw [ite_eq_left hmoff] at hok; exact absurd hok (by simp)
+    rw [ite_eq_right hmoff] at hok
     simp only [IntAmount.ofNumber] at hok
     cases hr : (Number.unchecked neg m e).to_rep mode with
     | error err => rw [hr] at hok; exact absurd hok (by simp)
@@ -94,8 +94,8 @@ lemma STAmount.checked_integral_rounds (nt : NumericType) (m : UInt64) (e : Int)
       rw [hr] at hok
       simp only [] at hok
       by_cases hrng : r.magnitude > nt.maxValue
-      · rw [if_pos hrng] at hok; exact absurd hok (by simp)
-      rw [if_neg hrng] at hok
+      · rw [ite_eq_left hrng] at hok; exact absurd hok (by simp)
+      rw [ite_eq_right hrng] at hok
       have hres : result.toRat = (r.toInt : ℚ) := by
         rw [← Except.ok.inj hok]
         exact STAmount.reconstruct_toRat nt r
@@ -108,7 +108,7 @@ lemma STAmount.checked_integral_rounds (nt : NumericType) (m : UInt64) (e : Int)
       refine ⟨?_, ?_, ?_⟩
       · -- less than one away
         cases neg <;> cases up
-        all_goals simp only [Bool.false_eq_true, if_false, if_true, one_mul, add_zero]
+        all_goals simp only [Bool.false_eq_true, ite_false, ite_true, one_mul, add_zero]
         all_goals rw [abs_lt]
         · constructor <;> linarith
         · have := lt_of_le_of_ne hf0 (Ne.symm (hup rfl))
@@ -119,28 +119,28 @@ lemma STAmount.checked_integral_rounds (nt : NumericType) (m : UInt64) (e : Int)
       · -- upward never ends below the value
         intro hmode
         cases neg
-        · simp only [Bool.false_eq_true, if_false, one_mul]
+        · simp only [Bool.false_eq_true, ite_false, one_mul]
           by_cases hf_zero : f = 0
           · rw [hf_zero]
             split <;> linarith
           · rw [huu hmode rfl hf_zero]
-            simp only [if_true]
+            simp only [ite_true]
             linarith
         · rw [hun hmode rfl]
-          simp only [if_true, Bool.false_eq_true, if_false]
+          simp only [ite_true, Bool.false_eq_true, ite_false]
           linarith
       · -- downward never ends above the value
         intro hmode
         cases neg
         · rw [hdu hmode rfl]
-          simp only [Bool.false_eq_true, if_false, one_mul]
+          simp only [Bool.false_eq_true, ite_false, one_mul]
           linarith
-        · simp only [if_true]
+        · simp only [ite_true]
           by_cases hf_zero : f = 0
           · rw [hf_zero]
             split <;> linarith
           · rw [hdn hmode rfl hf_zero]
-            simp only [if_true]
+            simp only [ite_true]
             linarith
 
 /-- Proof of `STAmount.checked_integral_within_one`. -/

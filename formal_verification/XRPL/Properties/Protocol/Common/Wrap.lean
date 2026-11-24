@@ -7,14 +7,12 @@ import XRPL.Properties.Protocol.Number.Normalize.NormalizedResult
 import XRPL.Properties.Protocol.STAmount.Common.Checked
 import XRPL.Properties.Protocol.STAmount.Common.OfNumberRounding
 import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
+import XRPL.Properties.Protocol.STAmount.Sub.Common.Neg
 
 /-! # Where a Protocol operation could wrap around
 
-The Number and STAmount operations check their fixed-width arithmetic. Addition and subtraction never wrap on
-normalized operands, division never wraps on a normalized divisor, and an STAmount conversion never wraps on an
-amount whose signed value fits an `Int64`. The other operations never wrap. Every operation that lending runs
-returns normalized Numbers and amounts that fit, so a lending computation that starts from such values never
-wraps. -/
+Number arithmetic never wraps on normalized operands, and an STAmount conversion never wraps on a mantissa below
+`2^63`. Lending keeps its values in that form, so a lending computation that starts from them never wraps. -/
 
 namespace XRPL.Model.Protocol
 
@@ -228,10 +226,14 @@ elab "wrap_facts" : tactic => do
 open Lean Elab Tactic Meta in
 /-- Close a bound `a < b` or `a ≤ b` with a hypothesis, comparing at the default transparency. A bound is small, so
 this stays cheap, and it sees through a literal like `2 ^ 63` or a field of a record the code built. -/
-elab "wrap_bound" : tactic => do
-  let tgt ← instantiateMVars (← getMainTarget)
+elab "wrap_bound" : tactic => withMainContext do
+  let g ← getMainGoal
+  let tgt ← instantiateMVars (← g.getType)
   unless tgt.isAppOf ``LT.lt || tgt.isAppOf ``LE.le do throwError "wrap_bound: not a bound"
-  withTransparency .default (evalTactic (← `(tactic| assumption)))
+  let some h ← withTransparency .default (findLocalDeclWithType? tgt) | throwError "wrap_bound: no hypothesis"
+  -- the proof is given the goal as its type, since `simp` compares the two types at the reducible transparency
+  g.assign (← mkExpectedTypeHint (mkFVar h) tgt)
+  replaceMainGoal []
 
 open Lean Elab Tactic Meta in
 /-- Close a path whose step `f … = .error .wrap` failed, with the lemma `f_ne_wrap` and `wrap_side` for its side
@@ -368,14 +370,14 @@ lemma divQuotient128_ne_wrap (xm ym : UInt64) (xe ye : Int) (hym : 10 ^ 18 ≤ y
   dsimp only at h
   rw [BitVec.mulChecked_of_lt hnum, ok_bind] at h
   by_cases hr : (toUInt128 xm * 100000000000000000 % toUInt128 ym != 0) = true
-  · rw [if_pos hr] at h
+  · rw [ite_eq_left hr] at h
     have hrem : (toUInt128 xm * 100000000000000000 % toUInt128 ym).toNat < ym.toNat := by
       rw [BitVec.toNat_umod, hy]; exact Nat.mod_lt _ (by omega)
     have hpn : (toUInt128 xm * 100000000000000000 % toUInt128 ym).toNat * (100000 : UInt128).toNat
         < 2 ^ 128 := by rw [hc]; have := ym.toNat_lt; omega
     rw [BitVec.mulChecked_of_lt hpn, ok_bind] at h
     by_cases hcr : ((toUInt128 xm * 100000000000000000 % toUInt128 ym * 100000) / toUInt128 ym != 0) = true
-    · rw [if_pos hcr] at h
+    · rw [ite_eq_left hcr] at h
       have hq : (toUInt128 xm * 100000000000000000 / toUInt128 ym).toNat < 2 ^ 61 := by
         rw [BitVec.toNat_udiv, hnv, hy]
         calc xm.toNat * 10 ^ 17 / ym.toNat ≤ xm.toNat * 10 ^ 17 / 10 ^ 18 := Nat.div_le_div_left hym (by norm_num)
@@ -395,8 +397,8 @@ lemma divQuotient128_ne_wrap (xm ym : UInt64) (xe ye : Int) (hym : 10 ^ 18 ≤ y
         rw [BitVec.toNat_mul_of_lt hzm, hc]; omega
       rw [BitVec.addChecked_of_lt hsum, ok_bind] at h
       cases h
-    · rw [if_neg hcr] at h; cases h
-  · rw [if_neg hr] at h; cases h
+    · rw [ite_eq_right hcr] at h; cases h
+  · rw [ite_eq_right hr] at h; cases h
 
 /-- `operator_div` never wraps on a normalized divisor. -/
 lemma Number.operator_div_ne_wrap (x y : Number) (mode : rounding_mode) (hy : y.isNormalized) :
@@ -420,8 +422,8 @@ lemma Number.operator_sub_ne_wrap (x y : Number) (mode : rounding_mode) (hx : x.
     (hy : y.isNormalized) : x.operator_sub y mode ≠ .error .wrap :=
   Number.operator_add_ne_wrap _ _ _ hx (Number.operator_neg_isNormalized y hy)
 
-lemma Number.power_ne_wrap (base : Number) (n : Nat) : base.power n ≠ .error .wrap := by
-  fun_induction Number.power base n with
+lemma Number.power_ne_wrap {mode : rounding_mode} (base : Number) (n : Nat) : base.power n mode ≠ .error .wrap := by
+  fun_induction Number.power base n mode with
   | case1 => exact nofun
   | case2 => exact nofun
   | case3 k ih =>
@@ -445,7 +447,27 @@ lemma Number.to_rep_ne_wrap (n : Number) (mode : rounding_mode) : n.to_rep mode 
     · exact nofun
   split_ne_wrap [hgrow]
 
-/-! ## IntAmount and IOUAmount -/
+/-- `to_rep` never returns the smallest `Int64`: a negative result is a checked negation. -/
+lemma Number.to_rep_ne_minValue {n : Number} {mode : rounding_mode} {r : Int64} (hok : n.to_rep mode = .ok r) :
+    r ≠ Int64.minValue := by
+  by_cases hneg : n.negative_ = false
+  · have := (Number.to_rep_nonneg_range n mode r hneg hok).1
+    rintro rfl; exact absurd this (by decide)
+  · have hneg' : n.negative_ = true := by simpa using hneg
+    unfold Number.to_rep at hok
+    simp only [hneg', ite_true, bind, Except.bind, pure, Except.pure] at hok
+    repeat' split at hok
+    all_goals first
+      | (cases hok; decide)
+      | cases hok
+      | exact Int64.negChecked_ne_minValue hok
+
+lemma IntAmount.ofNumber_ne_minValue {n : Number} {mode : rounding_mode} {i : IntAmount}
+    (h : IntAmount.ofNumber n mode = .ok i) : i.value ≠ Int64.minValue := by
+  unfold IntAmount.ofNumber at h
+  split at h
+  · rename_i r hr; cases h; exact Number.to_rep_ne_minValue hr
+  · cases h
 
 lemma IntAmount.ofNumber_ne_wrap (n : Number) (mode : rounding_mode) : IntAmount.ofNumber n mode ≠ .error .wrap := by
   unfold IntAmount.ofNumber
@@ -545,32 +567,28 @@ lemma Number.normalizeToRange_nonneg {n : Number} {minM maxM : UInt64} {mode : r
   obtain ⟨mant, hmant, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨hfit, rfl⟩ := UInt64.toInt64Checked_eq_ok.mp hmant
   rw [hsign] at h
-  simp only [Bool.false_eq_true, if_false, pure_eq, ok_bind] at h
+  simp only [Bool.false_eq_true, ite_false, pure_eq, ok_bind] at h
   cases h
   rw [UInt64.toInt64_toInt_of_lt _ hfit]
   omega
 
-/-- The signed value of the amount fits an `Int64`. -/
-def STAmount.Fits (s : STAmount) : Prop := -2 ^ 63 ≤ s.signedDrops ∧ s.signedDrops < 2 ^ 63
+/-- The mantissa of the amount is below `2^63`, so C++ reads it as an `Int64` without wrapping around. -/
+def STAmount.Fits (s : STAmount) : Prop := s.mValue.toNat < 2 ^ 63
 
-lemma STAmount.Fits.of_lt {s : STAmount} (h : s.mValue.toNat < 2 ^ 63) : s.Fits := by
-  unfold STAmount.Fits STAmount.signedDrops; split <;> omega
+lemma STAmount.Fits.of_lt {s : STAmount} (h : s.mValue.toNat < 2 ^ 63) : s.Fits := h
 
-/-- An amount that stores the magnitude and sign of an `Int64` fits. -/
+/-- An amount that stores the magnitude of an `Int64` other than the smallest fits. -/
 lemma STAmount.Fits.of_magnitude {s : STAmount} (v : Int64) (hv : s.mValue = v.magnitude)
-    (hneg : s.mIsNegative = decide (v < 0)) : s.Fits := by
-  have h1 := v.le_toInt
-  have h2 := v.toInt_lt
-  unfold STAmount.Fits STAmount.signedDrops
-  rw [hv, hneg, Int64.toNat_magnitude]
-  by_cases h : v < 0
-  · have hlt : v.toInt < 0 := by simpa using Int64.lt_iff_toInt_lt.mp h
-    simp only [h, decide_true, if_true]
-    omega
-  · have hge : 0 ≤ v.toInt := by
-      by_contra hc; exact h (Int64.lt_iff_toInt_lt.mpr (by simpa using not_le.mp hc))
-    simp only [h, decide_false, Bool.false_eq_true, if_false]
-    omega
+    (hne : v ≠ Int64.minValue) : s.Fits := by
+  unfold STAmount.Fits
+  rw [hv, Int64.toNat_magnitude]
+  exact Int64.natAbs_lt_of_ne_minValue hne
+
+/-- The signed value of an amount that fits is within the `Int64` range, and above the smallest `Int64`. -/
+lemma STAmount.Fits.signedDrops_bounds {s : STAmount} (h : s.Fits) :
+    -2 ^ 63 < s.signedDrops ∧ s.signedDrops < 2 ^ 63 := by
+  unfold STAmount.Fits at h
+  unfold STAmount.signedDrops; split <;> omega
 
 /-- A negated amount fits when its magnitude does. -/
 lemma STAmount.Fits.neg_of_lt {s : STAmount} (h : s.mValue.toNat < 2 ^ 63) : s.operator_neg.Fits := by
@@ -619,11 +637,53 @@ lemma IOUAmount.normalize_natAbs_lt {a i : IOUAmount} {mode : rounding_mode} (h 
   · cases h; decide
   · cases h; exact Number.normalizeToRange_natAbs_lt hm
 
+/-- An `IOUAmount.ofNumber` result has a mantissa below `2^63` in magnitude. -/
+lemma IOUAmount.ofNumber_natAbs_lt {n : Number} {mode : rounding_mode} {i : IOUAmount}
+    (h : IOUAmount.ofNumber n mode = .ok i) : i.mantissa_.toInt.natAbs < 2 ^ 63 := by
+  unfold IOUAmount.ofNumber at h
+  split at h
+  · cases h
+  rename_i r hr
+  unfold IOUAmount.fromNumber at hr
+  split at hr
+  · cases hr
+  rename_i m e hm
+  cases hr
+  split at h
+  · cases h
+  split at h
+  · cases h; decide
+  · cases h; exact Number.normalizeToRange_natAbs_lt hm
+
+/-- An IOU sum has a mantissa below `2^63` in magnitude when its operands have. -/
+lemma IOUAmount.operator_add_natAbs_lt {x y r : IOUAmount} {mode : rounding_mode}
+    (hx : x.mantissa_.toInt.natAbs < 2 ^ 63) (hy : y.mantissa_.toInt.natAbs < 2 ^ 63)
+    (h : x.operator_add y mode = .ok r) : r.mantissa_.toInt.natAbs < 2 ^ 63 := by
+  unfold IOUAmount.operator_add at h
+  split at h
+  · cases h; exact hx
+  split at h
+  · cases h; exact hy
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  · exact IOUAmount.ofNumber_natAbs_lt h
+
+/-- `iou` succeeds on a fractional amount only. -/
+lemma STAmount.iou_ok_not_integral {s : STAmount} {mode : rounding_mode} {i : IOUAmount}
+    (h : s.iou mode = .ok i) : ¬ s.integral = true := by
+  intro hc
+  unfold STAmount.iou at h
+  rw [ite_eq_left hc] at h; cases h
+
 /-- A fractional `canonicalize` result has a magnitude below `2^63`. -/
 lemma STAmount.canonicalize_fractional_mValue_lt {s r : STAmount} {mode : rounding_mode}
     (hint : ¬ s.integral = true) (h : s.canonicalize mode = .ok r) : r.mValue.toNat < 2 ^ 63 := by
   unfold STAmount.canonicalize at h
-  rw [if_neg hint] at h
+  rw [ite_eq_right hint] at h
   split at h
   · cases h
   rename_i i hi
@@ -633,36 +693,39 @@ lemma STAmount.canonicalize_fractional_mValue_lt {s r : STAmount} {mode : roundi
   rw [Int64.toNat_magnitude]
   exact hb
 
-/-- An amount made from an `Int64` fits. -/
-lemma STAmount.uncheckedFromInt64_fits (nt : NumericType) (v : Int64) (o : Int) :
-    (STAmount.uncheckedFromInt64 nt v o).Fits := by
-  refine STAmount.Fits.of_magnitude v (by unfold STAmount.uncheckedFromInt64; split <;> rfl) ?_
-  unfold STAmount.uncheckedFromInt64
-  split
-  · rename_i h; simp [STAmount.unchecked, h]
-  · rename_i h; simp [STAmount.unchecked, h]
+/-- An amount made from an `Int64` fits: the smallest `Int64` is rejected. -/
+lemma STAmount.uncheckedFromInt64_fits {nt : NumericType} {v : Int64} {o : Int} {r : STAmount}
+    (h : STAmount.uncheckedFromInt64 nt v o = .ok r) : r.Fits := by
+  obtain ⟨hv, rfl⟩ := STAmount.uncheckedFromInt64_eq_ok.mp h
+  exact STAmount.Fits.of_magnitude v rfl hv
+
+/-- `uncheckedFromInt64` wraps on the smallest `Int64` only. -/
+lemma STAmount.uncheckedFromInt64_ne_wrap (nt : NumericType) (v : Int64) (o : Int) (hv : v ≠ Int64.minValue) :
+    STAmount.uncheckedFromInt64 nt v o ≠ .error .wrap := by
+  rw [STAmount.uncheckedFromInt64_of_ne nt o hv]; exact nofun
 
 lemma STAmount.intAmount_ne_wrap (s : STAmount) (h : s.Fits) : s.intAmount ≠ .error .wrap := by
   unfold STAmount.intAmount
   split
-  · rw [Int.toInt64Checked_of_bounds h.1 h.2, ok_bind]; exact nofun
+  · rw [STAmount.signedDropsChecked_of_lt s h, ok_bind]; exact nofun
   · exact nofun
 
-lemma STAmount.iou_ne_wrap (s : STAmount) (mode : rounding_mode) : s.iou mode ≠ .error .wrap := by
+lemma STAmount.iou_ne_wrap (s : STAmount) (mode : rounding_mode) (h : s.Fits) : s.iou mode ≠ .error .wrap := by
   unfold STAmount.iou
   split
   · exact nofun
-  · exact IOUAmount.ofMantissaExp_ne_wrap _ _ _
+  · rw [STAmount.signedDropsChecked_of_lt s h, ok_bind]; exact IOUAmount.ofMantissaExp_ne_wrap _ _ _
 
 lemma STAmount.toNumber_ne_wrap (s : STAmount) (mode : rounding_mode) (h : s.Fits) :
     s.toNumber mode ≠ .error .wrap := by
   unfold STAmount.toNumber
-  split_ne_wrap [STAmount.intAmount_ne_wrap _ h, IntAmount.toNumber_ne_wrap, STAmount.iou_ne_wrap,
+  split_ne_wrap [STAmount.intAmount_ne_wrap _ h, IntAmount.toNumber_ne_wrap, STAmount.iou_ne_wrap _ _ h,
     IOUAmount.toNumber_ne_wrap]
 
-lemma STAmount.canonicalize_ne_wrap (s : STAmount) (mode : rounding_mode) : s.canonicalize mode ≠ .error .wrap := by
+lemma STAmount.canonicalize_ne_wrap (s : STAmount) (mode : rounding_mode) (h : s.Fits) :
+    s.canonicalize mode ≠ .error .wrap := by
   unfold STAmount.canonicalize
-  split_ne_wrap [IntAmount.ofNumber_ne_wrap, STAmount.iou_ne_wrap]
+  split_ne_wrap [IntAmount.ofNumber_ne_wrap, STAmount.iou_ne_wrap _ _ h]
 
 /-- `canonicalize` stores the magnitude and sign of an `Int64`, so its result fits. -/
 lemma STAmount.canonicalize_fits {s r : STAmount} {mode : rounding_mode} (h : s.canonicalize mode = .ok r) :
@@ -679,20 +742,26 @@ lemma STAmount.canonicalize_fits {s r : STAmount} {mode : rounding_mode} (h : s.
     rename_i i hi
     split at h
     · cases h
-    · cases h; exact STAmount.Fits.of_magnitude i.value rfl rfl
-  · split at h
+    · cases h; exact STAmount.Fits.of_magnitude i.value rfl (IntAmount.ofNumber_ne_minValue hi)
+  · rename_i hint
+    split at h
     · cases h
     rename_i i hi
     cases h
-    exact STAmount.Fits.of_magnitude i.mantissa_ rfl (by simp [IOUAmount.signum_neg_iff])
+    exact STAmount.Fits.of_magnitude i.mantissa_ rfl
+      (Int64.ne_minValue_of_natAbs_lt (IOUAmount.normalize_natAbs_lt (STAmount.iou_ok_peel hint hi)))
 
 lemma STAmount.checked_ne_wrap (nt : NumericType) (mValue : UInt64) (mOffset : Int) (mIsNegative : Bool)
-    (mode : rounding_mode) : STAmount.checked nt mValue mOffset mIsNegative mode ≠ .error .wrap :=
-  STAmount.canonicalize_ne_wrap _ _
+    (mode : rounding_mode) (h : mValue.toNat < 2 ^ 63) :
+    STAmount.checked nt mValue mOffset mIsNegative mode ≠ .error .wrap :=
+  STAmount.canonicalize_ne_wrap _ _ h
 
-lemma STAmount.ofIOUAmount_ne_wrap (a : IOUAmount) (mode : rounding_mode) :
-    STAmount.ofIOUAmount a mode ≠ .error .wrap :=
-  STAmount.canonicalize_ne_wrap _ _
+/-- `ofIOUAmount` never wraps on a mantissa that is not the smallest `Int64`. -/
+lemma STAmount.ofIOUAmount_ne_wrap (a : IOUAmount) (mode : rounding_mode) (h : a.mantissa_.toInt.natAbs < 2 ^ 63) :
+    STAmount.ofIOUAmount a mode ≠ .error .wrap := by
+  rw [STAmount.ofIOUAmount_of_ne mode (Int64.ne_minValue_of_natAbs_lt h)]
+  exact STAmount.canonicalize_ne_wrap _ _
+    (show (a.mantissa_.magnitude).toNat < 2 ^ 63 by rw [Int64.toNat_magnitude]; exact h)
 
 /-- `ofNumber` never wraps: it converts the sign-cleared value, whose integer or 16-digit mantissa fits. -/
 lemma STAmount.ofNumber_ne_wrap (nt : NumericType) (n : Number) (mode : rounding_mode) :
@@ -701,26 +770,31 @@ lemma STAmount.ofNumber_ne_wrap (nt : NumericType) (n : Number) (mode : rounding
   have hw : (if decide (n.signum < 0) = true then n.operator_neg else n).negative_ = false := by
     rw [Number.signum_neg_decide]
     by_cases hn : n.negative_
-    · rw [if_pos hn]
+    · rw [ite_eq_left hn]
       unfold Number.operator_neg
       split
       · rfl
       · simp [hn]
-    · rw [if_neg hn]; simpa using hn
+    · rw [ite_eq_right hn]; simpa using hn
   dsimp only
   split
   · split
     · rename_i e he; intro h; cases h; exact Number.to_rep_ne_wrap _ _ he
     · rename_i r hr
-      obtain ⟨h0, -⟩ := Number.to_rep_nonneg_range _ _ r hw hr
+      obtain ⟨h0, hle⟩ := Number.to_rep_nonneg_range _ _ r hw hr
       rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using h0)), ok_bind]
-      exact STAmount.checked_ne_wrap _ _ _ _ _
+      refine STAmount.checked_ne_wrap _ _ _ _ _ ?_
+      have := toUInt64_toNat_of_nonneg r h0
+      have : maxRep.toNat = 2 ^ 63 - 1 := by decide
+      omega
   · split
     · rename_i e he; intro h; cases h; exact Number.normalizeToRange_ne_wrap _ _ he
     · rename_i m ex hm
-      obtain ⟨h0, -⟩ := Number.normalizeToRange_nonneg hw hm
+      obtain ⟨h0, hlt⟩ := Number.normalizeToRange_nonneg hw hm
       rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using h0)), ok_bind]
-      exact STAmount.checked_ne_wrap _ _ _ _ _
+      refine STAmount.checked_ne_wrap _ _ _ _ _ ?_
+      have := toUInt64_toNat_of_nonneg m h0
+      omega
 
 /-- An `ofNumber` result is canonicalized, so it fits. -/
 lemma STAmount.ofNumber_fits {nt : NumericType} {n : Number} {mode : rounding_mode} {r : STAmount}
@@ -745,10 +819,11 @@ lemma STAmount.operator_le_ne_wrap (lhs rhs : STAmount) : lhs.operator_le rhs �
   unfold STAmount.operator_le
   split_ne_wrap [STAmount.operator_lt_ne_wrap]
 
-/-- `operator_add` never wraps on amounts that fit, unless two integral amounts sum past an `Int64`. -/
+/-- `operator_add` never wraps on amounts that fit, unless two integral amounts sum to the smallest `Int64` or
+past the `Int64` range. C++ negates a negative sum, and the smallest `Int64` cannot be negated. -/
 lemma STAmount.operator_add_ne_wrap (v1 v2 : STAmount) (mode : rounding_mode) (h1 : v1.Fits) (h2 : v2.Fits)
     (hsum : v1.integral = true →
-      -2 ^ 63 ≤ v1.signedDrops + v2.signedDrops ∧ v1.signedDrops + v2.signedDrops < 2 ^ 63) :
+      -2 ^ 63 < v1.signedDrops + v2.signedDrops ∧ v1.signedDrops + v2.signedDrops < 2 ^ 63) :
     v1.operator_add v2 mode ≠ .error .wrap := by
   unfold STAmount.operator_add
   split
@@ -758,28 +833,44 @@ lemma STAmount.operator_add_ne_wrap (v1 v2 : STAmount) (mode : rounding_mode) (h
   split
   · split
     · exact nofun
-    · exact STAmount.checked_ne_wrap _ _ _ _ _
+    · exact STAmount.checked_ne_wrap _ _ _ _ _ h2
   split
   · rename_i hint
     obtain ⟨hs1, hs2⟩ := hsum hint
+    have hb1 := h1.signedDrops_bounds
+    have hb2 := h2.signedDrops_bounds
     have hd1 : (v1.signedDrops.toInt64).toInt = v1.signedDrops :=
-      Int64.toInt_ofInt_of_le (by have := h1.1; omega) (by have := h1.2; omega)
+      Int64.toInt_ofInt_of_le (by omega) (by omega)
     have hd2 : (v2.signedDrops.toInt64).toInt = v2.signedDrops :=
-      Int64.toInt_ofInt_of_le (by have := h2.1; omega) (by have := h2.2; omega)
-    rw [Int.toInt64Checked_of_bounds h1.1 h1.2, ok_bind, Int.toInt64Checked_of_bounds h2.1 h2.2, ok_bind,
-      Int64.addChecked_of_bounds (by rw [hd1, hd2]; exact hs1) (by rw [hd1, hd2]; exact hs2), ok_bind]
-    dsimp only
+      Int64.toInt_ofInt_of_le (by omega) (by omega)
+    have hlo : -2 ^ 63 ≤ v1.signedDrops.toInt64.toInt + v2.signedDrops.toInt64.toInt := by rw [hd1, hd2]; omega
+    have hhi : v1.signedDrops.toInt64.toInt + v2.signedDrops.toInt64.toInt < 2 ^ 63 := by
+      rw [hd1, hd2]; exact hs2
+    have hne : v1.signedDrops.toInt64 + v2.signedDrops.toInt64 ≠ Int64.minValue := by
+      intro hc
+      have hadd := Int64.toInt_add_of_bounds hlo hhi
+      have hmin : Int64.minValue.toInt = -2 ^ 63 := by decide
+      rw [hc, hd1, hd2, hmin] at hadd
+      omega
+    rw [STAmount.signedDropsChecked_of_lt v1 h1, ok_bind, STAmount.signedDropsChecked_of_lt v2 h2, ok_bind,
+      Int64.addChecked_of_bounds hlo hhi, ok_bind, STAmount.uncheckedFromInt64_of_ne _ _ hne, ok_bind]
     split
     · exact nofun
-    · exact STAmount.canonicalize_ne_wrap _ _
-  · intro h
+    · exact STAmount.canonicalize_ne_wrap _ _ (STAmount.Fits.of_magnitude _ rfl hne)
+  · rename_i hint
+    intro h
     split at h
-    · rename_i e he; cases h; exact STAmount.iou_ne_wrap _ _ he
+    · rename_i e he; cases h; exact STAmount.iou_ne_wrap _ _ h1 he
+    rename_i i1 hi1
     split at h
-    · rename_i e he; cases h; exact STAmount.iou_ne_wrap _ _ he
+    · rename_i e he; cases h; exact STAmount.iou_ne_wrap _ _ h2 he
+    rename_i i2 hi2
     split at h
     · rename_i e he; cases h; exact IOUAmount.operator_add_ne_wrap _ _ _ he
-    · exact STAmount.ofIOUAmount_ne_wrap _ _ h
+    rename_i sumI hsumI
+    exact STAmount.ofIOUAmount_ne_wrap _ _ (IOUAmount.operator_add_natAbs_lt
+      (IOUAmount.normalize_natAbs_lt (STAmount.iou_ok_peel hint hi1))
+      (IOUAmount.normalize_natAbs_lt (STAmount.iou_ok_peel (STAmount.iou_ok_not_integral hi2) hi2)) hsumI) h
 
 /-- Adding to a fractional amount gives a fractional amount. -/
 lemma STAmount.operator_add_fractional {v1 v2 r : STAmount} {mode : rounding_mode} (h1 : v1.integral = false)
@@ -794,7 +885,7 @@ lemma STAmount.operator_add_fractional {v1 v2 r : STAmount} {mode : rounding_mod
     · cases h
     have := STAmount.canonicalize_mNumericType _ _ _ h
     unfold STAmount.integral at h1 ⊢
-    rw [this]; simpa using h1
+    rw [this]; simpa using! h1
   split at h
   · rename_i hi; exact absurd hi (by simpa using h1)
   · split at h
@@ -803,7 +894,8 @@ lemma STAmount.operator_add_fractional {v1 v2 r : STAmount} {mode : rounding_mod
     · cases h
     split at h
     · cases h
-    · have := STAmount.canonicalize_mNumericType _ _ _ h
+    · obtain ⟨-, h⟩ := STAmount.ofIOUAmount_ok_peel h
+      have := STAmount.canonicalize_mNumericType _ _ _ h
       unfold STAmount.integral
       rw [this]; simp [STAmount.unchecked, NumericType.isIntegral]
 
@@ -823,10 +915,10 @@ lemma STAmount.operator_add_fits {v1 v2 r : STAmount} {mode : rounding_mode} (h1
   · obtain ⟨_, _, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, _, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨t, _, h⟩ := bind_ok_peel _ _ _ h
-    dsimp only at h
+    obtain ⟨sum, hsum, h⟩ := bind_ok_peel _ _ _ h
     split at h
     · cases h
-      exact STAmount.uncheckedFromInt64_fits _ _ _
+      exact STAmount.uncheckedFromInt64_fits hsum
     · exact STAmount.canonicalize_fits h
   · split at h
     · cases h
@@ -834,12 +926,13 @@ lemma STAmount.operator_add_fits {v1 v2 r : STAmount} {mode : rounding_mode} (h1
     · cases h
     split at h
     · cases h
-    · exact STAmount.canonicalize_fits h
+    · obtain ⟨-, h⟩ := STAmount.ofIOUAmount_ok_peel h
+      exact STAmount.canonicalize_fits h
 
 lemma STAmount.operator_sub_ne_wrap (v1 v2 : STAmount) (mode : rounding_mode) (h1 : v1.Fits)
     (h2 : v2.mValue.toNat < 2 ^ 63)
     (hsum : v1.integral = true →
-      -2 ^ 63 ≤ v1.signedDrops + v2.operator_neg.signedDrops ∧ v1.signedDrops + v2.operator_neg.signedDrops < 2 ^ 63) :
+      -2 ^ 63 < v1.signedDrops + v2.operator_neg.signedDrops ∧ v1.signedDrops + v2.operator_neg.signedDrops < 2 ^ 63) :
     v1.operator_sub v2 mode ≠ .error .wrap :=
   STAmount.operator_add_ne_wrap _ _ _ h1 (STAmount.Fits.neg_of_lt h2) hsum
 
@@ -858,7 +951,7 @@ lemma STAmount.roundToExponent_ne_wrap (value : STAmount) (exponent : Int) (roun
       r.Fits := fun r hr => STAmount.canonicalize_fits hr
   split
   · rename_i e he; intro hh; cases hh
-    exact STAmount.checked_ne_wrap _ _ _ _ _ he
+    exact STAmount.checked_ne_wrap _ _ _ _ _ (show kMinValue.toNat < 2 ^ 63 by decide) he
   rename_i ref href
   split
   · rename_i e he; intro hh; cases hh
@@ -968,7 +1061,7 @@ lemma tenthBipsOfValue_ne_wrap (value : Number) (bips : TenthBips32) (mode : rou
     tenthBipsOfValue value bips mode ≠ .error .wrap := by
   unfold tenthBipsOfValue
   exact bind_ne_error (Number.operator_mul_ne_wrap _ _ _) fun _ =>
-    Number.operator_div_ne_wrap _ _ _ (Number.ofInt64_isNormalized _)
+    Number.operator_div_ne_wrap _ _ _ (Number.ofInt64_isNormalized _ _)
 
 /-! ## The side conditions -/
 
@@ -989,7 +1082,8 @@ lemma tenthBipsOfValue_isNormalized {value r : Number} {bips : TenthBips32} {mod
   unfold tenthBipsOfValue at h
   obtain ⟨p, hp, h⟩ := bind_ok_peel _ _ _ h
   exact Number.operator_div_isNormalized _ _ _ _
-    (Number.operator_mul_isNormalized _ _ _ _ hv (Number.ofInt64_isNormalized _) hp) (Number.ofInt64_isNormalized _) h
+    (Number.operator_mul_isNormalized _ _ _ _ hv (Number.ofInt64_isNormalized _ _) hp)
+    (Number.ofInt64_isNormalized _ _) h
 
 lemma STAmount.checked_fits {nt : NumericType} {mValue : UInt64} {mOffset : Int} {mIsNegative : Bool}
     {mode : rounding_mode} {r : STAmount} (h : STAmount.checked nt mValue mOffset mIsNegative mode = .ok r) :
@@ -1002,7 +1096,7 @@ lemma STAmount.canonicalize_mValue_lt {s r : STAmount} {mode : rounding_mode}
     (hnt : s.mNumericType.maxValue.toNat < 2 ^ 63) (h : s.canonicalize mode = .ok r) : r.mValue.toNat < 2 ^ 63 := by
   by_cases hint : s.integral = true
   · unfold STAmount.canonicalize at h
-    rw [if_pos hint] at h
+    rw [ite_eq_left hint] at h
     split at h
     · cases h; simp
     split at h
@@ -1036,10 +1130,6 @@ lemma STAmount.checked_mValue_lt {nt : NumericType} {mValue : UInt64} {mOffset :
     (h : STAmount.checked nt mValue mOffset mIsNegative mode = .ok r) : r.mValue.toNat < 2 ^ 63 :=
   STAmount.canonicalize_mValue_lt hnt h
 
-lemma STAmount.operator_neg_mValue (s : STAmount) : s.operator_neg.mValue = s.mValue := by
-  unfold STAmount.operator_neg
-  split <;> rfl
-
 lemma NumericType.int64_maxValue_lt : NumericType.int64.maxValue.toNat < 2 ^ 63 := by decide
 
 /-- The zero amount of a type has a magnitude below `2^63`. -/
@@ -1049,7 +1139,7 @@ lemma STAmount.zero_mValue_lt (nt : NumericType) : (STAmount.zero nt).mValue.toN
   · rename_i s hs
     by_cases hint : (STAmount.unchecked nt 0 0 false).integral = true
     · unfold STAmount.checked STAmount.canonicalize at hs
-      rw [if_pos hint, if_pos (by simp [STAmount.unchecked])] at hs
+      rw [ite_eq_left hint, ite_eq_left (by simp [STAmount.unchecked])] at hs
       cases hs
       simp
     · exact STAmount.canonicalize_fractional_mValue_lt hint hs
@@ -1075,7 +1165,7 @@ lemma STAmount.operator_add_fractional_mValue_lt {v1 v2 r : STAmount} {mode : ro
   · cases h
   split at h
   · cases h
-  · unfold STAmount.ofIOUAmount at h
+  · obtain ⟨-, h⟩ := STAmount.ofIOUAmount_ok_peel h
     exact STAmount.canonicalize_fractional_mValue_lt
       (by simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]) h
 
@@ -1135,7 +1225,6 @@ macro_rules
     | wrap_bound
     | exact XRPL.Model.Protocol.Number.zero_isNormalized
     | exact XRPL.Model.Protocol.Number.ofInt64_isNormalized _
-    | exact XRPL.Model.Protocol.STAmount.uncheckedFromInt64_fits _ _ _
     | exact XRPL.Model.Protocol.NumericType.int64_maxValue_lt
     | exact XRPL.Model.Protocol.largeRange_min_toNat_le
     | exact XRPL.Model.Protocol.STAmount.zero_mValue_lt _

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.YieldGrid
 
 /-! # The interest a loan operation books in YieldUnrealized
@@ -95,9 +96,8 @@ private lemma Loan.canAccept_open (loan : Loan) (v : Vault) (t : UInt32) (h : lo
   unfold Loan.canAccept at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hc := ‹(_ : Except Error TER) = _›; cases hc; done)
-    | skip
   all_goals
     simp only [Bool.not_eq_true] at *
     subst_vars

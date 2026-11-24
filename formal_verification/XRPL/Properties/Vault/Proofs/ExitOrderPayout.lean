@@ -5,9 +5,8 @@ import XRPL.Properties.Vault.Proofs.WithdrawFee
 
 /-! # One payout of the exit-order comparison
 
-For one withdrawal by shares from a reachable vault in the redemption phase, the payout is the priced
-amount floored onto the base grid, and the priced amount sits within `sharesε` and half its own ULP of
-the shares' worth. The waive flag changes nothing on a vault with no unrealized loss. -/
+A withdrawal by shares in the redemption phase pays the priced amount floored onto the base grid. The priced amount
+is within `sharesε` and half its own unit of the shares' worth. -/
 
 namespace XRPL.Model.SingleAssetVault
 

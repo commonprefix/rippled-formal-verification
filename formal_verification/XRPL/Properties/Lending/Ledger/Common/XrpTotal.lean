@@ -5,9 +5,8 @@ import XRPL.Properties.Lending.Loan.Common.SetScale
 
 /-! # On XRP the vault total is within the largest XRP amount
 
-Every vault update stores AssetsAvailable + AssetsDeployed as an amount of the asset (C++ `syncAssetsTotal`). XRP
-balances are whole drops far below `2^63`, so their sum is exact and the stored total is the sum itself. An MPT sum
-of `2^63` or `2^63 + 1` is stored rounded down, so the same does not follow there. -/
+XRP balances are whole drops far below `2^63`, so the total C++ `syncAssetsTotal` stores is their exact sum. An MPT
+sum of `2^63` or `2^63 + 1` is stored rounded down, so the same does not follow there. -/
 
 namespace XRPL.Model.Lending
 

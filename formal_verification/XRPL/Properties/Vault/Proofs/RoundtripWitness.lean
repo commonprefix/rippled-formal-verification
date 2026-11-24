@@ -4,16 +4,10 @@ import XRPL.Properties.Vault.Common.DepositDefs
 
 /-! # Witnesses for the round-trip bounds
 
-Each run's result is computed by the model and checked by `native_decide`. Every vault comes from a
-reachable history: a create, a deposit, then a donation.
+A deposit and redemption on a reachable IOU vault that loses one base unit, and one on an `int64` vault that pays
+back the whole deposit. -/
 
-* Loss: a scale-0 IOU vault of `8407255545351891` assets and `3644134340563550` shares takes a
-  deposit of `9000000564015`. The issued shares are worth just below the midpoint under the request,
-  the deposit's pricing rounds up onto it and charges the whole request, and the redemption, priced
-  lower by the issued shares' fraction of that rounding, rounds down and is floored one step below.
-* Full refund: an `int64` vault of 4 assets and 4 shares takes a deposit of 2 and pays it back. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.RtWit
 
@@ -64,12 +58,11 @@ lemma Vault.deposit_withdraw_roundtrip_loss_witness :
       Vault.Reachable v t0 ∧ t0 ≤ t ∧ amountDeposit.Canonical ∧ amountDeposit.mNumericType = v.numericType ∧
       (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r₁) ∧
-      (v.toExact.sharesTotal : ℚ) + r₁.shares.toRat ≤ 2 ^ 63 - 1 ∧
       (r₁.vault'.withdraw (.vaultShares r₁.shares) waiveUnrealizedLoss t hpos₂).run = .ok (.ok r₂) ∧
       r₁.assets.toRat - r₂.assets.toRat = (10 : ℚ) ^ v.baseExponent :=
   ⟨vL, xL, false, 0, 0, xL_pos, dep vL xL xL_pos, rL_pos, red (dep vL xL xL_pos) rL_pos, vL_reach, by decide,
     STAmount.canonical_of_canonicalB _ (by native_decide), by native_decide, fun h => absurd h (by native_decide),
-    by native_decide, by native_decide, by native_decide, by native_decide⟩
+    by native_decide, by native_decide, by native_decide⟩
 
 /-- Full refund: the redemption pays back the whole charge. -/
 lemma Vault.deposit_withdraw_roundtrip_gain_witness :
@@ -79,11 +72,10 @@ lemma Vault.deposit_withdraw_roundtrip_gain_witness :
       Vault.Reachable v t0 ∧ t0 ≤ t ∧ amountDeposit.Canonical ∧ amountDeposit.mNumericType = v.numericType ∧
       (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r₁) ∧
-      (v.toExact.sharesTotal : ℚ) + r₁.shares.toRat ≤ 2 ^ 63 - 1 ∧
       (r₁.vault'.withdraw (.vaultShares r₁.shares) waiveUnrealizedLoss t hpos₂).run = .ok (.ok r₂) ∧
       0 < (v.toExact.sharesTotal : ℚ) ∧ r₂.assets.toRat = r₁.assets.toRat :=
   ⟨vE, xE, false, 0, 0, xE_pos, dep vE xE xE_pos, rE_pos, red (dep vE xE xE_pos) rE_pos, vE_reach, by decide,
     STAmount.canonical_of_canonicalB _ (by native_decide), by native_decide, fun _ => by native_decide,
-    by native_decide, by native_decide, by native_decide, by native_decide, by native_decide⟩
+    by native_decide, by native_decide, by native_decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

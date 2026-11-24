@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.InterestMonotone
 
 /-! # What a loan owes the vault never rises on a payment
@@ -127,9 +128,8 @@ private lemma Loan.tryOverpayment_owed_le (l : Loan) (opc : PaymentComponents) (
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   -- Match the steps by their shape only. A full search unfolds the `Number` operators of the other steps.
   have hle := Loan.reamortized_interestDue_le l hlo hint hi (by with_reducible assumption)
@@ -159,9 +159,8 @@ private lemma UnsettledPayment.applyOverpayment_owed_le (payment p' : UnsettledP
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact le_refl _
-    | skip
   have hle := Loan.tryOverpayment_owed_le _ _ _ hlo hint hi ‹Loan.tryOverpayment _ _ = _›
   have h1 := (RawLoan.to_lawful_ok ‹RawLoan.to_lawful _ = _›).1
   have e1 := (congrArg RawLoan.totalValueOutstanding h1 :)

@@ -1,19 +1,9 @@
 import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRangeBound
 
-/-! # Exact fixed-scale directed rounding of the 16-digit re-round, non-negative input.
+/-! # Exact directed rounding of the 16-digit re-round, non-negative input
 
-`normalizeToRange` snaps a 19-digit `Number` (`mantissa ∈ [10¹⁸,10¹⁹)`) onto the
-16-digit grid at scale `10^(e+3)`. For a non-negative input the directed modes
-are exact fixed-scale roundings:
-
-* `.upward` rounds the magnitude *up*: the result value is `⌈M/1000⌉·10^(e+3)`
-  (with a carry to exponent `e+4` at the top-of-range cusp),
-* `.downward`/`.towards_zero` truncate: the result value is `⌊M/1000⌋·10^(e+3)`.
-
-These are the sharp statements behind the "double rounding does not compound" argument
-for directed IOU multiplication (`RoundsToRepresentableWithin … 1`).
-`normalizeToRange_16_{upward,downward,towards_zero}` give only the one-sided inequality. The exact grid value
-keeps the overshoot strictly below one ULP `10^(e+3)`. -/
+A 19-digit mantissa `M` at exponent `e` lands on `⌈M/1000⌉·10^(e+3)` in `upward` and on `⌊M/1000⌋·10^(e+3)` in
+`downward` and `towards_zero`. So the double rounding of a directed IOU multiplication stays within one unit. -/
 
 namespace XRPL.Model.Protocol
 
@@ -60,8 +50,8 @@ theorem normalizeToRange_16_ceil_pos (n : Number) (mant : Int64) (exp : Int)
     obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     refine ⟨?_, by omega⟩
     rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), hm3,
-        if_neg (show ¬ n.mantissa_.toNat % 1000 ≠ 0 by rw [hrem0]; decide)]
-    simp only [if_neg hneg, one_mul, Int.cast_natCast, Nat.add_zero]
+        ite_eq_right (show ¬ n.mantissa_.toNat % 1000 ≠ 0 by rw [hrem0]; decide)]
+    simp only [ite_eq_right hneg, one_mul, Int.cast_natCast, Nat.add_zero]
   · -- fire (nonempty ⟹ remainder ≠ 0): ceil = M/1000 + 1, or cusp carry.
     have hrem_ne : n.mantissa_.toNat % 1000 ≠ 0 := fun h => hemp (h_empty_of h)
     have hround : (g.round .upward == 1 || (g.round .upward == 0
@@ -80,8 +70,8 @@ theorem normalizeToRange_16_ceil_pos (n : Number) (mant : Int64) (exp : Int)
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       refine ⟨?_, by omega⟩
       rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ cMinValue (by rw [hcMin]; omega),
-          if_pos hrem_ne, hMk]
-      simp only [if_neg hneg, one_mul, Int.cast_natCast]
+          ite_eq_left hrem_ne, hMk]
+      simp only [ite_eq_right hneg, one_mul, Int.cast_natCast]
       rw [hcMin, show ((10 ^ 16 - 1 + 1 : ℕ)) = (10 ^ 16 : ℕ) from by norm_num,
           zpow_add₀ (by norm_num : (10:ℚ) ≠ 0) (n.exponent_ + 3) 1, zpow_one]
       push_cast; ring
@@ -103,8 +93,8 @@ theorem normalizeToRange_16_ceil_pos (n : Number) (mant : Int64) (exp : Int)
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       refine ⟨?_, by omega⟩
       rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hadd]; omega), hadd,
-          if_pos hrem_ne]
-      simp only [if_neg hneg, one_mul, Int.cast_natCast]
+          ite_eq_left hrem_ne]
+      simp only [ite_eq_right hneg, one_mul, Int.cast_natCast]
 
 /-- `.downward` and `.towards_zero` re-rounding of a non-negative 19-digit `Number` to 16 digits gives exactly
 `⌊M / 1000⌋ · 10^(e + 3)` at output exponent `e + 3`. -/
@@ -142,6 +132,6 @@ theorem normalizeToRange_16_floor_pos (n : Number) (mant : Int64) (exp : Int) (m
   obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
   refine ⟨?_, by omega⟩
   rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), hm3]
-  simp only [if_neg hneg, one_mul, Int.cast_natCast]
+  simp only [ite_eq_right hneg, one_mul, Int.cast_natCast]
 
 end XRPL.Model.Protocol

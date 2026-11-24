@@ -18,10 +18,8 @@ import XRPL.Properties.Vault.Proofs.PricedWorth
 
 /-! # `Vault.withdraw` accuracy
 
-The withdraw exchange prices with two correctly-rounded `Number` stages, a `mul`
-and a `div`, which together stay within `sharesε = 1.1·10⁻¹⁸` of the exact
-quotient. On a reachable vault a payout that leaves shares is exactly the priced amount less the exact
-early-exit fee, floored onto the base grid. The last withdrawal pays all the cash, with no fee. -/
+The pricing stays within `sharesε = 1.1·10⁻¹⁸` of the exact quotient. On a reachable vault a non-final payout is
+the priced amount less the exact fee, floored onto the base grid. The last withdrawal pays all the cash. -/
 
 namespace XRPL.Model.SingleAssetVault
 

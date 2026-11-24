@@ -31,7 +31,7 @@ lemma STAmount.ofNumber_iou_snap_pos (nt : NumericType) (r : Number) (mode : rou
   have hmne : (r.mantissa_ != 0) = true := by simp [hr_ne]
   have hneg_eq : decide (r.signum < 0) = r.negative_ := by
     unfold Number.signum
-    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, if_true, if_false,
+    rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, ite_true, ite_false,
       Bool.false_eq_true] <;> decide
   set neg : Bool := decide (r.signum < 0) with hneg_def
   have hneg_false : neg = false := by rw [hneg_eq]; exact hr_neg
@@ -43,7 +43,7 @@ lemma STAmount.ofNumber_iou_snap_pos (nt : NumericType) (r : Number) (mode : rou
   have hwe_hi : working.exponent_ + 4 ≤ maxExponent := by rw [hw_eq]; exact hre_hi
   have hw_neg : working.negative_ = false := by rw [hw_eq]; exact hr_neg
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
+  rw [ite_eq_right (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>

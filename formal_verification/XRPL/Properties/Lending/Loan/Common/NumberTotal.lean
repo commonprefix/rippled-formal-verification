@@ -55,8 +55,8 @@ lemma Number.operator_div_ok_of_abs (x y : Number) (mode : rounding_mode) (hx : 
     subst this
     unfold Number.operator_div
     rw [Number.operator_eq_zero_false_of_mantissa_ne y hy0]
-    simp only [Bool.false_eq_true, if_false]
-    rw [if_pos (by decide)]
+    simp only [Bool.false_eq_true, ite_false]
+    rw [ite_eq_left (by decide)]
     rfl
   have h1 := Number.exponent_le_of_abs_lt_big x hx hxl
   have h2 := Number.exponent_gt_of_abs_ge y hy hy0 (-219) (by
@@ -85,9 +85,9 @@ lemma tenthBipsOfValue_ok_of_abs (x : Number) (bips : TenthBips32) (hx : x.isNor
   have hu : (kTenthBipsPerUnity.toNat : ℚ) = 100000 := by decide
   rw [hu] at huv
   have hb32 : (bips.toNat : ℚ) < 2 ^ 32 := by exact_mod_cast bips.toNat_lt
-  have hbl : |bips.toNumber.toRat| < 10 ^ 200 := by
+  have hbl : |(bips.toNumber .to_nearest).toRat| < 10 ^ 200 := by
     rw [hbv, abs_of_nonneg (by positivity)]; linarith [show (2 : ℚ) ^ 32 < 10 ^ 200 by norm_num]
-  obtain ⟨m, hm⟩ := Number.operator_mul_ok_of_abs x bips.toNumber .to_nearest hx hbn
+  obtain ⟨m, hm⟩ := Number.operator_mul_ok_of_abs x (bips.toNumber .to_nearest) .to_nearest hx hbn
     (lt_trans hxl (by norm_num)) hbl
   have hmn := Number.operator_mul_isNormalized _ _ _ _ hx hbn hm
   have hma := (Number.mul_near _ _ _ hx hbn hm).abs_le
@@ -96,7 +96,7 @@ lemma tenthBipsOfValue_ok_of_abs (x : Number) (bips : TenthBips32) (hx : x.isNor
     calc |m.toRat| ≤ |x.toRat| * bips.toNat * (1 + Number.nearestError) := hma
       _ ≤ 10 ^ 190 * 2 ^ 32 * 2 := by gcongr; linarith
       _ < 10 ^ 200 := by norm_num
-  obtain ⟨r, hr⟩ := Number.operator_div_ok_of_abs m kTenthBipsPerUnity.toNumber .to_nearest hmn hun hml
+  obtain ⟨r, hr⟩ := Number.operator_div_ok_of_abs m (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest hmn hun hml
     (by rw [huv]; norm_num)
   refine ⟨r, ?_, Number.operator_div_isNormalized _ _ _ _ hmn hun hr, ?_⟩
   · simp only [tenthBipsOfValue, bind, Except.bind, hm, hr]

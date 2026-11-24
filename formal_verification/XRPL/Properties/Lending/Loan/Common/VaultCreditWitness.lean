@@ -1,10 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayLedgerWitness
 
 /-! # Witness for what a regular payment credits a coarsened vault
 
 The coarsened run of `PayLedgerWitness`, then loan D's final regular payment, checked by `native_decide`. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

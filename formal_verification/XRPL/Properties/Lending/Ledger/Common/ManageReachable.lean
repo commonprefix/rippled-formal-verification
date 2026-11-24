@@ -4,9 +4,8 @@ import XRPL.Properties.Lending.Loan.Common.ShareValue
 
 /-! # Management actions on the loan a reachable ledger stores
 
-LossUnrealized, AssetsDeployed, the broker's DebtTotal and the stored loan's PrincipalOutstanding are whole base
-units, at most `10^16` of them, so every sum a management action makes fits a Number. While the vault holds less
-than `10^16` base units, a default stays on the base grid. -/
+The amounts a management action reads are whole base units, at most `10^16` of them, so every sum it makes fits a
+Number. While the vault holds less than `10^16` base units, a default stays on the base grid. -/
 
 namespace XRPL.Model.Lending
 

@@ -10,9 +10,8 @@ import XRPL.Properties.Lending.Loan.Common.FullPaymentBeforeStartWitness
 
 /-! # `LoanPay`
 
-What a LoanPay transaction pays and what it changes in the loan, the vault and the broker. "Payment" is a successful
-LoanPay of any type from ledger `l` to `l'`, a scheduled payment is one instalment of `Loan.payInstalments`, primed
-values are the ones after it, read from `l'`. -/
+What a LoanPay pays and what it changes in the loan, the vault and the broker. A payment is a successful LoanPay
+from `l` to `l'`, and a scheduled payment is one instalment of `Loan.payInstalments`. -/
 
 namespace XRPL.Model
 

@@ -163,37 +163,37 @@ lexicographic comparison decides the rational order. -/
 theorem STAmount.operator_lt_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_lt lhs rhs = .ok (decide (lhs.toRat < rhs.toRat)) := by
   unfold STAmount.operator_lt
-  rw [if_neg (show ¬ ((!STAmount.areComparable lhs rhs) = true) from by rw [h.comparable]; decide)]
+  rw [ite_eq_right (show ¬ ((!STAmount.areComparable lhs rhs) = true) from by rw [h.comparable]; decide)]
   congr 1
   apply bool_eq_decide_of_iff
   by_cases hsign : lhs.mIsNegative = rhs.mIsNegative
   · -- same sign: the leading sign branch is not taken.
-    rw [if_neg (show ¬ ((lhs.mIsNegative != rhs.mIsNegative) = true) from by
+    rw [ite_eq_right (show ¬ ((lhs.mIsNegative != rhs.mIsNegative) = true) from by
       rw [hsign]; simp)]
     by_cases hlz : lhs.mValue = 0
     · -- `lhs = 0` is sign-cleared, so both flags are `false`.
       have hlf : lhs.mIsNegative = false := h.lhs_zero_sign hlz
       have hrf : rhs.mIsNegative = false := by rw [← hsign, hlf]
-      rw [if_pos (beq_iff_eq.mpr hlz), hrf]
-      simp only [Bool.false_eq_true, if_false]
+      rw [ite_eq_left (beq_iff_eq.mpr hlz), hrf]
+      simp only [Bool.false_eq_true, ite_false]
       have hl0 : lhs.toRat = 0 := (STAmount.toRat_eq_zero_iff lhs).mpr hlz
       rw [hl0, bne_iff_ne, ne_eq, ← STAmount.toRat_eq_zero_iff rhs]
       constructor
       · intro hne; exact lt_of_le_of_ne (STAmount.toRat_nonneg_of rhs hrf) (Ne.symm hne)
       · intro hlt; exact ne_of_gt hlt
     · -- `lhs ≠ 0`.
-      rw [if_neg (by simpa using hlz)]
+      rw [ite_eq_right (by simpa using hlz)]
       by_cases hrz : rhs.mValue = 0
       · -- `rhs = 0`: same sign forces both flags `false`, so `lhs > 0`.
         have hrf : rhs.mIsNegative = false := h.rhs_zero_sign hrz
         have hlf : lhs.mIsNegative = false := by rw [hsign, hrf]
-        rw [if_pos (beq_iff_eq.mpr hrz)]
+        rw [ite_eq_left (beq_iff_eq.mpr hrz)]
         have hr0 : rhs.toRat = 0 := (STAmount.toRat_eq_zero_iff rhs).mpr hrz
         have hlp : 0 < lhs.toRat := STAmount.toRat_pos_of lhs hlf hlz
         rw [hr0]
         exact iff_of_false (by decide) (by linarith)
       · -- both nonzero, same sign: the exponent/value lexicographic compare.
-        rw [if_neg (by simpa using hrz)]
+        rw [ite_eq_right (by simpa using hrz)]
         have hlp : lhs.mValue ≠ 0 := hlz
         have hrp : rhs.mValue ≠ 0 := hrz
         split_ifs with ho1 ho2 hv1 hv2
@@ -264,7 +264,7 @@ theorem STAmount.operator_lt_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
             rw [STAmount.toRat_eq_neg_abs lhs hsl, STAmount.toRat_eq_neg_abs rhs hrt]
             exact iff_of_false (by decide) (by rw [habs]; exact lt_irrefl _)
   · -- different signs: the leading sign branch is taken and returns `lhs.mIsNegative`.
-    rw [if_pos (show (lhs.mIsNegative != rhs.mIsNegative) = true from by
+    rw [ite_eq_left (show (lhs.mIsNegative != rhs.mIsNegative) = true from by
       rw [bne_iff_ne]; exact hsign)]
     cases hsl : lhs.mIsNegative
     · -- `lhs ≥ 0`, `rhs < 0`: never `lhs < rhs`.

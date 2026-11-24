@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.BaseGrid
 import XRPL.Properties.Lending.Ledger.Common.CashPrecision
 import XRPL.Properties.Lending.Loan.Common.OrderCreates
@@ -167,7 +168,7 @@ private lemma sum_principalOn_single (j : Nat) (e : LoanEntry) (hj : e.brokerInd
       simp only [List.getElem?_cons_zero, Option.some.injEq] at hi
       subst hi
       have hp : (some e).any (·.brokerIndex == j) = true := by simp [hj]
-      rw [if_pos hp] at hc
+      rw [ite_eq_left hp] at hc
       have h0 : ∀ o' ∈ os, o'.any (·.brokerIndex == j) = false := by
         intro o' ho'
         have := (List.countP_eq_zero (p := fun o : Option LoanEntry => o.any (·.brokerIndex == j))).mp
@@ -187,7 +188,7 @@ private lemma sum_principalOn_single (j : Nat) (e : LoanEntry) (hj : e.brokerInd
       have ho : o.any (·.brokerIndex == j) = false := by
         cases h : o.any (·.brokerIndex == j)
         · rfl
-        · rw [h, if_pos rfl] at hc; omega
+        · rw [h, ite_eq_left rfl] at hc; omega
       rw [ho] at hc
       rw [List.map_cons, List.sum_cons, hoff o ho, zero_add]
       exact ih k hi (by simpa using hc)
@@ -219,7 +220,7 @@ private lemma LendingLedger.Reachable.reserved_sub_fits {l : LendingLedger} (hr 
   have hle : e.loan.principalOutstanding.toRat ≤ l.vault.assetsReserved.toRat := by
     have := l.principalIf_le_sum (·.isPending) i
     rw [he] at this
-    simp only [LoanEntry.principalIf, hp, if_true] at this
+    simp only [LoanEntry.principalIf, hp, ite_true] at this
     rw [hr.reservedInv.sum]; exact this
   have hp0 : 0 ≤ e.loan.principalOutstanding.toRat := e.loan.exact.principalOutstanding_nonneg
   obtain ⟨nr, hnr⟩ := hr.reservedInv.grid
@@ -297,13 +298,13 @@ lemma LendingLedger.Reachable.deletePending_fits {l : LendingLedger} (hr : l.Rea
   have hAD : loan.principalOutstanding.toRat ≤ l.vault.assetsDeployed.toRat := by
     have := l.principalIf_le_sum (fun _ => true) i
     rw [he] at this
-    simp only [LoanEntry.principalIf, if_true] at this
+    simp only [LoanEntry.principalIf, ite_true] at this
     rw [hdeployed, hpo]; exact this
   have hdt := hr.debtInv.debt _ b hb
   have hDT : loan.principalOutstanding.toRat ≤ loan.broker.debtTotal.toRat := by
     have := l.principalOn_le_sum e.brokerIndex i
     rw [he] at this
-    simp only [LoanEntry.principalOn, if_true] at this
+    simp only [LoanEntry.principalOn, ite_true] at this
     rw [hlb, hdt, hpo]; exact this
   have hDTle : loan.broker.debtTotal.toRat ≤ l.vault.assetsDeployed.toRat := by
     rw [hlb, hdt, hdeployed]; exact l.brokerPrincipal_le _

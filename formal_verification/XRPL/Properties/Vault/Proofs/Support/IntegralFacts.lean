@@ -53,8 +53,8 @@ lemma STAmount.ofNumber_signtrue_nonpos (nt : NumericType) (n : Number) (mode : 
     rw [Number.signum_neg_decide, hneg]; simp
   unfold STAmount.ofNumber at hok
   simp only [Number.signum_neg_decide, hneg] at hok
-  rw [if_neg (by decide : ¬ (NumericType.fractional).isIntegral = true)] at hok
-  simp only [if_true] at hok
+  rw [ite_eq_right (by decide : ¬ (NumericType.fractional).isIntegral = true)] at hok
+  simp only [ite_true] at hok
   rw [show kMinValue = cMinValue from rfl, show kMaxValue = cMaxValue from rfl] at hok
   set w := n.operator_neg with hwdef
   have hwm : w.mantissa_ = n.mantissa_ := by
@@ -93,7 +93,7 @@ lemma STAmount.ofNumber_integral_negative_nonpos (nt : NumericType) (n : Number)
     (result : STAmount) (hnt : nt.isIntegral = true) (hneg : n.negative_ = true)
     (hok : STAmount.ofNumber nt n mode = .ok result) : result.toRat ≤ 0 := by
   unfold STAmount.ofNumber at hok
-  simp only [Number.signum_neg_decide, hneg, if_true, if_pos hnt] at hok
+  simp only [Number.signum_neg_decide, hneg, ite_true, ite_eq_left hnt] at hok
   have hwneg : n.operator_neg.negative_ = false := by
     unfold Number.operator_neg
     split
@@ -112,7 +112,7 @@ lemma STAmount.ofNumber_integral_negative_nonpos (nt : NumericType) (n : Number)
       (toUInt64_toNat_le_maxRep iv hnn hle) hok
     rw [hexact, STAmount.toRat_signed]
     show (if true = true then (-1 : ℚ) else 1) * _ * _ ≤ 0
-    simp only [if_true, neg_mul, one_mul, Left.neg_nonpos_iff]
+    simp only [ite_true, neg_mul, one_mul, Left.neg_nonpos_iff]
     positivity
 
 /-- Canonicalizing an offset-`0` integral amount within `maxRep` keeps its type, offset, bound and value. -/
@@ -123,17 +123,17 @@ lemma STAmount.canonicalize_integral_facts (s result : STAmount) (mode : roundin
     result.mNumericType = s.mNumericType ∧ result.mOffset = 0 ∧
     result.mValue.toNat ≤ maxRep.toNat ∧ result.toRat = s.toRat := by
   have htoRat := STAmount.canonicalize_integral_toRat s result mode hint hoff hval_le hok
-  rw [STAmount.canonicalize, if_pos hint] at hok
+  rw [STAmount.canonicalize, ite_eq_left hint] at hok
   by_cases hz : s.mValue == 0
-  · rw [if_pos (by rw [hz]; rfl)] at hok
+  · rw [ite_eq_left (by rw [hz]; rfl)] at hok
     have hres := Except.ok.inj hok
     subst hres
     exact ⟨rfl, rfl, Nat.zero_le _, htoRat⟩
   · have hz' : (s.mValue == 0) = false := by simpa using hz
-    rw [if_neg (by rw [hz', hoff]; decide)] at hok
+    rw [ite_eq_right (by rw [hz', hoff]; decide)] at hok
     by_cases hmoff : s.mOffset > s.mNumericType.maxOffset
-    · rw [if_pos hmoff] at hok; exact absurd hok (by simp)
-    rw [if_neg hmoff] at hok
+    · rw [ite_eq_left hmoff] at hok; exact absurd hok (by simp)
+    rw [ite_eq_right hmoff] at hok
     simp only [hoff, IntAmount.ofNumber] at hok
     cases hr : (Number.unchecked s.mIsNegative s.mValue 0).to_rep mode with
     | error e => rw [hr] at hok; exact absurd hok (by simp)
@@ -151,8 +151,8 @@ lemma STAmount.canonicalize_integral_facts (s result : STAmount) (mode : roundin
         rw [h2]
         rcases s.mIsNegative <;> simp
       by_cases hrng : r.magnitude > s.mNumericType.maxValue
-      · rw [if_pos hrng] at hok; exact absurd hok (by simp)
-      rw [if_neg hrng] at hok
+      · rw [ite_eq_left hrng] at hok; exact absurd hok (by simp)
+      rw [ite_eq_right hrng] at hok
       have hres := Except.ok.inj hok
       subst hres
       refine ⟨rfl, rfl, ?_, htoRat⟩
@@ -176,7 +176,7 @@ lemma STAmount.ofNumber_downward_floor_bounds (nt : NumericType) (n : Number) (r
   by_cases hint : nt.isIntegral = true
   · -- integral: `to_rep .downward` is the floor, result exponent is `0`
     unfold STAmount.ofNumber at hok
-    simp only [Number.signum_neg_decide, hneg, Bool.false_eq_true, if_false, if_pos hint] at hok
+    simp only [Number.signum_neg_decide, hneg, Bool.false_eq_true, ite_false, ite_eq_left hint] at hok
     cases hr : n.to_rep .downward with
     | error e => rw [hr] at hok; exact absurd hok (by simp)
     | ok intValue =>
@@ -245,28 +245,28 @@ lemma STAmount.ofNumber_integral_facts (nt : NumericType) (n : Number)
     result.mNumericType = nt ∧ result.mOffset = 0 ∧
     result.mValue.toNat ≤ maxRep.toNat := by
   unfold STAmount.ofNumber at hok
-  rw [if_pos hnt] at hok
+  rw [ite_eq_left hnt] at hok
   set neg : Bool := decide (n.signum < 0) with hneg_def
   set working : Number := if neg then n.operator_neg else n with hw_def
   have hsig : n.signum < 0 ↔ n.negative_ = true := by
     unfold Number.signum
     by_cases hnn : n.negative_ = true
-    · rw [if_pos hnn]; simp [hnn]
-    · rw [if_neg hnn]
+    · rw [ite_eq_left hnn]; simp [hnn]
+    · rw [ite_eq_right hnn]
       constructor
       · intro h; split at h <;> norm_num at h
       · intro h; exact absurd h hnn
   have hw_neg : working.negative_ = false := by
     rw [hw_def]
     by_cases hneg : neg = true
-    · rw [if_pos hneg]
+    · rw [ite_eq_left hneg]
       have hnegn : n.negative_ = true :=
         hsig.mp (of_decide_eq_true (by rw [hneg_def] at hneg; exact hneg))
       unfold Number.operator_neg
       by_cases hm : (n.mantissa_ == 0) = true
-      · rw [if_pos hm]; rfl
-      · rw [if_neg hm]; simp [hnegn]
-    · rw [if_neg hneg]
+      · rw [ite_eq_left hm]; rfl
+      · rw [ite_eq_right hm]; simp [hnegn]
+    · rw [ite_eq_right hneg]
       by_cases hnegn : n.negative_ = true
       · exfalso; apply hneg; rw [hneg_def]; exact decide_eq_true (hsig.mpr hnegn)
       · simpa using hnegn

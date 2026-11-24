@@ -22,11 +22,11 @@ lemma IOUAmount.normalize_InRange16_or_zero (a : IOUAmount) (mode : rounding_mod
   refine Or.inl ?_
   unfold IOUAmount.normalize at hok
   by_cases hma : a.mantissa_ = 0
-  · rw [if_pos (beq_iff_eq.mpr hma)] at hok
+  · rw [ite_eq_left (beq_iff_eq.mpr hma)] at hok
     rw [← Except.ok.inj hok] at hi0
     exact absurd rfl hi0
   · rw [show (a.mantissa_ == 0) = false from beq_eq_false_iff_ne.mpr hma] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     have ham_toInt : a.mantissa_.toInt ≠ 0 := by
       intro h; exact hma (Int64.toInt_inj.mp (by rw [h]; decide))
     cases hfr : Number.from_rep a.mantissa_ a.exponent_ largeRange.min largeRange.max mode with
@@ -62,13 +62,13 @@ lemma IOUAmount.normalize_InRange16_or_zero (a : IOUAmount) (mode : rounding_mod
         rw [hfn] at hofn
         simp only [] at hofn
         by_cases hhi : r.exponent_ > cMaxOffset
-        · rw [if_pos hhi] at hofn; exact absurd hofn (by simp)
-        rw [if_neg hhi] at hofn
+        · rw [ite_eq_left hhi] at hofn; exact absurd hofn (by simp)
+        rw [ite_eq_right hhi] at hofn
         by_cases hlo : r.exponent_ < cMinOffset
-        · rw [if_pos hlo] at hofn
+        · rw [ite_eq_left hlo] at hofn
           rw [← Except.ok.inj hofn] at hi0
           exact absurd rfl hi0
-        rw [if_neg hlo] at hofn
+        rw [ite_eq_right hlo] at hofn
         have hir : i = r := (Except.ok.inj hofn).symm
         unfold IOUAmount.fromNumber at hfn
         cases hnorm : v.normalizeToRange cMinValue cMaxValue mode with
@@ -108,11 +108,11 @@ lemma IOUAmount.normalize_mantissa_nonneg (m : Int64) (e : Int) (mode : rounding
     omega
   unfold IOUAmount.normalize at hok
   by_cases hma : m = 0
-  · rw [if_pos (show ((⟨m, e⟩ : IOUAmount).mantissa_ == 0) = true from beq_iff_eq.mpr hma)] at hok
+  · rw [ite_eq_left (show ((⟨m, e⟩ : IOUAmount).mantissa_ == 0) = true from beq_iff_eq.mpr hma)] at hok
     rw [← Except.ok.inj hok] at hi0; exact absurd rfl hi0
   · have hm_toInt : m.toInt ≠ 0 := fun h => hma (Int64.toInt_inj.mp (by rw [h]; decide))
     rw [show ((⟨m, e⟩ : IOUAmount).mantissa_ == 0) = false from beq_eq_false_iff_ne.mpr hma] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     cases hfr : Number.from_rep m e largeRange.min largeRange.max mode with
     | error err => rw [hfr] at hok; exact absurd hok (by simp)
     | ok v =>
@@ -156,12 +156,12 @@ lemma IOUAmount.normalize_mantissa_nonneg (m : Int64) (e : Int) (mode : rounding
         rw [hfn] at hofn
         simp only [] at hofn
         by_cases hhi : r.exponent_ > cMaxOffset
-        · rw [if_pos hhi] at hofn; exact absurd hofn (by simp)
-        rw [if_neg hhi] at hofn
+        · rw [ite_eq_left hhi] at hofn; exact absurd hofn (by simp)
+        rw [ite_eq_right hhi] at hofn
         by_cases hlo : r.exponent_ < cMinOffset
-        · rw [if_pos hlo] at hofn
+        · rw [ite_eq_left hlo] at hofn
           rw [← Except.ok.inj hofn] at hi0; exact absurd rfl hi0
-        rw [if_neg hlo] at hofn
+        rw [ite_eq_right hlo] at hofn
         have hir : i = r := (Except.ok.inj hofn).symm
         unfold IOUAmount.fromNumber at hfn
         cases hnorm : v.normalizeToRange cMinValue cMaxValue mode with
@@ -187,8 +187,8 @@ lemma STAmount.canonicalize_signfalse_nonneg (s result : STAmount) (mode : round
     0 ≤ result.toRat := by
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
-  rw [if_neg hint] at hok
-  rw [STAmount.iou_eq mode hint] at hok
+  rw [ite_eq_right hint] at hok
+  rw [STAmount.iou_eq mode hint hfit] at hok
   have hsd_nn : 0 ≤ s.signedDrops.toInt64.toInt := by
     rw [STAmount.signedDrops_toInt64_toInt_of_lt s hfit]
     unfold STAmount.signedDrops; rw [hneg]; simp
@@ -219,7 +219,7 @@ lemma STAmount.canonicalize_fczr (s result : STAmount) (mode : rounding_mode)
     result.FracCanonZero := by
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
-  rw [if_neg hint] at hok
+  rw [ite_eq_right hint] at hok
   cases hi : s.iou mode with
   | error e => rw [hi] at hok; exact absurd hok (by simp)
   | ok i =>
@@ -261,7 +261,7 @@ lemma STAmount.canonicalize_fczr (s result : STAmount) (mode : rounding_mode)
 `FracCanonZero`. -/
 lemma STAmount.ofIOUAmount_fczr (a : IOUAmount) (mode : rounding_mode) (result : STAmount)
     (hok : STAmount.ofIOUAmount a mode = .ok result) : result.FracCanonZero := by
-  unfold STAmount.ofIOUAmount at hok
+  obtain ⟨-, hok⟩ := STAmount.ofIOUAmount_ok_peel hok
   exact STAmount.canonicalize_fczr _ result mode rfl hok
 
 /-- `operator_add` of a `FracCanonZero` first operand is `FracCanonZero`: the `v2 = 0` branch returns the
@@ -273,23 +273,23 @@ lemma STAmount.operator_add_fczr (v1 v2 result : STAmount) (mode : rounding_mode
   have hint1 : ¬ v1.integral = true := by unfold STAmount.integral; rw [h1nt]; decide
   unfold STAmount.operator_add at hok
   cases hcmp : STAmount.areComparable v1 v2 with
-  | false => rw [if_pos (by rw [hcmp]; decide)] at hok; exact absurd hok (by simp)
+  | false => rw [ite_eq_left (by rw [hcmp]; decide)] at hok; exact absurd hok (by simp)
   | true =>
-    rw [if_neg (by rw [hcmp]; decide)] at hok
+    rw [ite_eq_right (by rw [hcmp]; decide)] at hok
     by_cases hv2 : v2.mValue = 0
-    · rw [if_pos (beq_iff_eq.mpr hv2)] at hok
+    · rw [ite_eq_left (beq_iff_eq.mpr hv2)] at hok
       rw [← Except.ok.inj hok]; exact ⟨h1nt, h1cz⟩
     · rw [show (v2.mValue == 0) = false from beq_eq_false_iff_ne.mpr hv2] at hok
-      simp only [Bool.false_eq_true, if_false] at hok
+      simp only [Bool.false_eq_true, ite_false] at hok
       by_cases hv1 : v1.mValue = 0
-      · rw [if_pos (beq_iff_eq.mpr hv1), if_neg (by simp [hint1])] at hok
+      · rw [ite_eq_left (beq_iff_eq.mpr hv1), ite_eq_right (by simp [hint1])] at hok
         rw [STAmount.checked] at hok
         exact STAmount.canonicalize_fczr _ result mode
           (show (STAmount.unchecked v1.mNumericType v2.mValue v2.mOffset
             v2.mIsNegative).mNumericType = .fractional from h1nt) hok
       · rw [show (v1.mValue == 0) = false from beq_eq_false_iff_ne.mpr hv1] at hok
-        simp only [Bool.false_eq_true, if_false] at hok
-        rw [if_neg hint1] at hok
+        simp only [Bool.false_eq_true, ite_false] at hok
+        rw [ite_eq_right hint1] at hok
         cases hi1 : v1.iou mode with
         | error e => rw [hi1] at hok; exact absurd hok (by simp)
         | ok i1 =>
@@ -319,8 +319,8 @@ lemma STAmount.operator_neg_fczr (s : STAmount) (h : s.FracCanonZero) :
   obtain ⟨hnt, hcz⟩ := h
   unfold STAmount.operator_neg
   by_cases hz : s.mValue = 0
-  · rw [if_pos (beq_iff_eq.mpr hz)]; exact ⟨hnt, hcz⟩
-  · rw [if_neg (fun hb => hz (beq_iff_eq.mp hb))]
+  · rw [ite_eq_left (beq_iff_eq.mpr hz)]; exact ⟨hnt, hcz⟩
+  · rw [ite_eq_right (fun hb => hz (beq_iff_eq.mp hb))]
     refine ⟨hnt, ?_⟩
     rcases hcz with hc | hcv
     · exact Or.inl ⟨hnt, hc.mant_lo, hc.mant_hi, hc.exp_lo, hc.exp_hi⟩
@@ -348,13 +348,13 @@ lemma STAmount.roundToExponent_fczr (value result : STAmount) (scale : Int)
   obtain ⟨hnt, hcz⟩ := h
   have hint : ¬ value.integral = true := by unfold STAmount.integral; rw [hnt]; decide
   unfold STAmount.roundToExponent at hok
-  rw [if_neg hint] at hok
+  rw [ite_eq_right hint] at hok
   by_cases hz : value.isZero = true
-  · rw [if_pos hz] at hok; rw [← Except.ok.inj hok]; exact ⟨hnt, hcz⟩
-  · rw [if_neg hz] at hok
+  · rw [ite_eq_left hz] at hok; rw [← Except.ok.inj hok]; exact ⟨hnt, hcz⟩
+  · rw [ite_eq_right hz] at hok
     by_cases hge : value.exponent ≥ scale
-    · rw [if_pos hge] at hok; rw [← Except.ok.inj hok]; exact ⟨hnt, hcz⟩
-    · rw [if_neg hge] at hok
+    · rw [ite_eq_left hge] at hok; rw [← Except.ok.inj hok]; exact ⟨hnt, hcz⟩
+    · rw [ite_eq_right hge] at hok
       cases href : STAmount.checked value.mNumericType kMinValue scale value.negative rounding with
       | error e => rw [href] at hok; exact absurd hok (by simp)
       | ok referenceValue =>
@@ -373,16 +373,16 @@ lemma STAmount.toNumber_zero_fractional (s : STAmount) (mode : rounding_mode)
     (hfr : s.integral = false) (hz : s.mValue = 0) :
     s.toNumber mode = .ok Number.zero := by
   unfold STAmount.toNumber
-  rw [if_neg (by rw [hfr]; decide)]
+  rw [ite_eq_right (by rw [hfr]; decide)]
   have hsd : s.signedDrops.toInt64 = 0 := by
     have h0 : s.signedDrops = 0 := by unfold STAmount.signedDrops; rw [hz]; simp
     rw [h0]; rfl
   have hiou : s.iou mode = .ok IOUAmount.zero := by
-    rw [STAmount.iou_eq mode (by rw [hfr]; decide), hsd]
+    rw [STAmount.iou_eq mode (by rw [hfr]; decide) (by rw [hz]; decide), hsd]
     unfold IOUAmount.ofMantissaExp
     show IOUAmount.normalize ⟨0, s.mOffset⟩ mode = .ok IOUAmount.zero
     unfold IOUAmount.normalize
-    rw [if_pos (show (((⟨0, s.mOffset⟩ : IOUAmount)).mantissa_ == 0) = true from rfl)]
+    rw [ite_eq_left (show (((⟨0, s.mOffset⟩ : IOUAmount)).mantissa_ == 0) = true from rfl)]
   rw [hiou]
   show IOUAmount.toNumber IOUAmount.zero mode = .ok Number.zero
   unfold IOUAmount.toNumber IOUAmount.zero Number.from_rep Number.normalized Number.normalize
@@ -390,7 +390,7 @@ lemma STAmount.toNumber_zero_fractional (s : STAmount) (mode : rounding_mode)
   rw [doNormalize_eq_spec]
   all_goals try min_fit
   unfold doNormalizeSpec
-  rw [if_pos (by decide)]
+  rw [ite_eq_left (by decide)]
 
 /-- `canonicalize` preserves the numeric type: every success branch returns the
 input record with only the magnitude/offset/sign fields rewritten. -/
@@ -398,22 +398,22 @@ lemma STAmount.canonicalize_mNumericType (s result : STAmount) (mode : rounding_
     (hok : s.canonicalize mode = .ok result) : result.mNumericType = s.mNumericType := by
   rw [STAmount.canonicalize] at hok
   by_cases hint : s.integral = true
-  · rw [if_pos hint] at hok
+  · rw [ite_eq_left hint] at hok
     by_cases hz : (s.mValue == 0 || decide (s.mOffset ≤ -20)) = true
-    · rw [if_pos hz] at hok; rw [← Except.ok.inj hok]
-    · rw [if_neg hz] at hok
+    · rw [ite_eq_left hz] at hok; rw [← Except.ok.inj hok]
+    · rw [ite_eq_right hz] at hok
       by_cases hmoff : s.mOffset > s.mNumericType.maxOffset
-      · rw [if_pos hmoff] at hok; exact absurd hok (by simp)
-      · rw [if_neg hmoff] at hok
+      · rw [ite_eq_left hmoff] at hok; exact absurd hok (by simp)
+      · rw [ite_eq_right hmoff] at hok
         simp only [IntAmount.ofNumber] at hok
         cases hr : (Number.unchecked s.mIsNegative s.mValue s.mOffset).to_rep mode with
         | error e => rw [hr] at hok; exact absurd hok (by simp)
         | ok r =>
           rw [hr] at hok; simp only [] at hok
           by_cases hrng : r.magnitude > s.mNumericType.maxValue
-          · rw [if_pos hrng] at hok; exact absurd hok (by simp)
-          · rw [if_neg hrng] at hok; rw [← Except.ok.inj hok]
-  · rw [if_neg hint] at hok
+          · rw [ite_eq_left hrng] at hok; exact absurd hok (by simp)
+          · rw [ite_eq_right hrng] at hok; rw [← Except.ok.inj hok]
+  · rw [ite_eq_right hint] at hok
     cases hi : s.iou mode with
     | error e => rw [hi] at hok; exact absurd hok (by simp)
     | ok i => rw [hi] at hok; simp only [] at hok; rw [← Except.ok.inj hok]

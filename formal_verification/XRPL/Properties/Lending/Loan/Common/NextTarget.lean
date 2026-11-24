@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.TheoreticalMonotone
 import XRPL.Properties.Lending.Loan.Common.OverpaymentPrincipal
 import XRPL.Properties.Lending.Loan.Common.ScheduleComputes
@@ -419,9 +420,8 @@ private lemma Loan.tryOverpayment_next (l : Loan) (opc : PaymentComponents) (re 
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   rename_i _ rate hrate _ st hst _ th hth _ de hde _ rp0 hrp0 _ props hprops _ s1 hs1 _ s2 hs2 _ pin hpin _ gi hgi
     _ pmf hpmf _ s3 hs3 _ po hpo _ int hintr _ tvo htvo _ tvo' htvo' _ mfo hmfo _ s4 hs4 _ dl hdl _ io hio _ g hg
@@ -507,7 +507,7 @@ private lemma UnsettledPayment.applyOverpayment_nextShape (payment p : Unsettled
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first | exact hn | skip
+  all_goals try exact hn
   rename_i _ a' ha' hcond _ un hun _ ov hov hovp _ opc hopc hpd _ _ re hre _ am ham _ l' hl'
   have hpr : payment.loan.paymentRemaining ≠ 0 := by
     intro h0

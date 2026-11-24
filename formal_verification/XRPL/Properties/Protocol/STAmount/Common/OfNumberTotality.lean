@@ -4,10 +4,8 @@ import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
 
 /-! # The integral `ofNumber` path does not error
 
-Integral `STAmount.ofNumber` sends a sign-cleared value through `Number.to_rep`
-and repacks it with `STAmount.checked`. For a bounded value both steps succeed, and
-a whole value within the numeric type's bound is stored exactly, so `isRounded`
-is false on it. -/
+Integral `STAmount.ofNumber` succeeds on a bounded value. A whole value within the bound of the type is stored
+exactly, so `isRounded` is false on it. -/
 
 namespace XRPL.Model.Protocol
 
@@ -22,7 +20,7 @@ lemma Number.exponent_le_zero_of_cap (n : Number) (hnorm : n.isNormalized)
   · rw [hz]; decide
   · unfold Number.exponent
     by_cases hgt : n.mantissa_ > maxRep
-    · rw [if_pos hgt]
+    · rw [ite_eq_left hgt]
       by_contra hcon
       push Not at hcon
       have hexp_nn : (0 : ℤ) ≤ n.exponent_ := by omega
@@ -41,7 +39,7 @@ lemma Number.exponent_le_zero_of_cap (n : Number) (hnorm : n.isNormalized)
               mul_le_mul hm_ge hpow_ge1 (by norm_num) (by positivity)
       have : (9223372036854775808 : ℚ) ≤ 2 ^ 63 - 1 := le_trans hge hcap
       norm_num at this
-    · rw [if_neg hgt]
+    · rw [ite_eq_right hgt]
       by_contra hcon
       push Not at hcon
       have hm_nat : (1000000000000000000 : ℕ) ≤ n.mantissa_.toNat := by
@@ -78,17 +76,17 @@ lemma Number.to_rep_of_exponent_zero (n : Number) (mode : rounding_mode)
   unfold Number.to_repSpec
   simp only
   by_cases hz : (n.mantissa == 0) = true
-  · rw [if_pos hz, beq_iff_eq.mp hz]
-  · rw [if_neg hz, hneg]
-    simp only [Bool.false_eq_true, if_false]
-    rw [if_neg (show ¬ n.exponent < 0 by omega), if_pos (show n.exponent ≥ 0 by omega)]
+  · rw [ite_eq_left hz, beq_iff_eq.mp hz]
+  · rw [ite_eq_right hz, hneg]
+    simp only [Bool.false_eq_true, ite_false]
+    rw [ite_eq_right (show ¬ n.exponent < 0 by omega), ite_eq_left (show n.exponent ≥ 0 by omega)]
     have hgrow0 : growSpec n.mantissa n.exponent = .ok n.mantissa := by
-      rw [growSpec, if_neg (show ¬ n.exponent > 0 from by omega)]
+      rw [growSpec, ite_eq_right (show ¬ n.exponent > 0 from by omega)]
     rw [hgrow0]
     simp only
     rw [show Guard.new.round mode = -2 from by
       have := start_guard_round mode false; simpa using this]
-    rw [if_neg (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && n.mantissa % 2 == 1) = true
+    rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && n.mantissa % 2 == 1) = true
       from by simp)]
 
 /-- `Number.to_rep` succeeds on a nonnegative operand with nonpositive `Number.exponent`. The
@@ -103,13 +101,13 @@ lemma Number.to_rep_ok_of_nonneg_exp_nonpos (n : Number) (mode : rounding_mode)
   unfold Number.to_repSpec
   simp only
   by_cases hz : (n.mantissa == 0) = true
-  · exact ⟨0, by rw [if_pos hz]⟩
-  · rw [if_neg hz]
+  · exact ⟨0, by rw [ite_eq_left hz]⟩
+  · rw [ite_eq_right hz]
     have hD0_range := Number.mantissa_range_of_nonneg n hneg
     rw [hneg]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     have hge : ¬ n.exponent ≥ 0 := by omega
-    rw [if_pos hexplt, if_neg hge]
+    rw [ite_eq_left hexplt, ite_eq_right hge]
     simp only
     set sp := shiftSpec n.mantissa n.exponent Guard.new with hspdef
     have hDf : sp.1.toInt = n.mantissa.toInt / 10 ^ (-n.exponent).toNat := by
@@ -130,12 +128,12 @@ lemma Number.to_rep_ok_of_nonneg_exp_nonpos (n : Number) (mode : rounding_mode)
       rw [maxRep_val] at hle ⊢
       omega
     by_cases hb : (sp.2.round mode == 1 || sp.2.round mode == 0 && sp.1 % 2 == 1) = true
-    · rw [if_pos hb, if_neg (show ¬ sp.1 ≥ maxRep.toInt64 from fun hc => by
+    · rw [ite_eq_left hb, ite_eq_right (show ¬ sp.1 ≥ maxRep.toInt64 from fun hc => by
         have := Int64.le_iff_toInt_le.mp hc
         rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at this
         omega)]
       exact ⟨_, rfl⟩
-    · rw [if_neg hb]
+    · rw [ite_eq_right hb]
       exact ⟨_, rfl⟩
 
 /-- The integral `STAmount.canonicalize` succeeds within the type's own bound. An offset-`0`,
@@ -146,11 +144,11 @@ lemma STAmount.canonicalize_integral_ok_of_le (s : STAmount) (mode : rounding_mo
     (hvmax : s.mValue.toNat ≤ s.mNumericType.maxValue.toNat)
     (hmaxoff : (0 : Int) ≤ s.mNumericType.maxOffset) :
     ∃ result, s.canonicalize mode = .ok result := by
-  rw [STAmount.canonicalize, if_pos hint]
+  rw [STAmount.canonicalize, ite_eq_left hint]
   by_cases hz : (s.mValue == 0 || decide (s.mOffset ≤ -20)) = true
-  · exact ⟨_, by rw [if_pos hz]⟩
-  · rw [if_neg hz,
-        if_neg (show ¬ s.mOffset > s.mNumericType.maxOffset from by rw [hoff]; omega)]
+  · exact ⟨_, by rw [ite_eq_left hz]⟩
+  · rw [ite_eq_right hz,
+        ite_eq_right (show ¬ s.mOffset > s.mNumericType.maxOffset from by rw [hoff]; omega)]
     simp only [IntAmount.ofNumber]
     set u := Number.unchecked s.mIsNegative s.mValue s.mOffset with hu
     have hun : u.negative_ = false := hsneg
@@ -160,16 +158,16 @@ lemma STAmount.canonicalize_integral_ok_of_le (s : STAmount) (mode : rounding_mo
       omega
     have hexp : u.exponent = 0 := by
       unfold Number.exponent
-      rw [if_neg hnotgt]
+      rw [ite_eq_right hnotgt]
       exact hoff
     rw [Number.to_rep_of_exponent_zero u mode hun hexp]
     simp only []
     -- the stored magnitude is the record's own value
     have hm : u.mantissa.toInt = (s.mValue.toNat : ℤ) := by
       unfold Number.mantissa
-      rw [if_neg hnotgt, if_neg (by rw [hun]; decide), hum]
+      rw [ite_eq_right hnotgt, ite_eq_right (by rw [hun]; decide), hum]
       exact UInt64.toInt64_toInt_of_lt _ (by rw [maxRep_val] at hv; omega)
-    rw [if_neg (show ¬ u.mantissa.magnitude > s.mNumericType.maxValue from by
+    rw [ite_eq_right (show ¬ u.mantissa.magnitude > s.mNumericType.maxValue from by
       rw [Int64.magnitude_eq]
       rw [gt_iff_lt, UInt64.lt_iff_toNat_lt, hm, Int.natAbs_natCast]
       have hlt64 : s.mValue.toNat < 2 ^ 64 := by
@@ -192,16 +190,16 @@ lemma STAmount.ofNumber_integral_reduce (nt : NumericType) (n : Number)
   have hrrng := Number.to_rep_nonneg_range n mode r hneg hr
   refine ⟨r, hr, hrrng.1, toUInt64_toNat_le_maxRep r hrrng.1 hrrng.2, ?_⟩
   unfold STAmount.ofNumber
-  rw [if_pos hnt]
+  rw [ite_eq_left hnt]
   set neg : Bool := decide (n.signum < 0) with hneg_def
   set working : Number := if neg then n.operator_neg else n with hw_def
   have hnegf : neg = false := by
     rw [hneg_def]
     apply decide_eq_false
     unfold Number.signum
-    rw [hneg]; simp only [Bool.false_eq_true, if_false]
+    rw [hneg]; simp only [Bool.false_eq_true, ite_false]
     split <;> norm_num
-  have hwn : working = n := by rw [hw_def, hnegf]; simp only [Bool.false_eq_true, if_false]
+  have hwn : working = n := by rw [hw_def, hnegf]; simp only [Bool.false_eq_true, ite_false]
   rw [hwn, hr]
   simp only []
   rw [hnegf, Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hrrng.1)), ok_bind]

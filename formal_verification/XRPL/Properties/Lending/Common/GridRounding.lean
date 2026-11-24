@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Grid
 import XRPL.Properties.Lending.Common.SumRounding
 import XRPL.Properties.Protocol.STAmount.Common.Representable
@@ -89,11 +90,11 @@ lemma STAmount.ofNumber_fractional_of_trailing_zeros_neg (n : Number) (mode : ro
   have hwneg : n.operator_neg.negative_ = false := by unfold Number.operator_neg; simp [hm0, hneg]
   have hnorm := normalizeToRange_16_exact n.operator_neg mode (by rw [hwm]; exact hlo') (by rw [hwm]; exact hhi')
     (by rw [hwm]; exact hmod) (by rw [hwe]; unfold minExponent; omega) (by rw [hwe]; unfold maxExponent; omega)
-  rw [hwneg, if_neg (by decide), hwm, hwe] at hnorm
+  rw [hwneg, ite_eq_right (by decide), hwm, hwe] at hnorm
   have hsig : decide (n.signum < 0) = true := by rw [Number.signum_neg_decide, hneg]
   unfold STAmount.ofNumber
-  simp only [hsig, if_true]
-  rw [if_neg (by decide)]
+  simp only [hsig, ite_true]
+  rw [ite_eq_right (by decide)]
   rw [show n.operator_neg.normalizeToRange kMinValue kMaxValue mode =
     n.operator_neg.normalizeToRange cMinValue cMaxValue mode from rfl, hnorm]
   simp only
@@ -125,16 +126,16 @@ lemma STAmount.ofNumber_frac_offset (r : Number) (mode : rounding_mode) (result 
   have hw_exp : working.exponent_ = r.exponent_ := by
     rw [hw_def]; rcases neg with _ | _
     · simp
-    · simp only [if_true]; unfold Number.operator_neg; rw [if_neg (by simpa using hr_ne)]
+    · simp only [ite_true]; unfold Number.operator_neg; rw [ite_eq_right (by simpa using hr_ne)]
   have hw_neg : working.negative_ = false := by
     rw [hw_def, hneg_def, Number.signum_neg_decide]
     by_cases hrn : r.negative_ = true
-    · rw [if_pos hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
-    · rw [if_neg hrn]; simpa using hrn
+    · rw [ite_eq_left hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
+    · rw [ite_eq_right hrn]; simpa using hrn
   have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hr_lo
   have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hr_hi
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
+  rw [ite_eq_right (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -307,12 +308,12 @@ lemma sumRoundAndSubtract_onGrid (A c : Number) (b : Int) (nt : NumericType) (mo
     (hm : st.toNumber mode' = .ok m) : Number.OnGrid b m := by
   unfold sumRoundAndSubtract at h
   by_cases hi : nt.isIntegral = true
-  · rw [if_pos hi] at h
+  · rw [ite_eq_left hi] at h
     obtain ⟨x, hx, h⟩ := bind_ok_peel _ _ _ h
     obtain rfl : x = st := Except.ok.inj h
     rw [hint hi]
     exact STAmount.ofNumber_integral_onGrid nt c _ mode' x m hi hx hm
-  · rw [if_neg hi] at h
+  · rw [ite_eq_right hi] at h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨E, hE, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨sum, -, h⟩ := bind_ok_peel _ _ _ h

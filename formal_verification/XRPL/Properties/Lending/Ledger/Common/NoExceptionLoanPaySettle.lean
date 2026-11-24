@@ -1,11 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.PaymentSettles
 import XRPL.Properties.Lending.Loan.Common.DuePayment
 
 /-! # The settlement of a LoanPay never ends in an arithmetic error
 
-Once its instalments passed, a payment settles with the vault and the broker. On a reachable ledger every sum of
-the settlement computes while the credit and the fee fit the asset. The payment then ends in a result code, unless
-one of its three lawfulness re-checks fails. -/
+On a reachable ledger every sum of the settlement computes while the credit and the fee fit the asset. The payment
+then ends in a result code unless one of its three lawfulness re-checks fails. -/
 
 namespace XRPL.Model.Lending
 
@@ -214,7 +214,7 @@ lemma LendingLedger.Reachable.pay_settle_error {l : LendingLedger} (hr : l.Reach
   have hAAN := q.pool.wf.assetsAvailable_norm
   have hAA0 : 0 ≤ q.pool.assetsAvailable.toRat := q.pool.exact.assetsAvailable_nonneg
   have hint0 : q.pool.numericType.isIntegral = true → q.pool.baseExponent = 0 := by
-    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [if_pos h]
+    intro h; unfold Vault.baseExponent NumericType.baseExponent; rw [ite_eq_left h]
   have hATfit : q.pool.numericType.isIntegral = true → q.pool.assetsAvailable.toRat +
       q.pool.assetsDeployed.toRat + q.amounts.interestPaid.toRat + 1 ≤ q.pool.numericType.maxValue.toNat := by
     intro hint

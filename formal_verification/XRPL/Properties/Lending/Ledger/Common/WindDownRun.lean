@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.WindDownLoans
 import XRPL.Properties.Lending.Ledger.Common.HolderRedeemIntegral
 import XRPL.Properties.Lending.Ledger.Common.ShareSum
@@ -8,9 +9,8 @@ import XRPL.Properties.Lending.Ledger.Common.WindDownProofs
 
 /-! # Winding a vault down to its deletion
 
-Once every loan is closed, the brokers leave, each holder but the last redeems all its shares, the last holder
-takes all the cash, and VaultDelete finds nothing left. On an MPT vault of `2.5·10^17` units or more the last holder
-first redeems all but a few shares, then the rest. -/
+Once every loan is closed, the brokers leave, the holders redeem their shares, the last one takes all the cash, and
+VaultDelete finds nothing left. On an MPT vault of `2.5·10^17` units or more the last holder redeems in two steps. -/
 
 namespace XRPL.Model.Lending
 
@@ -37,7 +37,7 @@ private lemma LendingLedger.sharesAmount (l : LendingLedger) (h : Nat) (x : Numb
   have hcan : isCanonicalAmount S .int64 = true := by
     unfold isCanonicalAmount
     have hint : NumericType.int64.isIntegral = true := by decide
-    rw [hint, if_pos rfl]
+    rw [hint, ite_eq_left rfl]
     have hr' := hsic.in_range
     rw [hty] at hr'
     simp [hty, hsic.offset_zero, hr']
@@ -206,15 +206,12 @@ structure LendingLedger.HolderPhase (l : LendingLedger) : Prop where
   noLoans : ∀ i, l.loan? i = none
   sum : l.SharesSum
 
-/-- A wind-down makes no deposit, so it keeps the holders' shares adding up to SharesTotal. -/
+/-- A wind-down keeps the holders' shares adding up to SharesTotal. -/
 private lemma LendingLedger.WindsDownWhole.sharesSum {l l' : LendingLedger} {txs : List LendingTx} (hr : l.Reachable)
     (hl : l.SharesSum) (h : l.WindsDownWhole txs l') : l'.SharesSum := by
   induction h with
   | refl => exact hl
-  | step tx hprev hw ha ih =>
-    refine ih.step_of_not_deposit (hprev.reachable hr) (fun h amount isDonation he => ?_) ha
-    subst he
-    exact hw
+  | step tx hprev _ ha ih => exact ih.step (hprev.reachable hr) (hprev.reachable hr).sharesNonneg ha
 
 /-- With no loan left nothing is lent and nothing is lost. -/
 private lemma LendingLedger.HolderPhase.idle {l : LendingLedger} (hP : l.HolderPhase) :
@@ -267,7 +264,7 @@ private lemma LendingLedger.HolderPhase.step {l l' : LendingLedger} {h : Nat} {a
   exact ⟨⟨hP.reachable.apply hok, by rw [hnd']; exact hP.notDeleted,
     by rw [Vault.phase_of_schedule hsch', hnow']; exact hP.redemption,
     fun i => by unfold LendingLedger.loan?; rw [hloans']; exact hP.noLoans i,
-    hP.sum.step_of_not_deposit hP.reachable (fun _ _ _ he => by cases he) hok⟩, hbr', hnt'⟩
+    hP.sum.step hP.reachable hP.reachable.sharesNonneg hok⟩, hbr', hnt'⟩
 
 /-- A holder that owns every share is the sole shareholder. -/
 private lemma LendingLedger.sole_of_all {l : LendingLedger} (hr : l.Reachable) {h : Nat}
@@ -320,7 +317,7 @@ private lemma List.sum_le_getD (L : List ℚ) {i : Nat} (h : ∀ j, j ≠ i → 
     cases i with
     | zero =>
       have hL : L.sum ≤ 0 := by
-        refine le_trans (List.sum_le_card_nsmul _ 0 fun x hx => ?_) (by simp)
+        refine le_trans (List.sum_le_length_nsmul _ 0 fun x hx => ?_) (by simp)
         obtain ⟨k, hk, rfl⟩ := List.getElem_of_mem hx
         have := h (k + 1) (by omega)
         rw [List.getD_cons_succ, List.getD_eq_getElem _ _ hk] at this
@@ -635,10 +632,10 @@ private lemma LendingLedger.HolderPhase.delete_brokers :
       have hbr : (l.commitBroker { index := j, broker := none }).brokers = l.brokers.set j none := by
         show storeSlot l.brokers j none = _
         unfold storeSlot
-        rw [if_pos hjl]
+        rw [ite_eq_left hjl]
       have hP' : (l.commitBroker { index := j, broker := none }).HolderPhase :=
         ⟨hP.reachable.apply hok, hP.notDeleted, hP.redemption, hP.noLoans,
-          hP.sum.step_of_not_deposit hP.reachable (fun _ _ _ he => by cases he) hok⟩
+          hP.sum.step hP.reachable hP.reachable.sharesNonneg hok⟩
       -- the other brokers keep their cover
       have hmax' : ∀ (k : Nat) (b' : LoanBroker), (l.commitBroker { index := j, broker := none }).broker? k = some b' →
           b'.coverAvailable.toRat ≤ (l.commitBroker { index := j, broker := none }).vault.numericType.maxAmount := by
@@ -733,7 +730,6 @@ lemma LendingLedger.wind_down_proof (l : LendingLedger) (hr : l.Reachable) (hnd 
       e.loan.paymentRemaining ≠ 0 → l.NotCoarsened)
     (hca : ∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
       b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount)
-    (hsum : l.SharesSum)
     (hdust : ∀ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' → (∀ i, l'.loan? i = none) →
       l'.NoDust) :
     ∃ (txs : List LendingTx) (l' : LendingLedger), LendingLedger.Reaches l txs l' ∧ (∀ tx ∈ txs, tx.isWindDown = true) ∧
@@ -741,7 +737,7 @@ lemma LendingLedger.wind_down_proof (l : LendingLedger) (hr : l.Reachable) (hnd 
   have hP : l.LoanPhase s := ⟨hr, hnd, hs, hpast, hgrace, hpending, hactive, hca⟩
   obtain ⟨txs₁, l₁, hw₁, hP₁, hnone⟩ := LendingLedger.LoanPhase.close_all _ l hP rfl
   have hH₁ : l₁.HolderPhase := ⟨hP₁.reachable, hP₁.notDeleted,
-    Vault.phase_past_redemption l₁.vault s hP₁.schedule l₁.now hP₁.past, hnone, hw₁.sharesSum hr hsum⟩
+    Vault.phase_past_redemption l₁.vault s hP₁.schedule l₁.now hP₁.past, hnone, hw₁.sharesSum hr hr.sharesSum⟩
   obtain ⟨txs₂, l₂, hw₂, hH₂, hb₂⟩ := LendingLedger.HolderPhase.delete_brokers _ l₁ hH₁ rfl hP₁.cover
   obtain ⟨txs₃, l₃, hw₃, hwt₃, hH₃, hS₃, hbr₃⟩ :=
     LendingLedger.HolderPhase.redeem_all hdust _ (txs₁ ++ txs₂) l₂ (hw₁.trans hw₂) hH₂ rfl

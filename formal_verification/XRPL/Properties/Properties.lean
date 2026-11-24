@@ -11,6 +11,7 @@ import XRPL.Properties.Protocol.STAmount.FromNumber.Rounds
 import XRPL.Properties.Protocol.STAmount.Constructors.FromMantissa
 import XRPL.Properties.Protocol.STAmount.Range.Success
 import XRPL.Properties.Protocol.STAmount.Range.Overflow
+import XRPL.Properties.Protocol.STAmount.Range.Wrap
 import XRPL.Properties.Protocol.STAmount.Compare.Compare
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
 import XRPL.Properties.Vault.AssociateAsset

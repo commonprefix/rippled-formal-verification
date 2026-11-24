@@ -19,12 +19,12 @@ lemma STAmount.operator_add_underflow_truth_small_iou_proof (v1 v2 result : STAm
     rcases hb : STAmount.areComparable v1 v2 with _ | _
     · rw [STAmount.operator_add, hb] at hok; simp at hok
     · rfl
-  rw [STAmount.operator_add, if_neg (by rw [hcmp]; decide)] at hok
+  rw [STAmount.operator_add, ite_eq_right (by rw [hcmp]; decide)] at hok
   have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
   have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
   have hint1 : ¬ v1.integral = true := by
     unfold STAmount.integral; rw [hc1.is_fractional]; decide
-  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), if_neg hint1,
+  rw [ite_eq_right (by simpa using hv2ne), ite_eq_right (by simpa using hv1ne), ite_eq_right hint1,
     STAmount.iou_canonical_id v1 mode hc1, STAmount.iou_canonical_id v2 mode hc2] at hok
   simp only at hok
   set i1 : IOUAmount := ⟨v1.signedDrops.toInt64, v1.mOffset⟩ with hi1

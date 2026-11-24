@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaySteps
 import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 

@@ -45,10 +45,14 @@ def STAmount.toRat (s : STAmount) : ℚ :=
     else
       mkRat (sign * m) ((10 : Nat) ^ (-s.mOffset).toNat)
 
+def STAmount.signedDropsChecked (s : STAmount) : Except Error Int64 := do
+  let magnitude ← s.mValue.toInt64Checked
+  return if s.mIsNegative then -magnitude else magnitude
+
 -- Integral (XRP/MPT) as a plain int64 amount.
 def STAmount.intAmount (s : STAmount) : Except Error IntAmount :=
   if s.integral then do
-    let value ← s.signedDrops.toInt64Checked
+    let value ← s.signedDropsChecked
     return { value }
   else .error .cannotConvert
 
@@ -56,9 +60,9 @@ def STAmount.intAmount (s : STAmount) : Except Error IntAmount :=
 def STAmount.iou (s : STAmount) (mode : rounding_mode) : Except Error IOUAmount :=
   if s.integral then
     .error .cannotConvert
-  else
-    let mantissa := s.mValue.toInt64
-    IOUAmount.ofMantissaExp (if s.mIsNegative then -mantissa else mantissa) s.mOffset mode
+  else do
+    let mantissa ← s.signedDropsChecked
+    IOUAmount.ofMantissaExp mantissa s.mOffset mode
 
 def STAmount.toNumber (s : STAmount) (mode : rounding_mode) : Except Error Number :=
   if s.integral then
@@ -97,9 +101,11 @@ def STAmount.unchecked (mNumericType : NumericType) (mValue : UInt64) (mOffset :
     (mIsNegative : Bool) : STAmount :=
   { mNumericType, mValue, mOffset, mIsNegative }
 
-def STAmount.uncheckedFromInt64 (nt : NumericType) (v : Int64) (offset : Int) : STAmount :=
-  if v < 0 then STAmount.unchecked nt v.magnitude offset true
-  else STAmount.unchecked nt v.magnitude offset false
+def STAmount.uncheckedFromInt64 (nt : NumericType) (v : Int64) (offset : Int) : Except Error STAmount :=
+  if v < 0 then do
+    let negated ← v.negChecked
+    return STAmount.unchecked nt negated.toUInt64 offset true
+  else .ok (STAmount.unchecked nt v.toUInt64 offset false)
 
 def STAmount.checked (nt : NumericType) (mValue : UInt64) (mOffset : Int) (mIsNegative : Bool)
     (mode : rounding_mode) : Except Error STAmount :=
@@ -111,9 +117,9 @@ def STAmount.zero (nt : NumericType) : STAmount :=
   | .ok s => s
   | .error _ => STAmount.unchecked nt 0 0 false
 
-def STAmount.ofIOUAmount (a : IOUAmount) (mode : rounding_mode) : Except Error STAmount :=
-  let neg := a.signum < 0
-  (STAmount.unchecked .fractional a.mantissa_.magnitude a.exponent_ neg).canonicalize mode
+def STAmount.ofIOUAmount (a : IOUAmount) (mode : rounding_mode) : Except Error STAmount := do
+  let raw ← STAmount.uncheckedFromInt64 .fractional a.mantissa_ a.exponent_
+  raw.canonicalize mode
 
 def STAmount.ofNumber (nt : NumericType) (n : Number) (mode : rounding_mode)
     : Except Error STAmount :=
@@ -185,10 +191,10 @@ def STAmount.operator_add (v1 v2 : STAmount) (mode : rounding_mode)
     if v1.integral && v2.mValue > maxRep then .error .overflow
     else STAmount.checked v1.mNumericType v2.mValue v2.mOffset v2.mIsNegative mode
   else if v1.integral then do
-    let drops1 ← v1.signedDrops.toInt64Checked
-    let drops2 ← v2.signedDrops.toInt64Checked
+    let drops1 ← v1.signedDropsChecked
+    let drops2 ← v2.signedDropsChecked
     let total ← drops1.addChecked drops2
-    let sum := STAmount.uncheckedFromInt64 v1.mNumericType total 0
+    let sum ← STAmount.uncheckedFromInt64 v1.mNumericType total 0
     if v1.mNumericType == .native then .ok sum else sum.canonicalize mode
   else
     match v1.iou mode with

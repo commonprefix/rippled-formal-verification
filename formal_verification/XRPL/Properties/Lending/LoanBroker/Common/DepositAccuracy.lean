@@ -26,7 +26,7 @@ lemma LoanBroker.coverDeposit_integral_amount_proof (lb : LoanBroker) (pool : α
   obtain ⟨aN, hnum, hs, -⟩ := LoanBroker.roundedCoverAmount_ok lb pool amount r hrr
   obtain ⟨hv, hn⟩ := STAmount.CanonicalOrZero.toNumber_exact (Or.inl hc) aN hnum
   unfold sumRoundAndSubtract at hs
-  rw [if_pos hint] at hs
+  rw [ite_eq_left hint] at hs
   simp only [bind_pure] at hs
   have hic := (hc.1 (by unfold STAmount.integral; rw [hat]; exact hint)).1
   have hden : aN.toRat.den = 1 := by rw [hv]; exact STAmount.IntegralCanonical.den_eq_one amount hic

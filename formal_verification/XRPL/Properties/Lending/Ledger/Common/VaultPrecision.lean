@@ -147,14 +147,14 @@ private lemma Vault.isRounded_false_of_units (v : Vault) (x : Number) (hn : x.is
   cases hnt : v.numericType with
   | integral mv mo ms msh =>
     rw [hnt] at hx hbound hAD
-    simp only [NumericType.isIntegral, if_true, zpow_zero, mul_one] at hx hbound
+    simp only [NumericType.isIntegral, ite_true, zpow_zero, mul_one] at hx hbound
     rcases hAD with h0 | ⟨hmo, k, hk, hk63, hk'⟩
     · exact Or.inl (le_antisymm (h0 ▸ hle) hnn)
     · have hnk : n ≤ k := by exact_mod_cast (show (n : ℚ) ≤ k by rw [← hx, ← hk']; exact hle)
       exact Or.inr ⟨hmo, n, le_trans hnk hk, le_trans hnk hk63, hx⟩
   | fractional =>
     rw [hnt] at hx hbound
-    simp only [NumericType.isIntegral, Bool.false_eq_true, if_false] at hx hbound
+    simp only [NumericType.isIntegral, Bool.false_eq_true, ite_false] at hx hbound
     have hpos : (0 : ℚ) < 10 ^ (-(v.scale.toNat : ℤ)) := by positivity
     have hn16 : n ≤ 10 ^ 16 := by
       have : (n : ℚ) ≤ 10 ^ 16 := le_of_mul_le_mul_right (by rw [← hx]; exact hbound) hpos

@@ -2,7 +2,7 @@ import XRPL.Properties.Lending.Ledger.Common.SettledVault
 import XRPL.Properties.Lending.Ledger.Common.BaseGrid
 import XRPL.Properties.Lending.Ledger.Common.Exits
 import XRPL.Properties.Lending.Ledger.Common.RecheckVault
-import XRPL.Properties.Lending.Ledger.Common.SharesNonneg
+import XRPL.Properties.Lending.Ledger.Common.ShareSum
 import XRPL.Properties.Lending.Ledger.Common.SumFacts
 import XRPL.Properties.Lending.Ledger.Common.ReachableFromIn
 import XRPL.Properties.Lending.Ledger.Common.WithdrawHolder
@@ -97,7 +97,7 @@ lemma LendingLedger.payoff_exit_settled_proof (l : LendingLedger) (hr : l.Reacha
   have hcan : isCanonicalAmount S .int64 = true := by
     unfold isCanonicalAmount
     have hint : NumericType.int64.isIntegral = true := by decide
-    rw [hint, if_pos rfl]
+    rw [hint, ite_eq_left rfl]
     have hr' := hsic.in_range
     rw [hty] at hr'
     simp [hty, hsic.offset_zero, hr']

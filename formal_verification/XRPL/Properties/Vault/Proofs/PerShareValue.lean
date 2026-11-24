@@ -6,10 +6,8 @@ import XRPL.Properties.Vault.Proofs.MaxValueFits
 
 /-! # Per-share value under each operation
 
-On an Open-zone vault the net asset value is the cash, and every operation updates the cash and the
-share total exactly. A deposit then takes the issued shares' worth less at most one base step, and a
-withdrawal or a clawback pays at most the burned shares' worth, plus `sharesε` of it and half a unit of
-its last digit. -/
+On an Open-zone vault a deposit takes the issued shares' worth less at most one base step, and a withdrawal or a
+clawback pays at most the burned shares' worth plus `sharesε` of it and half a unit of its last digit. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -138,8 +136,7 @@ lemma Vault.OpenZone.deposit_donation_no_dilution {v : Vault} (hz : v.OpenZone) 
   obtain ⟨hAA', hz'⟩ := Vault.deposit_openZone v amountDeposit true t hpos hcanon hty hz r hok
   have hs0 : r.shares.toRat = 0 := by
     rw [hrsh]; exact STAmount.zero_toRat _
-  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit true t hpos hcanon hty r hok (by
-    rw [hs0, add_zero, RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]; exact v.sharesTotal_le_maxRep)
+  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit true t hpos hcanon hty r hok
   rw [hs0, add_zero] at hST'
   refine ⟨?_, by exact_mod_cast hST'⟩
   rw [hz.withdrawNav_eq, hz'.withdrawNav_eq, hAA', hras]

@@ -97,7 +97,7 @@ private lemma LoanBroker.canDelete_loanCount {α : Type} [AssetPool α] (lb : Lo
     (h : lb.canDelete pool = .ok .tesSUCCESS) : lb.loanCount = 0 := by
   unfold LoanBroker.canDelete at h
   by_contra hne
-  rw [if_pos (by simpa using hne)] at h
+  rw [ite_eq_left (by simpa using hne)] at h
   cases h
 
 /-- A broker transaction adds a broker without debt or loans at the end, rewrites a broker keeping its

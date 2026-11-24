@@ -5,13 +5,13 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-def secondsInYear : Number := Number.ofInt64 31_536_000
+def secondsInYear : Number := Number.ofInt64 31_536_000 .to_nearest
 
 -- XLS-66 (1): annual rate prorated to the interval
 def loanPeriodicRate (interestRate : TenthBips32) (paymentInterval : UInt32)
     : Except Error Number := do
   let paymentIntervalInt64 := paymentInterval.toInt64
-  let tenthBips ← tenthBipsOfValue (Number.ofInt64 paymentIntervalInt64) interestRate .to_nearest
+  let tenthBips ← tenthBipsOfValue (Number.ofInt64 paymentIntervalInt64 .to_nearest) interestRate .to_nearest
   tenthBips.operator_div secondsInYear .to_nearest
 
 -- XLS-66 (16): late payment penalty interest. The late rate is calculated over the number of seconds overdue.
@@ -36,8 +36,9 @@ def loanAccruedInterest (principalOutstanding periodicRate : Number)
   let secondsSinceLastPayment ← now.subChecked lastPaymentDate
 
   let interestPerInterval ← principalOutstanding.operator_mul periodicRate .to_nearest
-  let numerator ← interestPerInterval.operator_mul (Number.ofInt64 secondsSinceLastPayment.toInt64) .to_nearest
-  numerator.operator_div (Number.ofInt64 paymentInterval.toInt64) .to_nearest
+  let numerator ← interestPerInterval.operator_mul
+    (Number.ofInt64 secondsSinceLastPayment.toInt64 .to_nearest) .to_nearest
+  numerator.operator_div (Number.ofInt64 paymentInterval.toInt64 .to_nearest) .to_nearest
 
 -- XLS-66 (27)+(28): early payoff interest = accrued interest + prepayment (close-rate) penalty
 def computeFullPaymentInterest (theoreticalPrincipalOutstanding periodicRate : Number)
@@ -58,10 +59,10 @@ def powerMinusOneLoop (rate : Number) (paymentsRemaining index : Nat)
   if h : index < paymentsRemaining then
     let currentTerm ← currentTerm.operator_mul rate .to_nearest
     let termsLeft ← (paymentsRemaining - index).toInt64Checked
-    let currentTerm ← currentTerm.operator_mul (Number.ofInt64 termsLeft) .to_nearest
+    let currentTerm ← currentTerm.operator_mul (Number.ofInt64 termsLeft .to_nearest) .to_nearest
 
     let termIndex ← (index + 1).toInt64Checked
-    let currentTerm ← currentTerm.operator_div (Number.ofInt64 termIndex) .to_nearest
+    let currentTerm ← currentTerm.operator_div (Number.ofInt64 termIndex .to_nearest) .to_nearest
     let nextSum ← runningSum.operator_add currentTerm .to_nearest
 
     if nextSum.operator_eq runningSum then return runningSum
@@ -85,9 +86,9 @@ def computePowerMinusOneHybrid (rate paymentsRemainingNum : Number) (paymentsRem
 
   let cancellationThreshold ← Number.from_rep 1 (-9) largeRange.min largeRange.max .to_nearest
   if nRate.operator_ge cancellationThreshold then
-    let one := Number.ofInt64 1
+    let one := Number.ofInt64 1 .to_nearest
     let base ← one.operator_add rate .to_nearest
-    let raised ← Number.power base paymentsRemaining.toNat
+    let raised ← Number.power base paymentsRemaining.toNat .to_nearest
     raised.operator_sub one .to_nearest
   else
     computePowerMinusOne rate paymentsRemainingNum paymentsRemaining

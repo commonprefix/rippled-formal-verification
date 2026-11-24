@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.ManageReachable
 import XRPL.Properties.Lending.Ledger.Common.AssetsTotalSteps
 
@@ -37,7 +38,7 @@ private lemma roundDown_shape (sum sum' : Number) (E : Int) (hsn : sum.isNormali
   simp only at h
   have hretf := STAmount.ofNumber_fractional_fczr sum _ ret hret
   have hret_int : ret.integral = false := by unfold STAmount.integral; rw [hretf.1]; rfl
-  rw [if_neg (by rw [hret_int]; decide)] at h
+  rw [ite_eq_right (by rw [hret_int]; decide)] at h
   cases hrd : STAmount.roundToExponent ret E .downward with
   | error e => rw [hrd] at h; cases h
   | ok rd =>
@@ -49,7 +50,7 @@ private lemma roundDown_shape (sum sum' : Number) (E : Int) (hsn : sum.isNormali
   · -- a zero 16-digit amount comes from a sum too small to reach the scale
     have hrr : rd = ret := by
       unfold STAmount.roundToExponent at hrd
-      simp only [hret_int, Bool.false_eq_true, if_false, STAmount.isZero, hrz, beq_self_eq_true, if_true,
+      simp only [hret_int, Bool.false_eq_true, ite_false, STAmount.isZero, hrz, beq_self_eq_true, ite_true,
         Except.ok.injEq] at hrd
       exact hrd.symm
     have hs'0 : sum'.toRat = 0 := by rw [hv, hrr, STAmount.toRat_eq_zero_of_mValue_zero ret hrz]
@@ -248,7 +249,7 @@ private lemma sumRoundAndSubtract_credit_core (A c : Number) (b : Int) (st : STA
   obtain ⟨-, hcrx⟩ := sumRoundAndSubtract_downward_le A c b .fractional st hA hA0 hc hc0 ⟨by omega, by omega⟩ h
   obtain ⟨hcrv, hcrn⟩ := hcrx cr hcr
   unfold sumRoundAndSubtract at h
-  rw [if_neg (by decide)] at h
+  rw [ite_eq_right (by decide)] at h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨E, hE, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨sum, hsum, h⟩ := bind_ok_peel _ _ _ h
@@ -419,7 +420,7 @@ lemma sumRoundAndSubtract_credit_floor (A c : Number) (b : Int) (st : STAmount) 
           have : (0 : ℚ) < j := by exact_mod_cast (show 0 < j by omega)
           positivity
         linarith
-      simp only [hnz, Bool.false_eq_true, if_false] at he
+      simp only [hnz, Bool.false_eq_true, ite_false] at he
       cases hst' : STAmount.ofNumber .fractional a' .downward with
       | error err => rw [hst'] at he; simp [bind, Except.bind] at he
       | ok st' =>
@@ -444,7 +445,7 @@ lemma sumRoundAndSubtract_credit_exact_integral (A c : Number) (b : Int) (nt : N
   obtain ⟨hstle, hcrx⟩ := sumRoundAndSubtract_downward_le A c b nt st hA hA0 hc hc0 hb h
   obtain ⟨hcrv, hcrn⟩ := hcrx cr hcr
   unfold sumRoundAndSubtract at h
-  rw [if_pos hint] at h
+  rw [ite_eq_left hint] at h
   obtain ⟨x, hx, h⟩ := bind_ok_peel _ _ _ h
   obtain rfl : x = st := Except.ok.inj h
 

@@ -3,9 +3,8 @@ import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.Nearest
 
 /-! # `operator_sub` rounds to a neighbouring `Number`
 
-`x - y` is computed as `x + (-y)`. The result is the largest `Number` at or below the exact value (`downward`), the
-smallest at or above it (`upward`), the one of these two nearer zero (`towards_zero`), or either of them
-(`to_nearest`). `downward` and `upward` assume a nonzero result, since a value too small for a `Number` becomes zero. -/
+`x - y` is `x + (-y)`, so the result is the neighbouring `Number` on the side the mode asks for, or either neighbour
+in `to_nearest`. `downward` and `upward` assume a nonzero result. -/
 
 namespace XRPL.Model.Protocol
 

@@ -8,17 +8,8 @@ namespace XRPL.Model.Protocol
 
 /-! # `divQuotient128` correctness
 
-The staged division quotient `divQuotient128 xm ym xe ye` expands the numerator
-by `10^17` (Stage 1), refines a nonzero remainder by a further `10^5`
-(Stage 2, total factor `10^22`), and reports whether any residual survives
-(Stage 3, the `dropped` sticky flag).
-
-The key property: `xm · 10^N = zm128 · ym + r` with `0 ≤ r < ym`, `N ∈ {17, 22}`,
-`ze = xe - ye - N`, and `dropped = true ↔ r ≠ 0`. This means
-`|x/y| = (zm128 + r/ym) · 10^ze` with the sticky flag exactly tracking `r ≠ 0`.
-When the Stage-2 correction is zero (`N = 17` with `r ≠ 0` possible), the
-residual is tiny: `r · 10^5 < ym`, so `δ = r/ym < 10⁻⁵`. The
-`doNormalize128` lemmas need this as their `δ·10^20 ≤ M` hypothesis. -/
+The division quotient satisfies `xm · 10^N = zm128 · ym + r` with `0 ≤ r < ym` and `N` 17 or 22, and the `dropped`
+flag is set exactly when `r ≠ 0`. With `N = 17` the remainder is tiny: `r · 10^5 < ym`. -/
 
 abbrev divQuotientTail (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ)
     (xm ym : UInt64) (xe ye : Int) : Prop :=
@@ -36,7 +27,7 @@ private lemma divQuotient128_eq_rem_zero (xm ym : UInt64) (xe ye : Int)
       = .ok (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17, false) := by
   unfold divQuotient128
   dsimp only
-  rw [BitVec.mulChecked_of_lt hnum, ok_bind, if_neg hrem]
+  rw [BitVec.mulChecked_of_lt hnum, ok_bind, ite_eq_right hrem]
   rfl
 
 private lemma divQuotient128_eq_corr_ne (xm ym : UInt64) (xe ye : Int)
@@ -57,7 +48,7 @@ private lemma divQuotient128_eq_corr_ne (xm ym : UInt64) (xe ye : Int)
          toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) % toUInt128 ym != 0) := by
   unfold divQuotient128
   dsimp only
-  rw [BitVec.mulChecked_of_lt hnum, ok_bind, if_pos hrem, BitVec.mulChecked_of_lt hpn, ok_bind, if_pos hcorr,
+  rw [BitVec.mulChecked_of_lt hnum, ok_bind, ite_eq_left hrem, BitVec.mulChecked_of_lt hpn, ok_bind, ite_eq_left hcorr,
     BitVec.mulChecked_of_lt hzm, ok_bind, BitVec.addChecked_of_lt hsum, ok_bind]
   rfl
 
@@ -72,7 +63,7 @@ private lemma divQuotient128_eq_corr_zero (xm ym : UInt64) (xe ye : Int)
          toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) % toUInt128 ym != 0) := by
   unfold divQuotient128
   dsimp only
-  rw [BitVec.mulChecked_of_lt hnum, ok_bind, if_pos hrem, BitVec.mulChecked_of_lt hpn, ok_bind, if_neg hcorr]
+  rw [BitVec.mulChecked_of_lt hnum, ok_bind, ite_eq_left hrem, BitVec.mulChecked_of_lt hpn, ok_bind, ite_eq_right hcorr]
   rfl
 
 /-- Sample runs of the other two branches. The `Div/Common/*/WitnessTrace.lean` witnesses cover

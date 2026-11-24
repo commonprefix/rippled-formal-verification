@@ -43,7 +43,7 @@ lemma LoanBroker.coverClawback_cover_pos (lb : LoanBroker) (pool : α) (amount :
   rw [Number.signum_eq _ lb.wf.coverAvailable_norm] at hpos
   show 0 < lb.coverAvailable.toRat
   by_contra h
-  rw [if_neg h] at hpos
+  rw [ite_eq_right h] at hpos
   split_ifs at hpos <;> omega
 
 /-- Along a broker-only history from an empty broker in the Open zone, the broker stays in the Open

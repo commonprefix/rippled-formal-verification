@@ -210,6 +210,6 @@ theorem RawVault.to_lawful_ok {rv : RawVault} {v : Vault}
 theorem RawVault.to_lawful_ok_of {rv : RawVault} (hwf : rv.WF) (hvalid : rv.Valid) :
     ∃ v, rv.to_lawful = .ok v ∧ v.toRawVault = rv := by
   refine ⟨⟨rv, hwf, hvalid⟩, ?_, rfl⟩
-  unfold RawVault.to_lawful; rw [dif_pos ⟨hwf, hvalid⟩]
+  unfold RawVault.to_lawful; rw [dite_eq_left ⟨hwf, hvalid⟩]
 
 end XRPL.Model.SingleAssetVault

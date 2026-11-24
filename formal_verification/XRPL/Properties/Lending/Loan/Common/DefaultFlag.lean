@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Frame
 import XRPL.Properties.Lending.Loan.Common.ReachableDefs
 import XRPL.Properties.Lending.Loan.Common.SetUpdates
@@ -94,7 +95,6 @@ private lemma UnsettledPayment.payInstalments_keepsDefault {α : Type} (amount :
     · simp only [pure, Except.pure, Except.ok.injEq] at h; subst h; exact Loan.KeepsDefault.refl _
     · obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨pc, -, h⟩ := bind_ok_peel _ _ _ h
-      try dsimp only at h
       obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       split at h
@@ -104,7 +104,6 @@ private lemma UnsettledPayment.payInstalments_keepsDefault {α : Type} (amount :
         obtain ⟨loan', hl, h⟩ := bind_ok_peel _ _ _ h
         obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
         obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
-        try dsimp only at h
         have hk := Loan.doPayment_keepsDefault _ _ _ hl
         split at h
         · simp only [pure, Except.pure, Except.ok.injEq] at h; subst h; exact hk
@@ -218,7 +217,7 @@ private lemma Loan.canManage_not_default (loan : Loan) (action : LoanManageActio
   unfold Loan.canManage at h
   cases hd : loan.isDefault
   · rfl
-  · simp only [hd, if_true] at h
+  · simp only [hd, ite_true] at h
     split_ifs at h <;> simp [pure, Except.pure] at h
 
 /-- A defaulted loan reachable from create has no payment left. -/

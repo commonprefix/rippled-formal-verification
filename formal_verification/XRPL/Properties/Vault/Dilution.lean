@@ -12,6 +12,7 @@ import XRPL.Properties.Vault.Proofs.DilutionReachWitness
 import XRPL.Properties.Vault.Proofs.MaxValueFits
 import XRPL.Properties.Vault.Proofs.Support.VaultBalances
 import XRPL.Properties.Vault.Proofs.PerShareFloor
+import XRPL.Properties.Vault.Proofs.DepositRunWitness
 
 /-! # Operations do not dilute shareholders
 
@@ -29,7 +30,6 @@ theorem Vault.no_dilution (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0) 
       amountDeposit.Canonical →
       amountDeposit.mNumericType = v.numericType →
       ∀ r : VaultWithAmounts, (v.deposit amountDeposit false t hpos).run = .ok (.ok r) →
-      (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 → -- the MPT maximum
       -- the charge rounds, so it matches the issued shares' worth only when that worth is a whole number of base
       -- units
       (∃ k : ℤ, v.idealChargeDeposit r.shares.toRat = k * 10 ^ v.baseExponent) →
@@ -57,8 +57,8 @@ theorem Vault.no_dilution (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0) 
       -- units
       (∃ k : ℤ, v.idealAssetsWithdraw waiveUnrealizedLoss r.shares.toRat = k * 10 ^ v.baseExponent) →
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
-  ⟨fun amountDeposit t hpos hcanon hty r hok hSsz hworth =>
-    Vault.Reachable.deposit_no_dilution_intended_proof v amountDeposit t t0 hpos hr hcanon hty r hok hSsz hworth,
+  ⟨fun amountDeposit t hpos hcanon hty r hok hworth =>
+    Vault.Reachable.deposit_no_dilution_intended_proof v amountDeposit t t0 hpos hr hcanon hty r hok hworth,
     fun amountDeposit t hpos hcanon hty r hok =>
       have h := Vault.deposit_donation_no_dilution_proof v amountDeposit t t0 hpos hr hcanon hty
         (Vault.maxValue_fits_of_canonical v amountDeposit hcanon hty) r hok
@@ -88,12 +88,11 @@ theorem Vault.no_dilution_deposit_grid_attained :
       amountDeposit.Canonical ∧
       amountDeposit.mNumericType = v.numericType ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
-      (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 ∧
       v.numericType.isIntegral = false ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
-  obtain ⟨v, amountDeposit, t, t0, hpos, r, hr, hcanon, hty, -, hok, hSsz, hiou, heq⟩ :=
+  obtain ⟨v, amountDeposit, t, t0, hpos, r, hr, hcanon, hty, -, hok, hiou, heq⟩ :=
     Vault.deposit_no_dilution_grid_witness
-  exact ⟨v, amountDeposit, t, t0, hpos, r, hr, hcanon, hty, hok, hSsz, hiou, heq⟩
+  exact ⟨v, amountDeposit, t, t0, hpos, r, hr, hcanon, hty, hok, hiou, heq⟩
 
 /-- Witness for `no_dilution` on a deposit: on a reachable integral vault a deposit charged half a unit below the issued
 share's worth (`2` for `2.5`) lowers per-share value. -/
@@ -103,7 +102,6 @@ theorem Vault.no_dilution_deposit_integral_attained :
       amountDeposit.Canonical ∧
       amountDeposit.mNumericType = v.numericType ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
-      (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 ∧
       v.numericType.isIntegral = true ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   Vault.deposit_no_dilution_integral_witness
@@ -161,5 +159,16 @@ theorem Vault.ReachableFromIn.dilution_attained :
       1 < n ∧
       w.withdrawNav / (w.toExact.sharesTotal : ℚ) < v.withdrawNav / (v.toExact.sharesTotal : ℚ) :=
   Vault.ReachableFromIn.dilution_witness
+
+/-- Witness for `ReachableFromIn.no_dilution`: on an IOU vault at Scale 2, 100 deposits of 0.03, each charge rounded
+down to the vault scale, lower per-share value `1/70 → 17/1200`. -/
+theorem Vault.ReachableFromIn.dilution_deposit_attained :
+    ∃ (v : Vault) (t0 t : UInt32) (n : ℕ) (w : Vault) (charged shares : ℚ),
+      Vault.Reachable v t0 ∧
+      Vault.DepositRun v t w charged shares n ∧
+      Vault.ReachableFromIn false v t w n ∧
+      1 < n ∧
+      w.withdrawNav / (w.toExact.sharesTotal : ℚ) < v.withdrawNav / (v.toExact.sharesTotal : ℚ) :=
+  Vault.ReachableFromIn.dilution_deposit_witness
 
 end XRPL.Model.SingleAssetVault

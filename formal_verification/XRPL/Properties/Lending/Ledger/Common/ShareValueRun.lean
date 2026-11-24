@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.ShareValueRunDefs
 import XRPL.Properties.Lending.Ledger.Common.ShareValueVaultSteps
 import XRPL.Properties.Lending.Ledger.Common.VaultAccounting
@@ -8,9 +9,8 @@ import XRPL.Properties.Lending.Loan.Common.ShareValue
 
 /-! # shareValue never falls over a sequence of transactions
 
-One transaction that is not an impair, a default of a loan that is not impaired or an exit of the only holder keeps
-shareValue = (AssetsTotal − LossUnrealized) / SharesTotal, on a vault that is not coarsened and when the shares a
-vault transaction moves are worth whole base units. The sequence row follows by induction over the run. -/
+On a vault that is not coarsened, every transaction but an impair, a default of an unimpaired loan or an exit of the
+only holder does not lower shareValue, when the shares it moves are worth whole base units. -/
 
 namespace XRPL.Model.Lending
 
@@ -161,10 +161,10 @@ after it, shares are left, and the shares a vault transaction moves are worth wh
 private lemma LendingLedger.shareValue_step (l l' : LendingLedger) (tx : LendingTx) (hr : l.Reachable)
     (h : (l.apply tx).run = .ok (.ok l')) (hkeep : l.lowersShareValue tx = false) (hnc : l.NotCoarsened)
     (hnc' : l'.NotCoarsened) (hS : l.vault.sharesTotal ≠ Number.zero) (hS' : l'.vault.sharesTotal ≠ Number.zero)
-    (hfit : l.vault.sharesTotal.toRat + l.sharesCreatedOf tx ≤ 2 ^ 63 - 1) (hwhole : l.movesWholeWorth tx) :
+    (hwhole : l.movesWholeWorth tx) :
     l.vault.toRawVault.shareValue ≤ l'.vault.toRawVault.shareValue := by
   have hLUstep := (LendingLedger.lending_step hr h).2.2.1
-  have hSTstep := LendingLedger.sharesTotal_step hr h hfit
+  have hSTstep := LendingLedger.sharesTotal_step hr h
   have hSpos := Vault.exact_sharesTotal_pos l.vault hS
   have hS'pos := Vault.exact_sharesTotal_pos l'.vault hS'
   have hcast := RawVault.WF.toExact_sharesTotal l.vault.toRawVault l.vault.wf
@@ -190,7 +190,7 @@ private lemma LendingLedger.shareValue_step (l l' : LendingLedger) (tx : Lending
     obtain ⟨hc, hty⟩ :=
       LendingTx.preflight_vaultDeposit_canonical l hasset hd amount isDonation (LendingLedger.apply_preflight h)
     have hcreated : l.sharesCreatedOf (.vaultDeposit hd amount isDonation) = r.shares.toRat := by
-      simp only [LendingLedger.sharesCreatedOf, dif_pos hpos, hdep]
+      simp only [LendingLedger.sharesCreatedOf, dite_eq_left hpos, hdep]
     cases isDonation with
     | true =>
       -- a donation issues no shares
@@ -202,11 +202,10 @@ private lemma LendingLedger.shareValue_step (l l' : LendingLedger) (tx : Lending
       obtain ⟨s, hinv⟩ := hr.loansInv
       have hsub := Vault.deposit_subscription l.vault s hinv.schedule amount l.now hpos r hdep
       obtain ⟨-, -, hat, hAD, hLU, -, hYU⟩ := LendingLedger.subscription_no_loans_proof l hr hsub
-      rw [hcreated] at hfit
       have hworth : ∃ k : ℤ, l.vault.idealChargeDeposit r.shares.toRat = k * 10 ^ l.vault.baseExponent := by
         rw [← hcreated]; exact hwhole
       have hcross := Vault.deposit_keeps_shareValue l.vault hasset hat hAD hLU hYU hr.availableStored
-        (hr.assetsAvailable_units hasset) amount l.now hpos hc hty r hdep (by rw [hcast]; exact hfit) hworth
+        (hr.assetsAvailable_units hasset) amount l.now hpos hc hty r hdep hworth
       rw [hv'] at hS'pos ⊢
       exact Vault.shareValue_le_of_cross _ _ hSpos hS'pos hcross
   | vaultWithdraw hd amount =>
@@ -215,7 +214,7 @@ private lemma LendingLedger.shareValue_step (l l' : LendingLedger) (tx : Lending
     obtain ⟨hc, hty⟩ :=
       LendingTx.preflight_vaultWithdraw_canonical l hasset hd amount (LendingLedger.apply_preflight h)
     have hremoved : l.sharesRemovedOf (.vaultWithdraw hd amount) = r.shares.toRat := by
-      simp only [LendingLedger.sharesRemovedOf, dif_pos hpos, hwh]
+      simp only [LendingLedger.sharesRemovedOf, dite_eq_left hpos, hwh]
     have hw : (l.vault.withdraw amount false l.now hpos).run = .ok (.ok r) := by
       rw [← hsole]; exact (Vault.withdraw_holder_ok _ _ _ _ _ _ _ hwh).1
     have hworth : ∃ k : ℤ, l.vault.idealAssetsWithdraw false r.shares.toRat = k * 10 ^ l.vault.baseExponent := by
@@ -231,7 +230,7 @@ private lemma LendingLedger.shareValue_step (l l' : LendingLedger) (tx : Lending
     have hc := LendingTx.preflight_vaultClawback_canonical l hasset hd assets (LendingLedger.apply_preflight h)
     obtain ⟨hhs, -, hhs0⟩ := LendingLedger.holderShares_balance l hr hd holderShares hof
     have hremoved : l.sharesRemovedOf (.vaultClawback hd assets) = r.shares.toRat := by
-      simp only [LendingLedger.sharesRemovedOf, dif_pos hnn, hof, hcl]
+      simp only [LendingLedger.sharesRemovedOf, dite_eq_left hnn, hof, hcl]
     have hcl' : (l.vault.clawback assets holderShares false hnn).run = .ok (.ok r) := by
       rw [← hsole]; exact hcl
     have hworth : ∃ k : ℤ, l.vault.idealAssetsWithdraw false r.shares.toRat = k * 10 ^ l.vault.baseExponent := by
@@ -291,7 +290,7 @@ private lemma LendingLedger.shareValue_step (l l' : LendingLedger) (tx : Lending
 /-- Proof body of `Lending.Reachable.no_dilution`. -/
 lemma LendingLedger.no_dilution_proof (start l : LendingLedger) (txs : List LendingTx) (hr : start.Reachable)
     (hrun : LendingLedger.Reaches start txs l) (hkeep : start.KeepsShareValueAlong txs)
-    (hshares : start.SharesLeftAlong txs) (hnc : start.NotCoarsenedAlong txs) (hfit : start.SharesFitAlong txs)
+    (hshares : start.SharesLeftAlong txs) (hnc : start.NotCoarsenedAlong txs)
     (hwhole : start.WholeWorthAlong txs) :
     start.vault.toRawVault.shareValue ≤ l.vault.toRawVault.shareValue := by
   induction hrun with
@@ -300,14 +299,13 @@ lemma LendingLedger.no_dilution_proof (start l : LendingLedger) (txs : List Lend
     have ih' := ih (fun pre l₂ t hp hr' => hkeep pre l₂ t (hp.trans (List.prefix_append _ _)) hr')
       (fun pre l₂ hp hr' => hshares pre l₂ (hp.trans (List.prefix_append _ _)) hr')
       (fun pre l₂ hp hr' => hnc pre l₂ (hp.trans (List.prefix_append _ _)) hr')
-      (fun pre l₂ t hp hr' => hfit pre l₂ t (hp.trans (List.prefix_append _ _)) hr')
       (fun pre l₂ t hp hr' => hwhole pre l₂ t (hp.trans (List.prefix_append _ _)) hr')
     have hstep := LendingLedger.shareValue_step l₀ l₁ tx (hprev.reachable hr) hok
       (hkeep txs₀ l₀ tx (List.prefix_refl _) hprev) (hnc txs₀ l₀ (List.prefix_append _ _) hprev)
       (hnc (txs₀ ++ [tx]) l₁ (List.prefix_refl _) (.step tx hprev hok))
       (hshares txs₀ l₀ (List.prefix_append _ _) hprev)
       (hshares (txs₀ ++ [tx]) l₁ (List.prefix_refl _) (.step tx hprev hok))
-      (hfit txs₀ l₀ tx (List.prefix_refl _) hprev) (hwhole txs₀ l₀ tx (List.prefix_refl _) hprev)
+      (hwhole txs₀ l₀ tx (List.prefix_refl _) hprev)
     exact ih'.trans hstep
 
 end XRPL.Model.Lending

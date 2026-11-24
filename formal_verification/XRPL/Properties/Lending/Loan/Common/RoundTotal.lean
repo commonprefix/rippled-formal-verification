@@ -75,8 +75,8 @@ lemma sumRoundAndSubtract_frac_downward_ok_any (A c : Number) (b : Int) (hA : A.
   obtain ⟨e, hex⟩ : ∃ e, numberExponent s0 b .fractional = .ok e := by
     unfold numberExponent
     by_cases hz : s0.operator_eq Number.zero = true
-    · rw [if_pos hz]; exact ⟨b, rfl⟩
-    · rw [if_neg hz]
+    · rw [ite_eq_left hz]; exact ⟨b, rfl⟩
+    · rw [ite_eq_right hz]
       obtain ⟨st, hst, -⟩ := STAmount.ofNumber_fractional_ok_fczr s0 .downward hs0n
         (by rw [abs_of_nonneg hs00]; exact hs0lt)
       rw [hst]
@@ -134,7 +134,7 @@ lemma sumRoundAndSubtract_frac_downward_ok_any (A c : Number) (b : Int) (hA : A.
   obtain ⟨st, hst, hstf⟩ := STAmount.ofNumber_fractional_ok_fczr d .downward hdn hdlt
   refine ⟨st, ?_, hstf⟩
   unfold sumRoundAndSubtract
-  rw [if_neg (by decide)]
+  rw [ite_eq_right (by decide)]
   show (pure PUnit.unit >>= fun _ => (do
       let exponent ← postSumExponent A c b NumericType.fractional
       let sum ← A.operator_add c rounding_mode.downward
@@ -160,7 +160,7 @@ lemma sumRoundAndSubtract_integral_ok (A c : Number) (b : Int) (nt : NumericType
   obtain ⟨st, hst⟩ := STAmount.ofNumber_integral_ok_of_lt nt c mode hint hmo hc hc0 hcap hmax
   refine ⟨st, ?_⟩
   unfold sumRoundAndSubtract
-  rw [if_pos hint, hst]
+  rw [ite_eq_left hint, hst]
   rfl
 
 end XRPL.Model.Protocol

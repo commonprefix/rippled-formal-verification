@@ -38,15 +38,15 @@ theorem STAmount.ofIOU_canonical (a : IOUAmount)
     rcases h_sign : decide (a.mantissa_ < 0) with _ | _
     · have h_not : ¬ a.mantissa_ < 0 := of_decide_eq_false h_sign
       apply decide_eq_false
-      rw [if_neg h_not]
+      rw [ite_eq_right h_not]
       by_cases h_ne : a.mantissa_ != 0
-      · rw [if_pos h_ne]
+      · rw [ite_eq_left h_ne]
         norm_num
-      · rw [if_neg h_ne]
+      · rw [ite_eq_right h_ne]
         norm_num
     · have h_lt : a.mantissa_ < 0 := of_decide_eq_true h_sign
       apply decide_eq_true
-      rw [if_pos h_lt]
+      rw [ite_eq_left h_lt]
       norm_num
   set absMant : Int64 := if IOUAmount.signum a < 0 then -a.mantissa_ else a.mantissa_
     with habsMant_def
@@ -58,9 +58,9 @@ theorem STAmount.ofIOU_canonical (a : IOUAmount)
         rwa [(by decide : (0 : Int64).toInt = 0)] at h1
       have h_sgn : IOUAmount.signum a < 0 := by
         unfold IOUAmount.signum
-        rw [if_pos h_lt]
+        rw [ite_eq_left h_lt]
         norm_num
-      rw [if_pos h_sgn, Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
+      rw [ite_eq_left h_sgn, Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
       have h_v := Int64.lt_iff_toInt_lt.mp h_lt
       rw [(by decide : (0 : Int64).toInt = 0)] at h_v
       have := hr.mant_hi
@@ -73,13 +73,13 @@ theorem STAmount.ofIOU_canonical (a : IOUAmount)
         exact h_c
       have h_sgn : ¬ IOUAmount.signum a < 0 := by
         unfold IOUAmount.signum
-        rw [if_neg h_lt]
+        rw [ite_eq_right h_lt]
         by_cases h_ne : a.mantissa_ != 0
-        · rw [if_pos h_ne]
+        · rw [ite_eq_left h_ne]
           norm_num
-        · rw [if_neg h_ne]
+        · rw [ite_eq_right h_ne]
           norm_num
-      rw [if_neg h_sgn]
+      rw [ite_eq_right h_sgn]
       omega
   have h_abs_toNat : absMant.toUInt64.toNat = a.mantissa_.toInt.natAbs := by
     have h1 := toUInt64_toNat_of_nonneg absMant (by rw [h_abs_toInt]; positivity)
@@ -99,7 +99,7 @@ theorem STAmount.ofIOU_canonical (a : IOUAmount)
           : STAmount).mValue = absMant.toUInt64 from rfl, h_abs_toNat]; exact hr.mant_hi
       exp_lo := hr.exp_lo
       exp_hi := hr.exp_hi }
-  unfold STAmount.ofIOUAmount
+  rw [STAmount.ofIOUAmount_of_ne mode (Int64.ne_minValue_of_natAbs_lt (by have := hr.mant_hi; omega))]
   show (STAmount.unchecked .fractional a.mantissa_.toInt.natAbs.toUInt64 a.exponent_ neg).canonicalize mode = _
   conv_lhs => rw [← h_abs_eq]
   calc (STAmount.unchecked .fractional absMant.toUInt64 a.exponent_ neg).canonicalize mode
@@ -113,7 +113,7 @@ theorem STAmount.ofIOU_canonical (a : IOUAmount)
 lemma STAmount.operator_neg_of_ne (s : STAmount) (h : s.mValue ≠ 0) :
     s.operator_neg = { s with mIsNegative := !s.mIsNegative } := by
   unfold STAmount.operator_neg
-  rw [if_neg (by
+  rw [ite_eq_right (by
     intro hb
     exact h (by exact_mod_cast beq_iff_eq.mp hb))]
 
@@ -124,7 +124,7 @@ lemma STAmount.toRat_signed (s : STAmount) :
   rcases h : s.mIsNegative with _ | _
   · rw [STAmount.toRat_of_nonneg s h]
     norm_num
-  · rw [STAmount.toRat_of_neg s h, if_pos rfl]
+  · rw [STAmount.toRat_of_neg s h, ite_eq_left rfl]
     ring
 
 /-- The 19-digit `Number` view of a canonical STAmount's IOU mantissa: the
@@ -152,12 +152,12 @@ theorem STAmount.iou_toNumber_canonical (s : STAmount) (mode : rounding_mode)
     · apply decide_eq_false
       rw [Int64.lt_iff_toInt_lt, h_sd_signed, hneg,
           (by decide : (0 : Int64).toInt = 0)]
-      simp only [Bool.false_eq_true, if_false]
+      simp only [Bool.false_eq_true, ite_false]
       omega
     · apply decide_eq_true
       rw [Int64.lt_iff_toInt_lt, h_sd_signed, hneg,
           (by decide : (0 : Int64).toInt = 0)]
-      simp only [if_true]
+      simp only [ite_true]
       have : 0 < s.mValue.toNat := by have := hc.mant_lo; omega
       omega
   have h_mAbs_toNat : (sd.toInt.natAbs.toUInt64).toNat = s.mValue.toNat := by
@@ -211,11 +211,11 @@ theorem STAmount.operator_add_iou_unfold (v1 v2 : STAmount) (mode : rounding_mod
     decide
   unfold STAmount.operator_add
   rw [h_cmp]
-  simp only [Bool.not_true, Bool.false_eq_true, if_false]
+  simp only [Bool.not_true, Bool.false_eq_true, ite_false]
   rw [show (v2.mValue == 0) = false from beq_eq_false_iff_ne.mpr h_mv2,
       show (v1.mValue == 0) = false from beq_eq_false_iff_ne.mpr h_mv1]
-  simp only [Bool.false_eq_true, if_false]
-  rw [if_neg h_int1]
+  simp only [Bool.false_eq_true, ite_false]
+  rw [ite_eq_right h_int1]
   rw [STAmount.iou_canonical_id v1 mode hc1, STAmount.iou_canonical_id v2 mode hc2]
   simp only []
   have h_sd1_ne : ¬ ((⟨v1.signedDrops.toInt64, v1.mOffset⟩ : IOUAmount).mantissa_ == 0)
@@ -243,7 +243,7 @@ theorem STAmount.operator_add_iou_unfold (v1 v2 : STAmount) (mode : rounding_mod
         from Bool.eq_false_iff.mpr (fun h => h_sd2_ne h),
       show ((⟨v1.signedDrops.toInt64, v1.mOffset⟩ : IOUAmount).mantissa_ == 0) = false
         from Bool.eq_false_iff.mpr (fun h => h_sd1_ne h)]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [STAmount.iou_toNumber_canonical v1 mode hc1,
       STAmount.iou_toNumber_canonical v2 mode hc2]
   simp only []
@@ -264,15 +264,15 @@ lemma STAmount.roundToExponent_eq_self (value : STAmount) (s : Int) (mode : roun
     value.roundToExponent s mode = .ok value := by
   unfold STAmount.roundToExponent
   by_cases hi : value.integral = true
-  · rw [if_pos hi]
-  · rw [if_neg hi]
+  · rw [ite_eq_left hi]
+  · rw [ite_eq_right hi]
     by_cases hz : value.isZero = true
-    · rw [if_pos hz]
-    · rw [if_neg hz]
+    · rw [ite_eq_left hz]
+    · rw [ite_eq_right hz]
       rcases h with h | h | h
       · exact absurd h hi
       · exact absurd h hz
-      · rw [if_pos h]
+      · rw [ite_eq_left h]
 
 /-- The same, read from a successful `roundToExponent`: the result is the amount. -/
 lemma STAmount.roundToExponent_ok_eq_self (value r : STAmount) (s : Int) (mode : rounding_mode)

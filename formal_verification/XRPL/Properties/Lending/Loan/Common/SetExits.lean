@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Common.PoolBalances
 import XRPL.Properties.Lending.Loan.Common.SetDefs
 
@@ -46,7 +47,7 @@ lemma Loan.create_precision_loss_proof (properties : LoanProperties)
   have hg : ∀ x ∈ principal :: fees.amountFields, isRounded x properties.loanScale broker.numericType = .ok (g x) := by
     intro x hx
     have h := hchecks x hx
-    simp only [g, dif_pos h]
+    simp only [g, dite_eq_left h]
     exact h.choose_spec
   have hall : (principal :: fees.amountFields).all g = false := by
     obtain ⟨x, hx, hf⟩ := hround
@@ -60,8 +61,7 @@ lemma Loan.create_precision_loss_proof (properties : LoanProperties)
   rw [hall] at hp
   simp only [Loan.create]
   unfold_ter
-  simp [Vault.pool_amounts, hfunds, Vault.pool_baseExponent, hprops, hp]
-  rfl
+  simp [Vault.pool_amounts, hfunds, Vault.pool_baseExponent, hprops, hp, TER.isTesSuccess]
 
 /-- A create whose amortization guards return tecPRECISION_LOSS is rejected with it. -/
 lemma Loan.create_cannot_amortize_proof (properties : LoanProperties)
@@ -219,7 +219,7 @@ lemma Loan.create_limit_exceeded_proof (properties : LoanProperties) (loanState 
     (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run =
       .ok (.error .tecLIMIT_EXCEEDED) := by
   have hl : broker.checkLimits debtTotal' v.baseExponent = .ok .tecLIMIT_EXCEEDED := by
-    unfold LoanBroker.checkLimits; rw [if_pos hmax]; rfl
+    unfold LoanBroker.checkLimits; rw [ite_eq_left hmax]; rfl
   simp only [Loan.create]
   unfold_ter
   simp [Vault.pool_amounts, hterms.funds, Vault.pool_baseExponent, hterms.properties_ok, hterms.precision, hguards,
@@ -242,7 +242,7 @@ lemma Loan.create_below_minCover_proof (properties : LoanProperties) (loanState 
     (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run =
       .ok (.error .tecINSUFFICIENT_FUNDS) := by
   have hl : broker.checkLimits debtTotal' v.baseExponent = .ok .tecINSUFFICIENT_FUNDS := by
-    unfold LoanBroker.checkLimits; rw [if_neg (by rw [hmax]; decide)]
+    unfold LoanBroker.checkLimits; rw [ite_eq_right (by rw [hmax]; decide)]
     simp only [bind, Except.bind, hcover]; rfl
   simp only [Loan.create]
   unfold_ter

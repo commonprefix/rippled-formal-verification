@@ -5,10 +5,8 @@ import XRPL.Properties.Vault.Proofs.MaxValueFits
 
 /-! # The order of two exits from a vault in the redemption phase
 
-A payout that leaves shares is the priced amount floored onto the base grid, and the last one pays all
-the cash left. Each is within one base unit of the shares' worth, and B's rounding moves A's remaining
-worth by at most B's own deviation. Going second gains A two units when B's floor leaves nearly a unit,
-A's first price floors away nearly a unit and A's second rounds up. -/
+Each payout is within one base unit of the shares' worth, and B's rounding moves A's remaining worth by at most
+B's own deviation. -/
 
 namespace XRPL.Model.SingleAssetVault
 

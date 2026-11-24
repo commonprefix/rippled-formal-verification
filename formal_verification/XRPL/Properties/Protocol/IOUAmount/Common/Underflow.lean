@@ -32,9 +32,9 @@ private lemma Number.roundsToRepresentable_ge_anyMode (d : Number) (truth : ℚ)
     obtain ⟨n, hn, hd⟩ := hR
     rw [hd]
     by_cases h0 : truth ≥ 0
-    · rw [if_pos h0] at hn
+    · rw [ite_eq_left h0] at hn
       exact Number.lower_tight truth n hn w hw hwt
-    · rw [if_neg h0] at hn
+    · rw [ite_eq_right h0] at hn
       exact hwt.trans (Number.le_upper truth n hn)
 
 /-- A rounded result is at most any `Number` at or above the exact value, in every mode. -/
@@ -55,9 +55,9 @@ private lemma Number.roundsToRepresentable_le_anyMode (d : Number) (truth : ℚ)
     obtain ⟨n, hn, hd⟩ := hR
     rw [hd]
     by_cases h0 : truth ≥ 0
-    · rw [if_pos h0] at hn
+    · rw [ite_eq_left h0] at hn
       exact (Number.lower_le truth n hn).trans hwt
-    · rw [if_neg h0] at hn
+    · rw [ite_eq_right h0] at hn
       exact Number.upper_tight truth n hn w hw hwt
 
 /-- A nonzero sum of normalized Numbers is a neighbouring `Number` of the exact sum, in every mode. -/
@@ -138,8 +138,8 @@ lemma IOUAmount.ofNumber_underflow_truth_small_proof (sum : Number) (mode : roun
     have hmant := normalizeToRange_16_mantissa_range sum mode m e h_lo h_hi he_lo he_hi hnorm
     have herange := normalizeToRange_16_exp_range sum mode m e h_lo h_hi he_lo he_hi hnorm
     by_cases hhi : e > cMaxOffset
-    · rw [if_pos hhi] at hok; simp at hok
-    rw [if_neg hhi] at hok
+    · rw [ite_eq_left hhi] at hok; simp at hok
+    rw [ite_eq_right hhi] at hok
     by_cases hlo : e < cMinOffset
     · -- the 16 digit exponent is below `-96`, so the 19 digit exponent is at most `-100`
       have hE : sum.exponent_ ≤ -100 := by
@@ -159,7 +159,7 @@ lemma IOUAmount.ofNumber_underflow_truth_small_proof (sum : Number) (mode : roun
             rw [← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num
     · -- the clamp passed, so the result keeps its 16 digit mantissa
       exfalso
-      rw [if_neg hlo] at hok
+      rw [ite_eq_right hlo] at hok
       have hres : result = ⟨m, e⟩ := (Except.ok.inj hok).symm
       have hm0 : m = 0 := by rw [hres] at hres0; exact hres0
       have h := hmant.1
@@ -202,7 +202,7 @@ lemma IOUAmount.normalize_underflow_truth_small_proof (m : Int64) (e : Int) (mod
       show m ≠ 0
       intro h; rw [h] at hm_lo; simp at hm_lo
     unfold IOUAmount.normalize at hok
-    rw [if_neg (by simpa using hm_ne), hfr] at hok
+    rw [ite_eq_right (by simpa using hm_ne), hfr] at hok
     simp only at hok
     have hofn : IOUAmount.ofNumber v mode = .ok result := hok
     have hv_abs : |v.toRat| = (m.toInt.natAbs : ℚ) * 10 ^ e := by rw [hv_val, hmabs]
@@ -255,7 +255,7 @@ lemma IOUAmount.operator_add_underflow_truth_small_proof (x y result : IOUAmount
   obtain ⟨yn, hyn_eq, hyn_val, hyn_norm, hyn_ne⟩ := IOUAmount.toNumber_canonical y mode hy.mant_lo hy.mant_hi
     (by have := hy.exp_lo; omega) (by have := hy.exp_hi; omega)
   unfold IOUAmount.operator_add at hok
-  rw [if_neg (by simpa using hym), if_neg (by simpa using hxm), hxn_eq, hyn_eq] at hok
+  rw [ite_eq_right (by simpa using hym), ite_eq_right (by simpa using hxm), hxn_eq, hyn_eq] at hok
   simp only at hok
   cases hadd : Number.operator_add xn yn mode with
   | error e => rw [hadd] at hok; simp at hok

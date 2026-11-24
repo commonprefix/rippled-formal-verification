@@ -37,7 +37,7 @@ private lemma Vault.Flows.balances {w : Vault} {t : UInt32} (hr : Vault.Reachabl
       (u.toExact.sharesTotal : ℚ) = w.toExact.sharesTotal + SC - SR - SD := by
   induction h with
   | refl => constructor <;> ring
-  | deposit u t₁ t' _ _ _ _ _ _ amount isDonation r hf _ hc hty hpos hok _ ih =>
+  | deposit u t₁ t' _ _ _ _ _ _ amount isDonation r hf _ hc hty hpos hok ih =>
     have hu := Vault.Flows.reachable hr hf
     obtain ⟨hA, hS, -⟩ := (Vault.vault_updates_exact u t₁ hu).1 amount isDonation t' hpos hc hty r hok
     constructor <;> linarith [ih.1, ih.2]
@@ -45,7 +45,7 @@ private lemma Vault.Flows.balances {w : Vault} {t : UInt32} (hr : Vault.Reachabl
     have hu := Vault.Flows.reachable hr hf
     obtain ⟨hA, hS, -⟩ := (Vault.vault_updates_exact u t₁ hu).2.1 amount waive t' hpos hc hty r hok
     constructor <;> linarith [ih.1, ih.2]
-  | clawback u t₁ t' _ _ _ _ _ _ assets holderShares waive r hf _ hc _ hhs _ hnn hok _ ih =>
+  | clawback u t₁ t' _ _ _ _ _ _ assets holderShares waive r hf _ hc _ hhs _ hnn hok ih =>
     have hu := Vault.Flows.reachable hr hf
     obtain ⟨hA, hS, -⟩ := (Vault.vault_updates_exact u t₁ hu).2.2 assets holderShares waive hnn hc hhs r hok
     constructor <;> linarith [ih.1, ih.2]

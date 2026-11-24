@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayBounds
 
 /-! # When an overpayment drops its extra amount
@@ -53,7 +54,7 @@ include hamount
 private lemma UnsettledPayment.drop_of_check (hc : payment.extraAllowed amount' = false) :
     UnsettledPayment.applyOverpayment payment amount = .ok payment := by
   unfold UnsettledPayment.extraAllowed at hc
-  simp only [UnsettledPayment.applyOverpayment, hamount, bind, Except.bind, hc, Bool.not_false, if_true]
+  simp only [UnsettledPayment.applyOverpayment, hamount, bind, Except.bind, hc, Bool.not_false, ite_true]
   rfl
 
 private lemma UnsettledPayment.drop_of_extra (hc : payment.extraAllowed amount' = true)
@@ -64,7 +65,7 @@ private lemma UnsettledPayment.drop_of_extra (hc : payment.extraAllowed amount' 
     UnsettledPayment.applyOverpayment payment amount = .ok payment := by
   unfold UnsettledPayment.extraAllowed at hc
   simp only [UnsettledPayment.applyOverpayment, hamount, bind, Except.bind, hc, Bool.not_true, Bool.false_eq_true,
-    if_false, hunspent, hextra, hzero, Bool.not_false, if_true]
+    ite_false, hunspent, hextra, hzero, Bool.not_false, ite_true]
   rfl
 
 private lemma UnsettledPayment.drop_of_principal (hc : payment.extraAllowed amount' = true)
@@ -77,7 +78,7 @@ private lemma UnsettledPayment.drop_of_principal (hc : payment.extraAllowed amou
   unfold UnsettledPayment.extraAllowed at hc
   unfold Loan.computeOverpaymentComponents at hopc
   simp only [UnsettledPayment.applyOverpayment, hamount, bind, Except.bind, hc, Bool.not_true, Bool.false_eq_true,
-    if_false, hunspent, hextra, hpos, hopc, hprincipal, Bool.not_false, if_true]
+    ite_false, hunspent, hextra, hpos, hopc, hprincipal, Bool.not_false, ite_true]
   rfl
 
 private lemma UnsettledPayment.drop_of_reamortization (hc : payment.extraAllowed amount' = true)
@@ -92,7 +93,7 @@ private lemma UnsettledPayment.drop_of_reamortization (hc : payment.extraAllowed
   unfold Loan.computeOverpaymentComponents at hopc
   unfold Loan.overpaymentReamortization at hre
   simp only [UnsettledPayment.applyOverpayment, hamount, bind, Except.bind, hc, Bool.not_true, Bool.false_eq_true,
-    if_false, hunspent, hextra, hpos, hopc, hprincipal, hre]
+    ite_false, hunspent, hextra, hpos, hopc, hprincipal, hre]
   rfl
 
 end

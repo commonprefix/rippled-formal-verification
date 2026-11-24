@@ -4,9 +4,8 @@ import XRPL.Properties.Lending.Ledger.Common.Exits
 
 /-! # A broker transaction replayed on another ledger
 
-A LoanBrokerSet update, a cover deposit, withdrawal or clawback, or a LoanBrokerDelete reads the broker, the vault's
-asset and base exponent, and whether the vault exists. On a second ledger that holds the same broker under another
-number, it succeeds the same way and gives the same broker. -/
+A broker transaction reads only the broker, the vault's asset and base exponent, and whether the vault exists. On a
+ledger that holds the same broker under another number it succeeds the same way and gives the same broker. -/
 
 namespace XRPL.Model.Lending
 
@@ -50,7 +49,7 @@ private lemma LoanBroker.canDelete_vault (lb : LoanBroker) (v v' : Vault) : lb.c
   · rw [h0, show lb.debtTotal = Number.zero from lb.valid.empty_broker h0]
     rfl
   · have hc : (lb.loanCount != 0) = true := by simpa using h0
-    rw [if_pos hc, if_pos hc]
+    rw [ite_eq_left hc, ite_eq_left hc]
 
 /-- A broker transaction on broker `k` of `l` runs the same on a ledger holding the same broker at `k'` with the
 same base exponent, and writes the same broker at `k'`. -/
@@ -64,9 +63,8 @@ private lemma LendingLedger.applyBroker_transfer {l L : LendingLedger} {k k' : N
     simp only [LendingLedger.txBroker?, Option.some.injEq] at hk
     have := LendingLedger.broker?_lt hb
     omega
-  all_goals first
+  all_goals try first
     | (simp only [LendingLedger.applyBroker] at hu; cases hu)
-    | skip
   all_goals
     simp only [LendingLedger.txBroker?, Option.some.injEq] at hk
     subst hk
@@ -112,9 +110,8 @@ private lemma LendingLedger.applyBroker_shape {l : LendingLedger} {k : Nat} {b :
     simp only [LendingLedger.txBroker?, Option.some.injEq] at hk
     have := LendingLedger.broker?_lt hb
     omega
-  all_goals first
+  all_goals try first
     | (simp only [LendingLedger.applyBroker] at hu; cases hu)
-    | skip
   all_goals
     simp only [LendingLedger.txBroker?, Option.some.injEq] at hk
     subst hk

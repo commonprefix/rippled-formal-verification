@@ -1,12 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.NegativeInterestWitness
 
 /-! # A loan that can be defaulted only in the redemption phase
 
-The closed-ended vault of `NegativeInterestWitness.lean`, RedemptionDate 77761000, checked by `native_decide`. A
-loan of 1000 has one payment due 60 seconds before RedemptionDate and a GracePeriod as long as its PaymentInterval.
-One second into the redemption phase the payment is missed, but the default is still rejected with tecTOO_SOON. -/
+A loan whose payment is missed one second into the redemption phase can't be defaulted yet (FV_M4_49). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

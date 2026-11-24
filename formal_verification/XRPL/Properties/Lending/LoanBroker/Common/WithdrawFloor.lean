@@ -17,9 +17,9 @@ private lemma numberExponent_frac_abs_lower (n : Number) (b e : Int) (hn : n.isN
     (10 : ℚ) ^ (e + 15) - 10 ^ e ≤ |n.toRat| := by
   unfold numberExponent at hok
   by_cases hz : n.operator_eq Number.zero = true
-  · simp only [hz, if_true, pure, Except.pure, Except.ok.injEq] at hok
+  · simp only [hz, ite_true, pure, Except.pure, Except.ok.injEq] at hok
     omega
-  simp only [hz, Bool.false_eq_true, if_false] at hok
+  simp only [hz, Bool.false_eq_true, ite_false] at hok
   have hnz : n.mantissa_ ≠ 0 := by
     intro hm
     rw [Number.eq_zero_of_mantissa_zero n hn hm] at hz

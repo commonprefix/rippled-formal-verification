@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.BrokerAccounting
 import XRPL.Properties.Lending.Loan.Common.ManageLedgerWitness
 
@@ -37,7 +38,7 @@ lemma LendingLedger.accounting_coverAvailable_witness :
   obtain ⟨e₀, he₀, hbk, -⟩ := hat.stored
   obtain rfl := Option.some.inj (he₀.symm.trans he)
   refine ⟨l, [.loanManage i .default], l', hr, .step _ .refl hok, e₀.brokerIndex, loan.broker, r₂.loan'.broker, hbk,
-    by rw [hbr, if_pos rfl], ?_⟩
+    by rw [hbr, ite_eq_left rfl], ?_⟩
   have hdc : l.brokerDefaultCoveredOf e₀.brokerIndex (.loanManage i .default) = r₂.amountToPool.toRat := by
     simp [LendingLedger.brokerDefaultCoveredOf, LendingLedger.onBroker, LendingLedger.defaultCoveredOf, he₀,
       LendingLedger.LoanAt.read hat, hdef]

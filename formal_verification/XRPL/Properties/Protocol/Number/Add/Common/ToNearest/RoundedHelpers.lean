@@ -21,18 +21,18 @@ theorem Number.operator_add_no_inbetween_below_to_nearest (x y result : Number)
       result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat + y.toRat) := by
   by_cases h_sign_eq : x.negative_ = y.negative_
   · -- Same-sign: the guard holds the exact dropped fraction, so the general lemma applies directly.
-    obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, hfloor_constr, habs_xy_eq,
-        h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, _, _, _⟩ :=
-      Number.operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
-        h_sign_eq h_not_zero hok
+    obtain ⟨zm, ze', f, g, res_pos, hzm_succ, hzm_le, hf_nn, hf_lt, habs_xy_eq, h_rup_pos, h_result_abs,
+        hres_pos_mant_ne, h_sign, hrl⟩ :=
+      Number.operator_add_same_sign_nearest_facts x y result hx hy hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
+    have hfloor : mantissaFloor < mantissaFloorSucc := by decide
     exact no_inbetween_below_to_nearest_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      .overflow hzm_ge hzm_le hf_nn hf_lt hfloor_constr habs_xy_eq
+      .normalize2 (by omega) hzm_le hf_nn hf_lt (fun hfl => absurd hfl (by omega)) habs_xy_eq
       h_rup_pos h_result_abs hres_pos_mant_ne
       (fun h_ru => by
         rcases h_ru with h1 | ⟨h0, _⟩
-        · linarith [represents_round_eq_one hf_rep h1]
-        · linarith [represents_round_eq_zero hf_rep h0])
-      (fun hfl hns => hns (Or.inl (represents_f_gt_half hf_rep (by linarith [hfloor_constr hfl]))))
+        · linarith [hrl.2.1.mp h1]
+        · linarith [hrl.2.2.mp h0])
+      (fun hfl _ => absurd hfl (by omega))
       (fun h_pos => Number.toRat_nonneg_of_nonnegative result
         (h_sign.trans (add_same_sign_xn_false_of_truth_pos x y h_sign_eq h_pos)))
       h_le
@@ -77,18 +77,18 @@ theorem Number.operator_add_no_inbetween_above (x y result : Number)
     ∀ m : Number, m.isNormalized →
       m.toRat < result.toRat → ¬ (x.toRat + y.toRat ≤ m.toRat) := by
   by_cases h_sign_eq : x.negative_ = y.negative_
-  · obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, hfloor_constr, habs_xy_eq,
-        h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, _, _, _⟩ :=
-      Number.operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
-        h_sign_eq h_not_zero hok
+  · obtain ⟨zm, ze', f, g, res_pos, hzm_succ, hzm_le, hf_nn, hf_lt, habs_xy_eq, h_rup_pos, h_result_abs,
+        hres_pos_mant_ne, h_sign, hrl⟩ :=
+      Number.operator_add_same_sign_nearest_facts x y result hx hy hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
+    have hfloor : mantissaFloor < mantissaFloorSucc := by decide
     exact no_inbetween_above_to_nearest_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      .overflow hzm_ge hzm_le hf_nn hf_lt hfloor_constr habs_xy_eq
+      .normalize2 (by omega) hzm_le hf_nn hf_lt (fun hfl => absurd hfl (by omega)) habs_xy_eq
       h_rup_pos h_result_abs hres_pos_mant_ne
       (fun h_ru => by
         rcases h_ru with h1 | ⟨h0, _⟩
-        · linarith [represents_round_eq_one hf_rep h1]
-        · linarith [represents_round_eq_zero hf_rep h0])
-      (fun hfl hns => hns (Or.inl (represents_f_gt_half hf_rep (by linarith [hfloor_constr hfl]))))
+        · linarith [hrl.2.1.mp h1]
+        · linarith [hrl.2.2.mp h0])
+      (fun hfl _ => absurd hfl (by omega))
       (fun h_neg => Number.toRat_nonpos_of_negative result
         (h_sign.trans (add_same_sign_xn_true_of_truth_neg x y h_sign_eq h_neg)))
       (fun h_pos => Number.toRat_nonneg_of_nonnegative result
@@ -139,7 +139,7 @@ theorem Number.operator_add_rounded_to_nearest_proof (x y result : Number)
     have h_result : result = x := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_pos hy_guard] at hok
+      rw [ite_eq_left hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     rw [hy0, add_zero]
     by_cases hx_mant : x.mantissa_ = 0
@@ -148,7 +148,7 @@ theorem Number.operator_add_rounded_to_nearest_proof (x y result : Number)
       left
       refine ⟨Number.zero, ?_, ?_⟩
       · unfold Number.lower
-        rw [if_pos rfl]
+        rw [ite_eq_left rfl]
       · rw [h_result, hx0, Number.toRat_zero]
     · have hx_ne : x.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero x hx_mant
       obtain ⟨n, h_lo, h_val⟩ := Number.lower_value_self x hx hx_ne
@@ -163,7 +163,7 @@ theorem Number.operator_add_rounded_to_nearest_proof (x y result : Number)
     have h_result : result = y := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_pos hx_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_left hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have hy_mant_ne : y.mantissa_ ≠ 0 := by
       intro h
@@ -182,14 +182,14 @@ theorem Number.operator_add_rounded_to_nearest_proof (x y result : Number)
     have h_result : result = Number.zero := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_right hx_guard, ite_eq_left heq_guard] at hok
       exact (Except.ok.inj
         (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
     rw [h_truth0]
     left
     refine ⟨Number.zero, ?_, ?_⟩
     · unfold Number.lower
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
     · rw [h_result]
   -- Generic path: both operands nonzero, no cancellation.
   have hx_mant_ne : x.mantissa_ ≠ 0 := by
@@ -246,12 +246,13 @@ theorem Number.operator_add_rounded_to_nearest_proof (x y result : Number)
     le_trans h5 (mul_le_mul_of_nonneg_left (by norm_num) (abs_nonneg _))
   have h_truth_top : result.exponent_ ≥ maxExponent →
       |x.toRat + y.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := by
-    intro _
+    intro h_exp
     by_cases h_sign_eq : x.negative_ = y.negative_
-    · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_top⟩ :=
-        Number.operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
-          h_sign_eq heq_guard hok
-      exact h_top
+    · obtain ⟨M, ze0, δ, sticky, -, -, -, -, hM18, -, -, -, -, -, hok128⟩ :=
+        Number.operator_add_algorithmic_facts_same_sign_represents x y result .to_nearest hx hy hx_mant_ne
+          hy_mant_ne h_sign_eq heq_guard hok
+      exact truth_top_of_result_cap result _ h_result_norm hresult h_bound
+        (doNormalize128_no_overflow_mantissa _ M ze0 sticky .to_nearest (by omega) result hok128 hresult h_exp) h_exp
     · exact add_diff_sign_truth_top x y hx hy h_sign_eq
   by_cases h_le : result.toRat ≤ x.toRat + y.toRat
   · left

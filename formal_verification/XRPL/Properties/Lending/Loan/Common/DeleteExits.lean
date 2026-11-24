@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.AcceptExits
 import XRPL.Properties.Lending.LoanBroker.LoanBrokerValid
 import XRPL.Model.Lending.Loan.LoanDelete
@@ -35,13 +36,13 @@ private lemma LoanBroker.releaseLoan_ok (lb : LoanBroker) (d : Number) (hc0 : lb
   · by_cases hc : lb.loanCount - 1 = 0
     · have hb : (lb.loanCount - 1 == 0) = true := by rw [hc]; rfl
       refine { lb.valid with debtTotal_nonneg := ?_, debt_within_cap := ?_, empty_broker := ?_ } <;>
-        dsimp only <;> rw [if_pos hb]
+        dsimp only <;> rw [ite_eq_left hb]
       · decide
       · exact fun _ => lb.valid.debtMaximum_nonneg
       · exact fun _ => rfl
     · have hb : (lb.loanCount - 1 == 0) = false := by simpa using hc
       refine { lb.valid with debtTotal_nonneg := ?_, debt_within_cap := ?_, empty_broker := ?_ } <;>
-        dsimp only <;> rw [hb, if_neg Bool.false_ne_true]
+        dsimp only <;> rw [hb, ite_eq_right Bool.false_ne_true]
       · exact (Number.operator_le_iff _ _ Number.zero_isNormalized hn).mpr (by rw [Number.toRat_zero]; exact h0 hc)
       · exact fun hm => (Number.operator_le_iff _ _ hn lb.wf.debtMaximum_norm).mpr (hle hc hm)
       · exact fun h => absurd h hc
@@ -70,7 +71,7 @@ private lemma Loan.delete_pending_reduce (loan : Loan) (v : Vault) (principal' :
           match loan.broker.releaseLoan debtTotal' with
           | .error e => .error e
           | .ok broker' => .ok (.ok { broker' := broker', pool' := v' }) := by
-  simp only [Loan.delete, hp, if_true, Loan.deletePending]
+  simp only [Loan.delete, hp, ite_true, Loan.deletePending]
   unfold_ter
   simp only [hround, Loan.deleteChange]
   rcases AssetPool.adjustBalances v
@@ -86,7 +87,7 @@ lemma Loan.delete_active_reduce (loan : Loan) (v : Vault) (hp : loan.isPending =
       match Loan.deleteActive loan.broker with
       | .error e => .error e
       | .ok broker' => .ok (.ok { broker' := broker', pool' := v }) := by
-  simp only [Loan.delete, hp, Bool.false_eq_true, if_false]
+  simp only [Loan.delete, hp, Bool.false_eq_true, ite_false]
   unfold_ter
   cases Loan.deleteActive loan.broker <;> rfl
 
@@ -141,7 +142,7 @@ lemma Loan.delete_pending_ok_inv (loan : Loan) (v : Vault) (r : LoanBrokerWithPo
       loan.broker.releaseLoan debtTotal' = .ok r.broker' := by
   cases hround : STAmount.roundToNumericType loan.broker.numericType loan.principalOutstanding .to_nearest with
   | error e =>
-    simp only [Loan.delete, hp, if_true, Loan.deletePending] at hok
+    simp only [Loan.delete, hp, ite_true, Loan.deletePending] at hok
     unfold_ter at hok
     simp [hround] at hok
   | ok principal' =>
@@ -330,7 +331,7 @@ lemma Loan.delete_error_codes_proof (ter : TER) (hok : (loan.delete v).run = .ok
   | true =>
     cases hround : STAmount.roundToNumericType loan.broker.numericType loan.principalOutstanding .to_nearest with
     | error e =>
-      simp only [Loan.delete, hp, if_true, Loan.deletePending] at hok
+      simp only [Loan.delete, hp, ite_true, Loan.deletePending] at hok
       unfold_ter at hok
       simp [hround] at hok
     | ok principal' =>

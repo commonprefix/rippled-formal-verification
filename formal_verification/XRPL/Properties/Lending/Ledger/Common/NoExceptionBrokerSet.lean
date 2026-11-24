@@ -1,12 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.RecheckBroker
 import XRPL.Properties.Lending.Ledger.Common.BrokerProofs
 import XRPL.Properties.Lending.Loan.Common.OverpaymentSkip
 
 /-! # LoanBrokerSet and LoanBrokerDelete never end in an exception
 
-A LoanBrokerSet reads the new DebtMaximum, which its preflight keeps within `2^63 - 1`, so every conversion to the
-asset succeeds. A LoanBrokerDelete converts CoverAvailable to an amount of the asset, which succeeds while the cover
-is within the asset's maximum. -/
+LoanBrokerSet converts a DebtMaximum its preflight keeps within `2^63 - 1`. LoanBrokerDelete converts CoverAvailable,
+which succeeds while the cover is within the asset's maximum. -/
 
 namespace XRPL.Model.Protocol
 
@@ -159,7 +159,7 @@ lemma LoanBroker.canDelete_ok (lb : LoanBroker) (v : Vault) : ∃ ter, lb.canDel
   · have hd := lb.valid.empty_broker h0
     rw [h0, show lb.debtTotal = Number.zero from hd]
     exact ⟨_, rfl⟩
-  · rw [if_pos (by simpa using h0)]
+  · rw [ite_eq_left (by simpa using h0)]
     exact ⟨_, rfl⟩
 
 /-- Proof body of the LoanBrokerDelete line: on a reachable ledger it returns a result code while CoverAvailable is

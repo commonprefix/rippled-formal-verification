@@ -5,6 +5,7 @@ import XRPL.Properties.Vault.Proofs.Support.ComputeDeposit
 import XRPL.Properties.Vault.Proofs.Support.VaultBalances
 import XRPL.Properties.Vault.Proofs.Support.DepositExchange
 import XRPL.Properties.Vault.Proofs.Support.CashGrid
+import XRPL.Properties.Vault.Proofs.Support.ShareSupply
 
 /-! # `Vault.deposit` exits
 
@@ -76,7 +77,7 @@ lemma Vault.deposit_rounded_zero_proof (v : Vault) (amountDeposit : STAmount) (i
     (hcl : clampToSumExponent assetsTotal amountDeposit v.baseExponent = .ok ra) (hz : ra.isZero = true) :
     (v.deposit amountDeposit isDonation t hpos).run = .ok (.error .tecPRECISION_LOSS) := by
   have hr : (v.roundedDepositAmount amountDeposit).run = .ok (.error .tecPRECISION_LOSS) := by
-    rw [roundedDepositAmount_ok v amountDeposit ra assetsTotal hat hcl, if_pos hz]
+    rw [roundedDepositAmount_ok v amountDeposit ra assetsTotal hat hcl, ite_eq_left hz]
   simp only [Vault.deposit]
   unfold_ter
   simp only [ExceptT.run] at hr
@@ -173,6 +174,37 @@ lemma Vault.deposit_maximum_exceeded_proof (v : Vault) (amountDeposit : STAmount
   simp [hopen.phase, hopen.donation, hopen.insolvent, hopen.blocked, hrounded, hcomp, hin, hadj, hat',
     hmax.1, hmax.2, (by decide : (TER.tesSUCCESS != TER.tesSUCCESS) = false)]
 
+/-- Proof of the share supply line of `Vault.deposit_exits`: the new shares take SharesTotal past the MPT maximum, so
+the share send fails. -/
+lemma Vault.deposit_share_overflow_proof (v : Vault) (amountDeposit : STAmount) (isDonation : Bool)
+    (t : UInt32) (hpos : 0 < amountDeposit.toRat) (hc : amountDeposit.Canonical)
+    (hty : amountDeposit.mNumericType = v.numericType) (ra : STAmount) (amounts : VaultAmounts)
+    (raw : RawVault) (assetsTotal' : Number)
+    (hopen : v.DepositOpen isDonation t)
+    (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra))
+    (hcomp : (computeDeposit v ra isDonation).run = .ok (.ok amounts))
+    (hin : v.checkOpenLimit amounts.assets = .ok .tesSUCCESS)
+    (hadj : (v.adjustAssetsAndShares amounts.assets amounts.shares).run = .ok (.ok raw))
+    (hat' : raw.assetsTotal = .ok assetsTotal')
+    (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
+      assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero)) = false)
+    (hover : 2 ^ 63 - 1 < (v.toExact.sharesTotal : ℚ) + amounts.shares.toRat) :
+    (v.deposit amountDeposit isDonation t hpos).run = .ok (.error .tecPATH_DRY) := by
+  obtain ⟨hoff, hsh0⟩ := Vault.deposit_minted_shares_form v amountDeposit ra isDonation amounts hc hty hrounded hcomp
+  obtain ⟨sharesTotalAmount, hst⟩ := Vault.sharesTotal_amount_ok v
+  have hcap : isMPTOverflow amounts.shares.mValue sharesTotalAmount.mValue = true := by
+    rw [Vault.shareSupply_overflow_iff v amounts.shares sharesTotalAmount hoff hsh0 hst,
+      ← RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
+    exact hover
+  simp only [Vault.deposit]
+  unfold_ter
+  simp only [ExceptT.run] at hcomp hadj hrounded
+  have hmax' : ¬ ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero = true ∧
+      assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero) = true) := by
+    rw [← Bool.and_eq_true, hmax]; decide
+  simp [hopen.phase, hopen.donation, hopen.insolvent, hopen.blocked, hrounded, hcomp, hin, hadj, hat',
+    hmax', hst, hcap, (by decide : (TER.tesSUCCESS != TER.tesSUCCESS) = false)]
+
 private lemma Vault.deposit_success_of_lawful (v : Vault) (amountDeposit : STAmount) (isDonation : Bool)
     (t : UInt32) (hpos : 0 < amountDeposit.toRat) (ra : STAmount) (amounts : VaultAmounts)
     (raw : RawVault) (assetsTotal' : Number) (v' : Vault)
@@ -185,11 +217,16 @@ private lemma Vault.deposit_success_of_lawful (v : Vault) (amountDeposit : STAmo
     (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
       assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero)) = false)
     (hl : raw.to_lawful = .ok v')
-    (hSsz : (v.toExact.sharesTotal : ℚ) + amounts.shares.toRat ≤ 2 ^ 63 - 1) :
+    (hSsz : (v.toExact.sharesTotal : ℚ) + amounts.shares.toRat ≤ 2 ^ 63 - 1)
+    (hoff : amounts.shares.mOffset = 0) (hsh0 : 0 ≤ amounts.shares.toRat) :
     (v.deposit amountDeposit isDonation t hpos).run = .ok (.ok { amounts with vault' := v' }) := by
-  have hcap : ¬ ((maxRep.toNat : ℚ) < v.sharesTotal.toRat + amounts.shares.toRat) := by
-    rw [← RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, show maxRep.toNat = 2 ^ 63 - 1 from rfl]
-    push_cast; linarith
+  obtain ⟨sharesTotalAmount, hst⟩ := Vault.sharesTotal_amount_ok v
+  have hcap : isMPTOverflow amounts.shares.mValue sharesTotalAmount.mValue = false := by
+    rw [Bool.eq_false_iff]
+    intro h
+    have hlt := (Vault.shareSupply_overflow_iff v amounts.shares sharesTotalAmount hoff hsh0 hst).mp h
+    rw [← RawVault.WF.toExact_sharesTotal v.toRawVault v.wf] at hlt
+    linarith
   simp only [Vault.deposit]
   unfold_ter
   simp only [ExceptT.run] at hcomp hadj hrounded
@@ -197,7 +234,7 @@ private lemma Vault.deposit_success_of_lawful (v : Vault) (amountDeposit : STAmo
       assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero) = true) := by
     rw [← Bool.and_eq_true, hmax]; decide
   simp [hopen.phase, hopen.donation, hopen.insolvent, hopen.blocked, hrounded, hcomp, hin, hadj, hat', hl,
-    hmax', hcap, (by decide : (TER.tesSUCCESS != TER.tesSUCCESS) = false)]
+    hmax', hst, hcap, (by decide : (TER.tesSUCCESS != TER.tesSUCCESS) = false)]
 
 /-- A deposit that passes every check produces a lawful vault. The new cash is the old cash plus a
 nonnegative charge, and the new share total gains the minted shares exactly, within the MPT maximum and never zero. -/
@@ -311,8 +348,9 @@ lemma Vault.deposit_success_proof (v : Vault) (amountDeposit : STAmount) (isDona
   obtain ⟨hwf, hval⟩ :=
     Vault.deposit_success_lawful v amountDeposit isDonation t hc hty ra amounts raw hopen hrounded hcomp hadj hSsz
   obtain ⟨v', hl, hv'⟩ := RawVault.to_lawful_ok_of hwf hval
+  obtain ⟨hoff, hsh0⟩ := Vault.deposit_minted_shares_form v amountDeposit ra isDonation amounts hc hty hrounded hcomp
   exact ⟨v', Vault.deposit_success_of_lawful v amountDeposit isDonation t hpos ra amounts raw assetsTotal' v' hopen
-    hrounded hcomp hin hadj hat' hmax hl hSsz, hv'⟩
+    hrounded hcomp hin hadj hat' hmax hl hSsz hoff hsh0, hv'⟩
 
 /-- Proof of `deposit_error_codes`: every exit is walked, and the cash update never reports a bad ledger. -/
 lemma Vault.deposit_error_codes_proof (v : Vault) (amountDeposit : STAmount) (isDonation : Bool)

@@ -6,9 +6,8 @@ import XRPL.Properties.Lending.Ledger.Common.IntegralCoverInv
 
 /-! # Proof body for the order of two defaults on a ledger
 
-On the base grid a default's cover joins AssetsAvailable exactly. Loans on two brokers each pay the same cover in
-either order. Two loans on one broker that the liquidation amount does not cap pay min(PrincipalOutstanding₁ +
-PrincipalOutstanding₂, CoverAvailable) together. -/
+On the base grid a default's cover joins AssetsAvailable exactly, so two defaults pay the same cover in either order
+when they are on two brokers or the liquidation amount does not cap them. -/
 
 namespace XRPL.Model.Lending
 
@@ -272,11 +271,11 @@ private lemma LendingLedger.defaults_comm_pool (l la lb lab lba : LendingLedger)
         exact (Option.some.inj h).symm
       have hB'b : B'.broker = rA.loan'.broker := by
         have h := hbB'
-        rw [hla, LendingLedger.broker?_default hbA, if_pos hk.symm] at h
+        rw [hla, LendingLedger.broker?_default hbA, ite_eq_left hk.symm] at h
         exact (Option.some.inj h).symm
       have hA'b : A'.broker = rB.loan'.broker := by
         have h := hbA'
-        rw [hlb, LendingLedger.broker?_default hbB, if_pos hk] at h
+        rw [hlb, LendingLedger.broker?_default hbB, ite_eq_left hk] at h
         exact (Option.some.inj h).symm
 
       obtain ⟨pA, -, hpA, -, -⟩ := hr.loanAt_principal hatA
@@ -365,11 +364,11 @@ private lemma LendingLedger.defaults_comm_pool (l la lb lab lba : LendingLedger)
     · -- two brokers: each default reads its own broker as stored
       have hBB : B'.broker = B.broker := by
         have h := hbB'
-        rw [hla, LendingLedger.broker?_default hbA, if_neg (Ne.symm hk), hbB] at h
+        rw [hla, LendingLedger.broker?_default hbA, ite_eq_right (Ne.symm hk), hbB] at h
         exact (Option.some.inj h).symm
       have hAA : A'.broker = A.broker := by
         have h := hbA'
-        rw [hlb, LendingLedger.broker?_default hbB, if_neg hk, hbA] at h
+        rw [hlb, LendingLedger.broker?_default hbB, ite_eq_right hk, hbA] at h
         exact (Option.some.inj h).symm
       rw [hBB, hwB, Except.ok.injEq] at hwB'
       rw [hAA, hwA, Except.ok.injEq] at hwA'
@@ -457,7 +456,7 @@ private lemma LendingLedger.defaults_comm_loans {l la lb lab lba : LendingLedger
       hlba, LendingLedger.loan?_commit_ofLoan _ hlb', hlb, LendingLedger.loan?_commit_ofLoan _ heb]
     by_cases hkj : k = j
     · subst hkj
-      simp only [↓reduceIte, if_neg (Ne.symm hij), Option.map_some]
+      simp only [↓reduceIte, ite_eq_right (Ne.symm hij), Option.map_some]
       rw [Loan.default_withBroker hwB' hokAB, Loan.default_withBroker hwB hokB]
     · by_cases hki : k = i
       · subst hki

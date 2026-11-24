@@ -9,7 +9,7 @@ open XRPL.Model.Protocol
 
 def maxManagementFeeRate : TenthBips16 := 10_000                   -- 10%
 def maxCoverRate : TenthBips32 := 100_000                          -- 100%
-def debtMaximumCap : Number := Number.ofInt64 9223372036854775807  -- 2^63 - 1
+def debtMaximumCap : Number := Number.ofInt64 9223372036854775807 .to_nearest  -- 2^63 - 1
 
 structure RawLoanBroker where
   numericType : NumericType

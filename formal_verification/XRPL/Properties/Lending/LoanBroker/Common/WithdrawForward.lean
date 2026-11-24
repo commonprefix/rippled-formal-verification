@@ -65,8 +65,8 @@ lemma LoanBroker.canCoverWithdraw_of_units (lb : LoanBroker) (v : Vault) (amount
     have hne : ∃ e, numberExponent sum v.baseExponent .fractional = .ok e := by
       unfold numberExponent
       by_cases hz0 : sum.operator_eq Number.zero = true
-      · rw [if_pos hz0]; exact ⟨_, rfl⟩
-      rw [if_neg hz0]
+      · rw [ite_eq_left hz0]; exact ⟨_, rfl⟩
+      rw [ite_eq_right hz0]
       have hsm : sum.mantissa_ ≠ 0 := fun hm => hz0 (by rw [Number.eq_zero_of_mantissa_zero sum hsn hm]; decide)
       obtain ⟨hlo, hhi⟩ := hsn.mantissaBounds_nat hsm
       have hse : sum.exponent_ ≤ 0 := Number.exponent_le_of_toRat_lt sum 0 hsn
@@ -89,7 +89,7 @@ lemma LoanBroker.canCoverWithdraw_of_units (lb : LoanBroker) (v : Vault) (amount
       have hrnd := STAmount.roundToExponent_rounded_any_proof amount r _ _ hiou (by omega) (by omega) hr
       simp only [RoundsToRepresentableAt] at hrnd
       change r.toRat = _ at hrnd
-      rw [if_pos hpos.le, hkv, mul_div_assoc, div_self hp.ne', mul_one] at hrnd
+      rw [ite_eq_left hpos.le, hkv, mul_div_assoc, div_self hp.ne', mul_one] at hrnd
       have hrv : r.toRat = amount.toRat := by rw [hrnd, hkv]; simp
       have hr0 : r.mValue ≠ 0 := fun h0 => hpos.ne' (hrv ▸ (STAmount.toRat_eq_zero_iff r).mpr h0)
       have hrF := STAmount.roundToExponent_fczr amount r _ _ ⟨hiou.is_fractional, Or.inl hiou⟩ hr
@@ -100,7 +100,7 @@ lemma LoanBroker.canCoverWithdraw_of_units (lb : LoanBroker) (v : Vault) (amount
         .ok v.baseExponent := by
       rw [show amount.operator_neg.numericType = .fractional from hniou.is_fractional]; exact hps
     unfold clampToSumExponent
-    simp only [hfr', Bool.false_eq_true, if_false, hnN, ok_bind, habs, hps', pure_bind, hround]
+    simp only [hfr', Bool.false_eq_true, ite_false, hnN, ok_bind, habs, hps', pure_bind, hround]
 
   -- the amount is not zero, converts exactly and fits in the cover
   obtain ⟨aN, haN, haNv, haNn⟩ := STAmount.toNumber_canonical_exact amount .to_nearest hc
@@ -122,7 +122,7 @@ lemma LoanBroker.canCoverWithdraw_of_units (lb : LoanBroker) (v : Vault) (amount
     rw [hmin', ok_bind, (Number.operator_le_iff _ _ hmn hc'n).mpr hc'm]
     rfl
   unfold LoanBroker.canCoverWithdraw
-  simp only [hcl, ok_bind, hz0, haN, hlt, hsub, hmc, Bool.false_eq_true, if_false, Bool.not_true, pure_bind]
+  simp only [hcl, ok_bind, hz0, haN, hlt, hsub, hmc, Bool.false_eq_true, ite_false, Bool.not_true, pure_bind]
   rfl
 
 end XRPL.Model.Lending

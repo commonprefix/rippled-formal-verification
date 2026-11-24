@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayUnits
 import XRPL.Properties.Lending.Loan.Common.BrokerDebt
 import XRPL.Properties.Protocol.Number.Sub.ZeroShape
@@ -355,7 +356,7 @@ lemma Loan.lateComponents_final (l : Loan) (now : UInt32) (pc : PaymentComponent
   refine ⟨pc0, hpc0, ?_⟩
   simp only [bind, Except.bind, pure, Except.pure] at h1
   repeat' (split at h1)
-  all_goals (cases h1 <;> rfl)
+  all_goals (cases h1; try rfl)
 
 /-- The late instalment takes the same amounts off the loan as the next scheduled one. -/
 private lemma Loan.lateComponents_scheduled (l : Loan) (now : UInt32) (pc : PaymentComponents)
@@ -490,9 +491,8 @@ private lemma Loan.tryOverpayment_some (l : Loan) (opc : PaymentComponents) (re 
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   obtain ⟨hs1, hs2, hs3, -⟩ := Loan.state_fields l _ ‹l.state = _›
   have hT := l.wf.totalValueOutstanding_norm
@@ -587,9 +587,8 @@ private lemma UnsettledPayment.applyOverpayment_below (payment p' : UnsettledPay
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact ⟨UnsettledPayment.Below.refl _, hok⟩
-    | skip
   obtain ⟨g1, g2, g3, g4, g5⟩ := Loan.tryOverpayment_some _ _ _ ‹Loan.tryOverpayment _ _ = _›
   have hpaid := PaymentAmounts.add_paidOk _ _ _ ‹PaymentAmounts.add _ _ = _› hok ⟨g4, g5⟩
   have h1 := (RawLoan.to_lawful_ok ‹RawLoan.to_lawful _ = _›).1

@@ -2,10 +2,14 @@
 #include <test/formal_verification/findings/NumberFindingsHelpers.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
+#include <test/jtx/Account.h>
+#include <test/jtx/Env.h>
+#include <test/jtx/amount.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test/suite.h>
 #include <xrpl/json/json_value.h>
+#include <xrpl/ledger/helpers/AccountRootHelpers.h>
 #include <xrpl/protocol/AccountID.h>
 #include <xrpl/protocol/Indexes.h>
 #include <xrpl/protocol/Issue.h>
@@ -13,11 +17,15 @@
 #include <xrpl/protocol/MPTIssue.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STAmount.h>
+#include <xrpl/protocol/STLedgerEntry.h>
 #include <xrpl/protocol/UintTypes.h>
+#include <xrpl/protocol/XRPAmount.h>
 #include <xrpl/protocol/jss.h>
 
 #include <cstdint>
 #include <exception>
+#include <limits>
+#include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -31,8 +39,45 @@ namespace xrpl::test::formal_verification {
 // C++. Calls that fail are commented out in runTests(), the rest are regression tests.
 class NumberFindings_test : public LeanSuite
 {
-    // FV_M1_11: MPTAmount mulRatio returns INT64_MIN for a result below INT64_MIN instead of
-    // throwing std::overflow_error.
+    // FV_M1_9: operator* in Upward at the kMaxRep cusp agrees with the model (XRPLF/rippled#7051).
+    void
+    testMultiplicationUpward()
+    {
+        testcase("FV_M1_9 multiplication in Upward");
+        NumberMantissaScaleGuard const scaleGuard(MantissaRange::MantissaScale::Large330);
+        SaveNumberRoundMode const modeGuard{Number::setround(Number::RoundingMode::Upward)};
+
+        // 1. 1000000000000049863 * 9223372036854315903 under Upward.
+        checkBinOp(
+            *this,
+            makeNumberPair(false, 1'000'000'000'000'049'863ULL, 0),
+            '*',
+            makeNumberPair(false, 9'223'372'036'854'315'903ULL, 0));
+
+        // 2. The exact product is above 9223372036854775807e18, so the result is too.
+        Number const product =
+            Number{1'000'000'000'000'049'863LL} * Number{9'223'372'036'854'315'903LL};
+        BEAST_EXPECT(product > (Number{9'223'372'036'854'775'807LL, 18}));
+    }
+
+    // FV_M1_10: an MPT amount of 10^18 - 1 becomes a Number whose mantissa() is below 10^18.
+    void
+    testMptMantissaBelowMin()
+    {
+        testcase("FV_M1_10 MPTAmount mantissa below 10^18");
+        NumberMantissaScaleGuard const scaleGuard(MantissaRange::MantissaScale::Large330);
+        constexpr std::int64_t smallestMantissa = 1'000'000'000'000'000'000LL;  // 10^18
+
+        // 1. 10^18 - 1 as a Number.
+        Number const value = MPTAmount{smallestMantissa - 1};
+
+        // BUG: mantissa() returns 999999999999999999.
+        BEAST_EXPECTS(
+            value.mantissa() >= smallestMantissa,
+            "mantissa() returned " + std::to_string(value.mantissa()));
+    }
+
+    // FV_M1_11: MPTAmount mulRatio returns INT64_MIN for a result below it instead of throwing.
     void
     testMptMulRatioUnderflow()
     {
@@ -55,8 +100,7 @@ class NumberFindings_test : public LeanSuite
         BEAST_EXPECTS(threw, "mulRatio returned " + to_string(result));
     }
 
-    // FV_M1_12: a product, sum or difference that rounds into the range between kMaxRep and
-    // kMaxRepUp is the same in the model and in C++ (XRPLF/rippled#7389).
+    // FV_M1_12: results that round between kMaxRep and kMaxRepUp agree with the model.
     void
     testRangeBoundaryArithmetic()
     {
@@ -85,8 +129,7 @@ class NumberFindings_test : public LeanSuite
             makeNumberPair(false, 7'777'777'777'777'777'777ULL, 0));
     }
 
-    // FV_M1_12: operator* under Downward at the kMaxRep cusp is the same in the model and in C++.
-    // It landed 7 ULPs below the largest Number under the exact product (XRPLF/rippled#7389).
+    // FV_M1_12: operator* in Downward at the kMaxRep cusp agrees with the model.
     void
     testMultiplicationRounding()
     {
@@ -102,8 +145,7 @@ class NumberFindings_test : public LeanSuite
             makeNumberPair(false, Number::minMantissa() + 1, 0));
     }
 
-    // FV_M1_12: normalizing a mantissa from kMaxRep to kMaxRepUp is the same in the model and in
-    // C++, for both signs and in each rounding mode.
+    // FV_M1_12: normalizing a mantissa from kMaxRep to kMaxRepUp agrees with the model.
     void
     testCuspRounding()
     {
@@ -125,8 +167,7 @@ class NumberFindings_test : public LeanSuite
         }
     }
 
-    // FV_M1_13: operator/ under Upward at the kMaxRep cusp is the same in the model and in C++.
-    // It returned a value below the exact quotient.
+    // FV_M1_13: operator/ in Upward at the kMaxRep cusp agrees with the model.
     void
     testDivisionRounding()
     {
@@ -142,8 +183,7 @@ class NumberFindings_test : public LeanSuite
             makeNumberPair(false, 1'000'000'000'000'000'007ULL, 0));
     }
 
-    // FV_M1_14: an add or subtract of opposite signs with a large exponent gap recovers the
-    // dropped digits before it rounds, as the model does (XRPLF/rippled#7369).
+    // FV_M1_14: add and subtract of opposite signs with a large exponent gap agree with the model.
     void
     testLargeGapAddSub()
     {
@@ -177,8 +217,7 @@ class NumberFindings_test : public LeanSuite
         }
     }
 
-    // FV_M1_15: operator< orders two negative Numbers with the same exponent by value
-    // (XRPLF/rippled#7406).
+    // FV_M1_15: operator< orders negative Numbers with the same exponent (XRPLF/rippled#7406).
     void
     testNegativeComparison()
     {
@@ -198,8 +237,7 @@ class NumberFindings_test : public LeanSuite
         BEAST_EXPECT(lean_number_lt(leanNumber(b), leanNumber(a)) != 0 && (b.cppNum < a.cppNum));
     }
 
-    // FV_M1_16: the sum of two negative Numbers that overflows the mantissa rounds in the
-    // direction of the rounding mode. Downward and Upward were swapped.
+    // FV_M1_16: a sum of two negative Numbers that overflows the mantissa rounds the right way.
     void
     testAddDirectedRounding()
     {
@@ -216,8 +254,7 @@ class NumberFindings_test : public LeanSuite
         }
     }
 
-    // FV_M1_17: a ToNearest sum of opposite signs with heavy cancellation rounds to the nearer
-    // Number. It picked the farther one.
+    // FV_M1_17: a ToNearest sum with heavy cancellation rounds to the nearer Number.
     void
     testAddToNearestCancellation()
     {
@@ -233,8 +270,29 @@ class NumberFindings_test : public LeanSuite
             makeNumberPair(false, 5'175'909'259'972'499'745ULL, 22));
     }
 
-    // Helpers of testTopExponentOverflow, down to that test.
-    // A case is an operation, one of + - * /, and its two operands.
+    // FV_M1_18: at the largest OwnerCount one more object does not lower the account reserve.
+    void
+    testReserveAtLargestOwnerCount()
+    {
+        testcase("FV_M1_18 reserve at the largest OwnerCount");
+        using namespace jtx;
+        Env env{*this};
+        Account const alice{"alice"};
+        env.fund(XRP(1'000), alice);
+        env.close();
+
+        // 1. A copy of alice's account root with OwnerCount at the uint32 maximum.
+        auto const account = std::make_shared<SLE>(*env.le(alice));
+        account->setFieldU32(sfOwnerCount, std::numeric_limits<std::uint32_t>::max());
+
+        // 2. The reserve for one more object.
+        XRPAmount const current = accountReserve(*env.current(), account, env.journal);
+        XRPAmount const withOneMore =
+            accountReserve(*env.current(), account, env.journal, {.ownerCountDelta = 1});
+        BEAST_EXPECT(withOneMore >= current);
+    }
+
+    // Helpers of testTopExponentOverflow. A case is an operation, one of + - * /, and its operands.
     using Case = std::tuple<char, Number, Number>;
 
     // Runs each case in the mode and expects the result. A negative sign mirrors the case. No
@@ -275,8 +333,7 @@ class NumberFindings_test : public LeanSuite
         expectResult(cases, mode, negative, std::nullopt);
     }
 
-    // FV_M1_19: at the largest exponent, add, subtract and divide return a Number the constructor
-    // rejects when they round up, and throw when the rounded result fits. Multiply gets both right.
+    // FV_M1_19: at the largest exponent add, subtract and divide mishandle overflow.
     void
     testTopExponentOverflow()
     {
@@ -332,8 +389,7 @@ class NumberFindings_test : public LeanSuite
         expectOverflow(oneToFive, Mode::Upward, positive);
         expectOverflow(oneToFive, Mode::Downward, negative);
 
-        // 4. Exact result from top + 5 to top + 10, past the midpoint. Rounding toward zero
-        //    still gives top.
+        // 4. Exact result from top + 5 to top + 10, past the midpoint. Toward zero gives top.
         Case const fiveToTen[] = {
             // The exact results are top + 7, top + 7, top + 6.22 and top + 9.22.
             {'+', top, Number{7'000'000'000'000'000'000, 32750}},
@@ -353,8 +409,7 @@ class NumberFindings_test : public LeanSuite
         expectOverflow(fiveToTen, Mode::Downward, negative);
     }
 
-    // Add and subtract of operands at opposite ends of the exponent range are the same in the
-    // model and in C++, in each rounding mode (cases from xrpld PR 7825).
+    // Add and subtract at opposite ends of the exponent range agree with the model (xrpld PR 7825).
     void
     testAddSubExtremeExponents()
     {
@@ -383,8 +438,7 @@ class NumberFindings_test : public LeanSuite
         }
     }
 
-    // Helpers of the STAmount tests below.
-    // True when an amount of the asset can be built from the mantissa.
+    // STAmount test helpers. True when an amount of the asset can be built from the mantissa.
     template <class A>
     static bool
     amountAccepted(A const& asset, std::uint64_t mantissa)
@@ -437,8 +491,7 @@ class NumberFindings_test : public LeanSuite
         BEAST_EXPECTS(actual == expected, actual.getText() + " instead of " + expected.getText());
     }
 
-    // FV_M1_20: an STAmount built from a negative Number rounds toward zero in Downward and away
-    // from zero in Upward. STAmount::fromNumber drops the sign before it rounds.
+    // FV_M1_20: an STAmount built from a negative Number rounds Downward and Upward the wrong way.
     void
     testAmountFromNegativeNumber()
     {
@@ -490,8 +543,7 @@ class NumberFindings_test : public LeanSuite
         expectEqual(STAmount{xrp, oneAndHalf}, STAmount{xrp, 2ULL});
     }
 
-    // FV_M1_21: adding two IOU amounts in ToNearest rounds twice, to 19 digits and then to 16. It
-    // can return the farther amount, and at the top of the range throw when the nearest one fits.
+    // FV_M1_21: adding two IOU amounts in ToNearest rounds twice, to 19 digits and then to 16.
     void
     testIouAddRoundsTwice()
     {
@@ -521,8 +573,7 @@ class NumberFindings_test : public LeanSuite
             expectEqual(largest + lessThanHalf, largest);
     }
 
-    // FV_M1_22: an XRP or MPT amount built from a mantissa and an exponent is set to 0 when the
-    // exponent is -20 or less, before rounding. The same value written two ways gives 1 or 0.
+    // FV_M1_22: an XRP or MPT amount with an exponent of -20 or less is 0 before rounding.
     void
     testAmountSmallExponent()
     {
@@ -551,8 +602,7 @@ class NumberFindings_test : public LeanSuite
         expectEqual(STAmount{mpt, 18'000'000'000'000'000'000ULL, -20}, STAmount{mpt, 1ULL});
     }
 
-    // FV_M1_23: an MPT amount built from a mantissa of 2^63 or 2^63 + 1 becomes 9223372036854775800
-    // instead of being rejected. Number::mantissa() drops the last digit of the mantissa.
+    // FV_M1_23: an MPT amount from a mantissa of 2^63 or 2^63 + 1 is accepted, not rejected.
     void
     testMptMantissaAboveMax()
     {
@@ -570,8 +620,7 @@ class NumberFindings_test : public LeanSuite
         BEAST_EXPECT(!amountAccepted(mpt, 9'223'372'036'854'775'809ULL));
     }
 
-    // FV_M1_24: adding two XRP amounts builds the sum with a constructor that does not call
-    // canonicalize, so the sum can be above the largest XRP amount of 10^17 drops.
+    // FV_M1_24: adding two XRP amounts can give a sum above the largest XRP amount of 10^17 drops.
     void
     testXrpAddRange()
     {
@@ -594,8 +643,7 @@ class NumberFindings_test : public LeanSuite
         BEAST_EXPECT(sumThrows(-largest, -one));
     }
 
-    // FV_M1_25: an IOU amount built from a mantissa of 2^63 or more becomes negative. STAmount::iou
-    // casts the unsigned mantissa to int64, and amountFromString and amountFromJson go through it.
+    // FV_M1_25: an IOU amount built from a mantissa of 2^63 or more becomes negative.
     void
     testIouMantissaAboveMax()
     {
@@ -629,8 +677,7 @@ class NumberFindings_test : public LeanSuite
         BEAST_EXPECT(!textAccepted(usd, "18446744073709551615e80"));
     }
 
-    // FV_M1_26: adding two MPT amounts adds their int64 values with no check, so a sum above
-    // 2^63 - 1 wraps around and comes back with the wrong sign.
+    // FV_M1_26: adding two MPT amounts above 2^63 - 1 in total wraps to the wrong sign.
     void
     testMptAddPastInt64()
     {
@@ -665,6 +712,7 @@ class NumberFindings_test : public LeanSuite
     {
         // Open bugs. Each call fails until the C++ code is fixed, so it is commented out.
         // clang-format off
+        // testMptMantissaBelowMin();       // FV_M1_10, by design
         // testMptMulRatioUnderflow();      // FV_M1_11
         // testTopExponentOverflow();       // FV_M1_19
         // testAmountFromNegativeNumber();  // FV_M1_20
@@ -676,6 +724,7 @@ class NumberFindings_test : public LeanSuite
         // testMptAddPastInt64();           // FV_M1_26
 
         // Cases that pass today, kept as regression tests.
+        testMultiplicationUpward();         // FV_M1_9
         testRangeBoundaryArithmetic();      // FV_M1_12
         testMultiplicationRounding();       // FV_M1_12
         testCuspRounding();                 // FV_M1_12
@@ -684,6 +733,7 @@ class NumberFindings_test : public LeanSuite
         testNegativeComparison();           // FV_M1_15
         testAddDirectedRounding();          // FV_M1_16
         testAddToNearestCancellation();     // FV_M1_17
+        testReserveAtLargestOwnerCount();   // FV_M1_18
 
         // Cases with no bug ID, kept as regression tests.
         testAddSubExtremeExponents();

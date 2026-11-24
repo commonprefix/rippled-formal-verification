@@ -119,12 +119,12 @@ theorem RawLoanBroker.to_lawful_ok {rb : RawLoanBroker} {lb : LoanBroker}
 theorem RawLoanBroker.to_lawful_ok_of {rb : RawLoanBroker} (hwf : rb.WF) (hvalid : rb.Valid) :
     ∃ lb, rb.to_lawful = .ok lb ∧ lb.toRawLoanBroker = rb := by
   refine ⟨⟨rb, hwf, hvalid⟩, ?_, rfl⟩
-  unfold RawLoanBroker.to_lawful; rw [dif_pos ⟨hwf, hvalid⟩]
+  unfold RawLoanBroker.to_lawful; rw [dite_eq_left ⟨hwf, hvalid⟩]
 
 /-- A raw state that is not well-formed and valid fails the re-validation with `notLawful`. -/
 theorem RawLoanBroker.to_lawful_not_lawful {rb : RawLoanBroker} (h : ¬ (rb.WF ∧ rb.Valid)) :
     rb.to_lawful = .error .notLawful := by
-  unfold RawLoanBroker.to_lawful; rw [dif_neg h]
+  unfold RawLoanBroker.to_lawful; rw [dite_eq_right h]
 
 /-- Two lawful brokers with the same record are the same broker. -/
 lemma broker_eq_of_raw {a b : LoanBroker} (h : a.toRawLoanBroker = b.toRawLoanBroker) : a = b := by

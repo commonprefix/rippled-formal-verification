@@ -1,15 +1,15 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.AssetFlowDefs
 import XRPL.Properties.Lending.Ledger.Common.AssetsTotalSteps
 import XRPL.Properties.Lending.Ledger.Common.DefaultCredit
 import XRPL.Properties.Lending.Ledger.Common.VaultOutflow
-import XRPL.Properties.Lending.Ledger.Common.SharesNonneg
+import XRPL.Properties.Lending.Ledger.Common.ShareSum
 import XRPL.Properties.Lending.Ledger.Common.WithdrawHolder
 
 /-! # Each transaction moves AssetsTotal by exactly its flow
 
 On a reachable ledger that is not coarsened before or after it, a transaction changes AssetsTotal by exactly the
-assets it moves: a deposit adds what it charges, a withdrawal and a clawback take off what they pay, a payment adds
-its interest and a default writes off the principal the cover does not pay. -/
+assets it moves in or out. -/
 
 namespace XRPL.Model.Lending
 
@@ -394,7 +394,7 @@ private lemma LendingLedger.pay_total_eq (l l' : LendingLedger) (i : Nat) (pt : 
   · -- an XRP or MPT vault: the credit is the sum floored to a whole unit, which it already is
     have hb0 : l.vault.baseExponent = 0 := hbint hint
     unfold sumRoundAndSubtract at hcred
-    rw [if_pos hint] at hcred
+    rw [ite_eq_left hint] at hcred
     obtain ⟨x, hx, hcred⟩ := bind_ok_peel _ _ _ hcred
     obtain rfl : x = credit := Except.ok.inj hcred
     have htneg := Number.negative_false_of_nonneg tot htotn htot0
@@ -584,7 +584,7 @@ lemma LendingLedger.flow_step (l l' : LendingLedger) (tx : LendingTx) (hr : l.Re
         have hdep : (l.vault.deposit amount isDonation l.now hpos).run = .ok (.ok _) := ‹_›
         rw [Vault.deposit_total_eq _ _ _ _ _ hc hty hasset hv hS hYg _ hdep]
         show _ = _ + (l.depositedAssets amount isDonation - 0 - 0 + 0 - 0)
-        simp only [LendingLedger.depositedAssets, dif_pos hpos, hdep]
+        simp only [LendingLedger.depositedAssets, dite_eq_left hpos, hdep]
         ring
       · cases hu
     | vaultWithdraw hd amount =>
@@ -601,7 +601,7 @@ lemma LendingLedger.flow_step (l l' : LendingLedger) (tx : LendingTx) (hr : l.Re
           show (_ : VaultWithAmounts).vault'.assetsDeployed = _ from congrArg RawVault.assetsDeployed hraw,
           Vault.debit_total_eq _ _ _ raw hasset hv hS hc hj hle hadj]
         show _ = _ + ((0 : ℚ) - l.withdrawalPayout hd amount - 0 + 0 - 0)
-        simp only [LendingLedger.withdrawalPayout, dif_pos hpos, hwh]
+        simp only [LendingLedger.withdrawalPayout, dite_eq_left hpos, hwh]
         ring
       · cases hu
     | vaultClawback hd assets =>
@@ -622,7 +622,7 @@ lemma LendingLedger.flow_step (l l' : LendingLedger) (tx : LendingTx) (hr : l.Re
           show (_ : VaultWithAmounts).vault'.assetsDeployed = _ from congrArg RawVault.assetsDeployed hraw,
           Vault.debit_total_eq _ _ _ raw hasset hv hS hc hj hle hadj]
         show _ = _ + ((0 : ℚ) - 0 - l.clawedAssets hd assets + 0 - 0)
-        simp only [LendingLedger.clawedAssets, dif_pos hnn, hof, hcw]
+        simp only [LendingLedger.clawedAssets, dite_eq_left hnn, hof, hcw]
         ring
       · cases hu
     | vaultBurnShares hd amount =>

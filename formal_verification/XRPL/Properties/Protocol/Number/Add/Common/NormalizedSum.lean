@@ -17,7 +17,7 @@ private lemma Number.operator_add_zero_shape_any (x y result : Number) (mode : r
   · have h_result : result = x := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_pos hy_guard] at hok
+      rw [ite_eq_left hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     subst h_result
     exact Number.eq_zero_of_mantissa_zero result hx h0
@@ -25,14 +25,14 @@ private lemma Number.operator_add_zero_shape_any (x y result : Number) (mode : r
   · have h_result : result = y := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_pos hx_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_left hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     subst h_result
     exact Number.eq_zero_of_mantissa_zero result hy h0
   by_cases heq_guard : x.operator_eq y.operator_neg = true
   · replace hok := Number.operator_add_ok_spec hok
     unfold Number.operator_addSpec at hok
-    rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
+    rw [ite_eq_right hy_guard, ite_eq_right hx_guard, ite_eq_left heq_guard] at hok
     exact (Except.ok.inj (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
   have hx_mant_ne : x.mantissa_ ≠ 0 := fun h => hx_guard (by rw [Number.eq_zero_of_mantissa_zero x hx h]; decide)
   have hy_mant_ne : y.mantissa_ ≠ 0 := fun h => hy_guard (by rw [Number.eq_zero_of_mantissa_zero y hy h]; decide)

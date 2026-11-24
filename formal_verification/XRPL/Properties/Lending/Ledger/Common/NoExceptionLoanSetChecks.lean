@@ -1,12 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionLoanSetValue
 import XRPL.Properties.Lending.LoanBroker.Common.CoverGrid
 import XRPL.Properties.Protocol.STAmount.Common.Representable
 
 /-! # The checks of a new loan compute
 
-After the values of the loan a LoanSet runs the precision check, the amortization guards, the Open-limit check
-and the broker's limits. Each returns a result code: the amounts they build are within the asset's range once the
-loan's values are. -/
+The precision check, amortization guards, Open limit check and broker limits of a LoanSet each return a result code
+once the loan's values are within the asset's range. -/
 
 namespace XRPL.Model.Lending
 
@@ -138,7 +138,7 @@ private lemma STAmount.roundToNumericType_upward_unit (nt : NumericType)
       simp only at hok
       have hty := STAmount.ofNumber_mNumericType _ _ _ st hof
       have hint : st.integral = false := by unfold STAmount.integral; rw [hty]; rfl
-      rw [if_neg (by rw [hint]; decide)] at hok
+      rw [ite_eq_right (by rw [hint]; decide)] at hok
       cases hr : STAmount.roundToExponent st s .upward with
       | error e => rw [hr] at hok; exact absurd hok (by simp)
       | ok r =>
@@ -339,7 +339,7 @@ private lemma Vault.exceedsOpenLimit_computes (v : Vault) (x : Number) (hx : x.i
   obtain ⟨s₁, hs₁⟩ := Number.operator_add_ok_of_abs atot v.yieldUnrealized .towards_zero hatN hYN
     (by rw [abs_of_nonneg hat0]; linarith) (by rw [abs_of_nonneg hY0]; linarith)
   obtain ⟨n₁, hlo₁, hs₁v⟩ := Number.operator_add_rounded_towards_zero _ _ _ hatN hYN hs₁
-  rw [if_pos (by linarith)] at hlo₁
+  rw [ite_eq_left (by linarith)] at hlo₁
   have hs₁ge : atot.toRat ≤ s₁.toRat := by
     rw [hs₁v]; exact Number.lower_tight _ n₁ hlo₁ atot hatN (by linarith)
   have hs₁le : s₁.toRat ≤ atot.toRat + v.yieldUnrealized.toRat := by
@@ -372,8 +372,8 @@ private lemma minimumBrokerCover_computes (nt : NumericType)
     (hdK : d.toRat ≤ K) (hrate : rate.toNat ≤ 100000)
     (hfit : ∀ v : ℚ, 0 ≤ v → v ≤ K → STAmount.RoundsInRange nt .upward v) (he : -96 ≤ e ∧ e ≤ 79) :
     ∃ m, minimumBrokerCover nt d rate e = .ok m := by
-  obtain ⟨hrN, hrv⟩ := TenthBips32.toNumber_facts rate
-  obtain ⟨huN, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
+  obtain ⟨hrN, hrv⟩ := TenthBips32.toNumber_facts rate .upward
+  obtain ⟨huN, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity .upward
   have hu : (kTenthBipsPerUnity.toNat : ℚ) = 100000 := by decide
   rw [hu] at huv
   have hrq : (rate.toNat : ℚ) ≤ 100000 := by exact_mod_cast hrate
@@ -392,7 +392,7 @@ private lemma minimumBrokerCover_computes (nt : NumericType)
   have hw2v' : w2.toRat = (K : ℚ) := by rw [hw2v]; simp
 
   -- the debt times the rate, rounded up
-  obtain ⟨p, hp⟩ := Number.operator_mul_ok_of_abs d rate.toNumber .upward hd hrN
+  obtain ⟨p, hp⟩ := Number.operator_mul_ok_of_abs d (rate.toNumber .upward) .upward hd hrN
     (by rw [abs_of_nonneg hd0]; linarith [show (2 : ℚ) ^ 63 < 10 ^ 200 by norm_num])
     (by rw [hrv, abs_of_nonneg hr0]; linarith [show (100000 : ℚ) < 10 ^ 200 by norm_num])
   have hpN := Number.operator_mul_isNormalized _ _ p _ hd hrN hp
@@ -409,7 +409,7 @@ private lemma minimumBrokerCover_computes (nt : NumericType)
         rwa [hw1v'] at this
 
   -- over the unity, rounded up
-  obtain ⟨m0, hm0⟩ := Number.operator_div_ok_of_abs p kTenthBipsPerUnity.toNumber .upward hpN huN
+  obtain ⟨m0, hm0⟩ := Number.operator_div_ok_of_abs p (kTenthBipsPerUnity.toNumber .upward) .upward hpN huN
     (by rw [abs_of_nonneg hp0.1]; linarith [show (2 : ℚ) ^ 63 * 100000 < 10 ^ 200 by norm_num])
     (by
       rw [huv, abs_of_nonneg (by norm_num)]
@@ -434,8 +434,8 @@ private lemma minimumBrokerCover_computes (nt : NumericType)
     (hfit _ hm00.1 hm00.2) he
   refine ⟨m, ?_⟩
   have heq : minimumBrokerCover nt d rate e =
-      ((d.operator_mul rate.toNumber .upward) >>=
-        (fun q => q.operator_div kTenthBipsPerUnity.toNumber .upward)) >>=
+      ((d.operator_mul (rate.toNumber .upward) .upward) >>=
+        (fun q => q.operator_div (kTenthBipsPerUnity.toNumber .upward) .upward)) >>=
           (fun mc => STAmount.roundToNumericType nt mc .upward (some e)) := rfl
   rw [heq, hp, ok_bind, hm0, ok_bind, hm]
 

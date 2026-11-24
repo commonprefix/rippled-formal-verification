@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.InterestDue
 import XRPL.Properties.Lending.Loan.Common.ReamortizationInterestIntegral
 import XRPL.Properties.Lending.Loan.Common.PaySteps
@@ -535,11 +536,10 @@ lemma Loan.doPayment_ne_notLawful (l : Loan) (pc : PaymentComponents)
   · simp only [Loan.doPayment, hf, Bool.false_eq_true, ↓reduceIte] at h
     unfold_ter at h
     walk_ok
-    all_goals first
+    all_goals try first
       | exact Number.operator_sub_ne_notLawful _ _ _ ‹_›
       | exact UInt32.subChecked_ne_notLawful _ _ ‹_›
       | exact UInt32.addChecked_ne_notLawful _ _ ‹_›
-      | skip
     rename_i hw
     obtain ⟨l', hl'⟩ := Loan.doPayment_tracked_lawful l pc ht hlt hr0 hr1 _ _ _ ‹_› ‹_› ‹_›
     rw [hl'] at hw
@@ -607,13 +607,12 @@ lemma UnsettledPayment.payInstalments_ne_notLawful {α : Type} (payment : Unsett
     rw [UnsettledPayment.payInstalments] at h
     unfold_ter at h
     walk_ok
-    all_goals first
+    all_goals try first
       | exact Loan.scheduledComponents_ne_notLawful _ ‹_›
       | exact PaymentComponents.totalDue_ne_notLawful _ ‹_›
       | exact Number.operator_add_ne_notLawful _ _ _ ‹_›
       | exact PaymentComponents.paidAmounts_ne_notLawful _ ‹_›
       | exact PaymentAmounts.add_ne_notLawful _ _ ‹_›
-      | skip
     · exact Loan.doPayment_with_fee_ne_notLawful _ hl _ _ ‹_› ‹_› ‹_›
     · refine ih _ ?_ ‹UnsettledPayment.payInstalments _ n amount = Except.error Error.notLawful›
       exact Loan.PayShape.doPayment_with_fee hl _ _ ‹_› ‹_›
@@ -683,10 +682,9 @@ private lemma Loan.payScheduled_ne_notLawful (loan : Loan) (v : Vault) (amount :
   simp only [Loan.payScheduledInstalments] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact hu (by simp only [ExceptT.run]; assumption)
     | exact RawLoan.interestDue_ne_notLawful _ ‹_›
-    | skip
   rename_i hloop
   refine UnsettledPayment.payInstalments_ne_notLawful _ _ _ ?_ hloop
   dsimp only
@@ -706,13 +704,12 @@ lemma Loan.payInstalments_ne_notLawful (loan : Loan) (v : Vault) (pt : LoanPayme
     simp only [Loan.payInstalments, Loan.payInstalment] at h
     unfold_ter at h
     walk_ok
-    all_goals first
+    all_goals try first
       | exact hu (by simp only [ExceptT.run]; assumption)
       | exact Loan.lateComponents_ne_notLawful _ _ ‹_›
       | exact PaymentComponents.totalDue_ne_notLawful _ ‹_›
       | exact RawLoan.interestDue_ne_notLawful _ ‹_›
       | exact PaymentComponents.paidAmounts_ne_notLawful _ ‹_›
-      | skip
     rename_i hdo
     have hla := Loan.unimpairIfImpaired_loan' loan v _ ‹Loan.unimpairIfImpaired loan v = _›
     refine Loan.doPayment_late_ne_notLawful _ ?_ now _ ‹Loan.lateComponents _ now = _› ?_ hdo
@@ -726,13 +723,12 @@ lemma Loan.payInstalments_ne_notLawful (loan : Loan) (v : Vault) (pt : LoanPayme
     simp only [Loan.payInstalments, Loan.payInstalment] at h
     unfold_ter at h
     walk_ok
-    all_goals first
+    all_goals try first
       | exact hu (by simp only [ExceptT.run]; assumption)
       | exact Loan.fullComponents_ne_notLawful _ _ ‹_›
       | exact PaymentComponents.totalDue_ne_notLawful _ ‹_›
       | exact RawLoan.interestDue_ne_notLawful _ ‹_›
       | exact PaymentComponents.paidAmounts_ne_notLawful _ ‹_›
-      | skip
     rename_i hdo
     exact Loan.doPayment_ne_notLawful _ _ (Or.inl (Loan.fullComponents_final _ _ _ ‹Loan.fullComponents _ now = _›))
       hdo
@@ -842,7 +838,7 @@ lemma Loan.settle_ne_notLawful (p : UnsettledPayment Vault)
   simp only [Loan.settlePayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact RawLoanBroker.hasMinimumCover_ne_notLawful _ _ ‹_›
     | exact RawLoan.interestDue_ne_notLawful _ ‹_›
     | exact Number.operator_sub_ne_notLawful _ _ _ ‹_›
@@ -850,7 +846,6 @@ lemma Loan.settle_ne_notLawful (p : UnsettledPayment Vault)
     | exact sumRoundAndSubtract_ne_notLawful _ _ _ _ _ ‹_›
     | exact STAmount.toNumber_ne_notLawful _ _ ‹_›
     | exact validatePostPayment_ne_notLawful _ _ ‹_›
-    | skip
   -- the vault update
   all_goals try
     exact Loan.settle_pool_ne_notLawful p hpaid.1 hsi hpool hnt hmax
@@ -1031,9 +1026,8 @@ private lemma Loan.tryOverpayment_lawful (l : Loan) (opc : PaymentComponents) (r
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   exact Loan.reamortized_lawful l opc hlo hint hr0 hpd ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
     ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› hi
@@ -1064,13 +1058,12 @@ lemma UnsettledPayment.applyOverpayment_ne_notLawful (payment : UnsettledPayment
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact STAmount.roundToNumericType_ne_notLawful _ _ _ _ ‹_›
     | exact Number.operator_sub_ne_notLawful _ _ _ ‹_›
     | exact Loan.overpaymentComponents_ne_notLawful _ _ ‹_›
     | exact Loan.tryOverpayment_ne_notLawful _ _ ‹_›
     | exact PaymentAmounts.add_ne_notLawful _ _ ‹_›
-    | skip
   rename_i hlaw
   have hopc := ‹Loan.overpaymentComponents _ _ = _›
   have hovn := STAmount.roundToNumericType_isNormalized _ _ _ _ _

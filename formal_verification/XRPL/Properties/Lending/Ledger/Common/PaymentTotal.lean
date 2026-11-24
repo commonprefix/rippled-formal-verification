@@ -3,10 +3,8 @@ import XRPL.Properties.Lending.Loan.Common.DueLoop
 
 /-! # A payment that passes its checks succeeds
 
-A payment of at least the amount due of its first instalment, an overpayment of exactly that amount, on a loan
-stored on a reachable ledger, pays its instalments: a late or full payment its one instalment, a regular payment or
-an overpayment the scheduled instalments its amount covers. It then settles while the vault is not coarsened, no
-interest part is negative, and the vault gets principal or interest or the loan is paid off. -/
+A payment of at least its first instalment's amount due pays its instalments and settles, while the vault is not
+coarsened, no interest part is negative, and the vault gets something or the loan is paid off. -/
 
 namespace XRPL.Model.Lending
 

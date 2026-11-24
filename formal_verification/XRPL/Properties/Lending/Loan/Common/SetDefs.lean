@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Model.Lending.Loan.LoanSet
 import XRPL.Model.Lending1_1.AssetPool
 import XRPL.Properties.Lending.Common.Reduction
@@ -64,10 +65,10 @@ lemma LoanSchedule.checkTimeAvailability_eq (s : LoanSchedule) :
   obtain ⟨-, hta⟩ := UInt32.subChecked_eq_ok.mp hta
   have hT : ta.toNat = maxTime.toNat - s.startDate.toNat := by rw [← hta]; exact UInt32.toNat_sub_of_le _ _ hS
   by_cases h1 : (decide (s.gracePeriod > ta) || decide (s.paymentInterval > ta) || decide (s.paymentTotal > ta)) = true
-  · rw [if_pos h1]
+  · rw [ite_eq_left h1]
     simp only [Bool.or_eq_true, decide_eq_true_eq, gt_iff_lt, UInt32.lt_iff_toNat_lt, hT] at h1
-    rw [if_pos (by omega)]
-  · rw [if_neg h1]
+    rw [ite_eq_left (by omega)]
+  · rw [ite_eq_right h1]
     simp only [Bool.or_eq_true, decide_eq_true_eq, gt_iff_lt, UInt32.lt_iff_toNat_lt, hT, not_or, not_lt] at h1
     have hle : s.gracePeriod ≤ ta := by rw [UInt32.le_iff_toNat_le, hT]; omega
     split
@@ -82,15 +83,15 @@ lemma LoanSchedule.checkTimeAvailability_eq (s : LoanSchedule) :
       rw [UInt32.lt_iff_toNat_lt, UInt32.toNat_div, hT2]
     by_cases h3 : (maxTime.toNat - s.startDate.toNat - s.gracePeriod.toNat) / s.paymentInterval.toNat <
         s.paymentTotal.toNat
-    · rw [if_pos (h2.mpr h3), if_pos (by omega)]
-    · rw [if_neg (mt h2.mp h3), if_neg (by omega)]
+    · rw [ite_eq_left (h2.mpr h3), ite_eq_left (by omega)]
+    · rw [ite_eq_right (mt h2.mp h3), ite_eq_right (by omega)]
 
 /-- A schedule whose last grace period ends after the largest ledger time is killed. -/
 lemma LoanSchedule.checkTimeAvailability_killed (s : LoanSchedule)
     (h : maxTime.toNat <
       s.startDate.toNat + s.gracePeriod.toNat + s.paymentTotal.toNat * s.paymentInterval.toNat) :
     s.checkTimeAvailability = .ok .tecKILLED := by
-  rw [LoanSchedule.checkTimeAvailability_eq, if_pos]
+  rw [LoanSchedule.checkTimeAvailability_eq, ite_eq_left]
   by_cases hg : s.gracePeriod.toNat > maxTime.toNat - s.startDate.toNat
   · exact Or.inl hg
   refine Or.inr (Or.inr (Or.inr ?_))
@@ -107,7 +108,7 @@ lemma LoanSchedule.checkTimeAvailability_success (s : LoanSchedule) (hfits : s.F
   have hn := hfits.paymentTotal_pos
   have hi := hfits.paymentInterval_pos
   have h := hfits.ends_in_time
-  rw [LoanSchedule.checkTimeAvailability_eq, if_neg]
+  rw [LoanSchedule.checkTimeAvailability_eq, ite_eq_right]
   rw [UInt32.lt_iff_toNat_lt] at hn hi
   simp only [UInt32.toNat_zero] at hn hi
   have hni : s.paymentTotal.toNat ≤ s.paymentTotal.toNat * s.paymentInterval.toNat :=

@@ -7,9 +7,8 @@ import XRPL.Properties.Vault.Proofs.Support.Errors
 
 /-! # The vault re-check after a balance update
 
-A loan operation updates the vault with `adjustBalances`, which rejects a negative balance and a LossUnrealized
-above AssetsDeployed. The vault it writes passes its re-check when the asset stores the new AssetsDeployed,
-AssetsReserved stays within it, and a vault without shares holds nothing. -/
+The vault a loan operation writes with `adjustBalances` passes its re-check when the asset stores the new
+AssetsDeployed, AssetsReserved stays within it, and a vault without shares holds nothing. -/
 
 namespace XRPL.Model.Lending
 

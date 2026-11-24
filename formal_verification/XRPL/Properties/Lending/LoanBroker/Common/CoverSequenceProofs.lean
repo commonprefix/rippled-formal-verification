@@ -27,7 +27,7 @@ private lemma LoanBroker.roundedCoverAmount_canonical (lb : LoanBroker) (pool : 
     omega
   by_cases hint : lb.numericType.isIntegral = true
   · unfold sumRoundAndSubtract at hs
-    rw [if_pos hint] at hs
+    rw [ite_eq_left hint] at hs
     simp only [bind_pure] at hs
     obtain ⟨hic, hnt⟩ := STAmount.ofNumber_integral_canonical _ _ _ r hint hs
     exact ⟨hic.canonical (by rw [hnt]; exact hmax hint), hnt⟩
@@ -189,7 +189,7 @@ lemma LoanBroker.coverDeposit_clawable_proof (lb : LoanBroker) (base : Int) (hr 
   refine ⟨res2.amount', hrc, ?_, hcan1⟩
   rw [hfl]
   simp only [LoanBroker.clawTarget, (STAmount.isZero_eq_false_iff_pos _ hpos'.le).2 hpos', Bool.false_eq_true,
-    if_false, Number.toRat_zero, sub_zero]
+    ite_false, Number.toRat_zero, sub_zero]
   rw [min_eq_left hle]
   exact floor_units_self _ _ (j : ℤ) (by rw [hj]; norm_cast)
 
@@ -370,7 +370,7 @@ private lemma LoanBroker.Reachable.clawback_some (lb : LoanBroker) (base : Int) 
     LoanBroker.Reachable.coverClawback_facts lb base hr hmax v hvb hnt (some a) hreq hcan res hok
   obtain ⟨hz, -⟩ := LoanBroker.Reachable.zone_setup lb base hr hmax v hvb
   obtain ⟨-, jc, hjc⟩ := hz.cover
-  simp only [LoanBroker.clawTarget, (STAmount.isZero_eq_false_iff_pos _ hpa.le).2 hpa, Bool.false_eq_true, if_false,
+  simp only [LoanBroker.clawTarget, (STAmount.isZero_eq_false_iff_pos _ hpa.le).2 hpa, Bool.false_eq_true, ite_false,
     sub_zero] at hfl
   rw [hvb] at hjc
   rw [floor_min_grid a.toRat lb.toExact.coverAvailable base jc hjc] at hfl

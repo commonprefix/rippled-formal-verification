@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.AssetFlowSteps
 import XRPL.Properties.Lending.Ledger.Common.PaymentShareValue
 import XRPL.Properties.Lending.Loan.Common.ShareValue
@@ -153,7 +154,7 @@ lemma LendingLedger.pay_credit_floor (l : LendingLedger) (hr : l.Reachable) (i :
   · -- an XRP or MPT vault: the credit is the whole sum, so nothing is lost
     have hb0 : l.vault.baseExponent = 0 := hbint hint
     unfold sumRoundAndSubtract at hcred
-    rw [if_pos hint] at hcred
+    rw [ite_eq_left hint] at hcred
     obtain ⟨x, hx, hcred⟩ := bind_ok_peel _ _ _ hcred
     obtain rfl : x = credit := Except.ok.inj hcred
     have htneg := Number.negative_false_of_nonneg tot htotn htot0

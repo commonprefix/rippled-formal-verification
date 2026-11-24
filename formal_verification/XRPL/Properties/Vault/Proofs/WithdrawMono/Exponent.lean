@@ -2,9 +2,8 @@ import XRPL.Properties.Vault.Proofs.Support.NormalizeFacts
 
 /-! # The exponent of a fractional `.to_nearest` `ofNumber`
 
-For a positive normalized `n = m·10^k` the 16-digit pack has exponent `k+3`, or
-`k+4` exactly when `m ≥ 9999999999999999500` (the carry). Hence the stored exponent
-is at least `j+4` iff `n ≥ 9999999999999999500·10^j`. -/
+For a positive normalized `n = m·10^k` the 16-digit pack has exponent `k+3`, or `k+4` exactly when
+`m ≥ 9999999999999999500`. -/
 
 namespace XRPL.Model.SingleAssetVault.WdMono
 
@@ -25,7 +24,7 @@ private lemma guard_round_tn (g : Guard) (r : ℕ) (hr : r < 1000)
     have hr0 : r = 0 := by
       have : (r : ℚ) = 0 := by field_simp at hf0; exact_mod_cast hf0
       exact_mod_cast this
-    have hround : g.round .to_nearest = -2 := by unfold Guard.round; rw [if_pos he]
+    have hround : g.round .to_nearest = -2 := by unfold Guard.round; rw [ite_eq_left he]
     subst hr0
     constructor
     · rw [hround]; exact ⟨fun h => absurd h (by decide), fun h => absurd h (by omega)⟩
@@ -68,7 +67,7 @@ lemma ntr_tn_exp (n : Number) (mant : Int64) (exp : Int)
         0 ≤ mant.toInt := by
     intro X hX heq hneg
     rw [← heq, hneg]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     rw [UInt64.toInt64_toInt_of_lt _ hX]; positivity
   obtain ⟨hr1, hr0⟩ :=
     guard_round_tn g (n.mantissa_.toNat % 1000) (Nat.mod_lt _ (by omega)) hrep
@@ -109,13 +108,13 @@ lemma ntr_tn_exp (n : Number) (mant : Int64) (exp : Int)
       · exfalso
         have h_err : n.normalizeToRange cMinValue cMaxValue .to_nearest = .error .normalize2 := by
           unfold Number.normalizeToRange
-          rw [h_red, hcusp, hcusp_eq, if_pos hovf]
+          rw [h_red, hcusp, hcusp_eq, ite_eq_left hovf]
         rw [h_err] at hok; exact absurd hok (by simp)
       · have hcompute : n.normalizeToRange cMinValue cMaxValue .to_nearest
             = .ok (if n.negative_ then -cMinValue.toInt64 else cMinValue.toInt64,
                    (n.exponent_ + 3) + 1) := by
           unfold Number.normalizeToRange
-          rw [h_red, hcusp, hcusp_eq, if_neg hovf]
+          rw [h_red, hcusp, hcusp_eq, ite_eq_right hovf]
           ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
@@ -191,7 +190,7 @@ lemma checked_frac_zero (mant : UInt64) (exp : Int) (neg : Bool) (mode : roundin
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
-    rw [STAmount.iou_eq mode h_int]
+    rw [STAmount.iou_eq mode h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
@@ -199,13 +198,13 @@ lemma checked_frac_zero (mant : UInt64) (exp : Int) (neg : Bool) (mode : roundin
   · exfalso
     have hb : STAmount.checked .fractional mant exp neg mode = .error .overflow := by
       rw [STAmount.checked]; unfold STAmount.canonicalize
-      rw [if_neg h_int, hiou, if_pos hhi]
+      rw [ite_eq_right h_int, hiou, ite_eq_left hhi]
     rw [hb] at hok; simp at hok
   · by_cases hlo : exp < cMinOffset
     · refine ⟨by unfold cMinOffset at hlo; exact hlo, ?_⟩
       rw [STAmount.checked] at hok
       unfold STAmount.canonicalize at hok
-      rw [if_neg h_int, hiou, if_neg hhi, if_pos hlo] at hok
+      rw [ite_eq_right h_int, hiou, ite_eq_right hhi, ite_eq_left hlo] at hok
       simp only [] at hok
       rw [← Except.ok.inj hok]
       rfl
@@ -240,9 +239,9 @@ lemma ofNumber_frac_tn_exp (n : Number) (r : STAmount) (hn : n.isNormalized)
     · exact hlo
   have hneg_dec : decide (n.signum < 0) = false := by rw [Number.signum_neg_decide]; exact hneg
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide : ¬ (NumericType.fractional.isIntegral = true))] at hok
+  rw [ite_eq_right (by decide : ¬ (NumericType.fractional.isIntegral = true))] at hok
   rw [hneg_dec] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   cases hnorm : n.normalizeToRange kMinValue kMaxValue .to_nearest with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>

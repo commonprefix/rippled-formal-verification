@@ -13,8 +13,7 @@ import XRPL.Properties.Vault.Proofs.DilutionWitness
 
 /-! # `Vault.clawback` accuracy
 
-The relative error is `sharesε`: a clawback prices shares and assets with two
-correctly-rounded `Number` stages, a `mul` and a `div`, which together stay within
+A clawback prices with a `mul` and a `div`, each correctly rounded, which together stay within
 `sharesε = 1.1·10⁻¹⁸` of the exact quotient. -/
 
 namespace XRPL.Model.SingleAssetVault

@@ -3,18 +3,9 @@ import XRPL.Properties.Lending.Ledger.Common.ReachableProofs
 
 /-! # Witnesses for a VaultDeposit that ends in an exception
 
-Runs from a new closed-ended vault, checked by `native_decide`. A vault of `9·10^15` units is lent in two loans of
-`4.5·10^15` at a LateInterestRate of 100%. The first is paid 20 years late, so AssetsTotal is `9.9·10^16` units.
+Donations above the largest XRP or MPT amount end in an error in the Open limit check (FV_M4_52, FV_M4_60). -/
 
-* XRP: a donation of `4.5·10^15` drops takes AssetsTotal plus the amount above `10^17` drops, the largest XRP
-  amount, and the Open limit check ends in the out-of-range error.
-* MPT: a donation of `9128872036854775807` units takes it above `2^63 - 1`, the largest MPT amount, and the Open
-  limit check ends in an overflow error.
-
-For an IOU no reachable ledger is known where AssetsTotal plus the amount passes the largest IOU amount. The last
-lemma shows the error on a lawful IOU vault that holds `10^80`, which no run here reaches. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -45,7 +36,7 @@ private def dwMptGenesis : LendingLedger :=
 private lemma dwXrpGenesis_genesis : dwXrpGenesis.Genesis where
   created := ⟨none, none, dwSchedule, none, false, .native, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨dwXrpVault.wf, dwXrpVault.valid⟩⟩
+    exact dite_eq_left ⟨dwXrpVault.wf, dwXrpVault.valid⟩⟩
   holds_asset := Or.inr (Or.inl rfl)
   no_holders := rfl
   no_brokers := rfl
@@ -55,7 +46,7 @@ private lemma dwXrpGenesis_genesis : dwXrpGenesis.Genesis where
 private lemma dwMptGenesis_genesis : dwMptGenesis.Genesis where
   created := ⟨none, none, dwSchedule, none, false, .int64, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨dwMptVault.wf, dwMptVault.valid⟩⟩
+    exact dite_eq_left ⟨dwMptVault.wf, dwMptVault.valid⟩⟩
   holds_asset := Or.inr (Or.inr rfl)
   no_holders := rfl
   no_brokers := rfl

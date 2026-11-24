@@ -31,7 +31,7 @@ lemma Number.operator_mul_ok_of_exp_le (x y : Number) (mode : rounding_mode)
     subst this
     rw [Number.operator_mul_eq_spec]
     unfold Number.operator_mulSpec
-    rw [if_pos (by decide)]
+    rw [ite_eq_left (by decide)]
     rfl
   by_cases hy0 : y.mantissa_ = 0
   · refine ⟨y, ?_⟩
@@ -39,8 +39,8 @@ lemma Number.operator_mul_ok_of_exp_le (x y : Number) (mode : rounding_mode)
     subst this
     rw [Number.operator_mul_eq_spec]
     unfold Number.operator_mulSpec
-    simp only [Number.operator_eq_zero_false_of_mantissa_ne x hx0, Bool.false_eq_true, if_false]
-    rw [if_pos (by decide)]
+    simp only [Number.operator_eq_zero_false_of_mantissa_ne x hx0, Bool.false_eq_true, ite_false]
+    rw [ite_eq_left (by decide)]
     rfl
   have hxm := (hx.mantissaBounds hx0).1
   have hym := (hy.mantissaBounds hy0).1
@@ -52,7 +52,7 @@ lemma Number.operator_mul_ok_of_exp_le (x y : Number) (mode : rounding_mode)
   unfold Number.operator_mulSpec
   rw [Number.operator_eq_zero_false_of_mantissa_ne x hx0]
   rw [Number.operator_eq_zero_false_of_mantissa_ne y hy0]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   set zn := x.negative_ != y.negative_ with hzn_def
   set M := toUInt128 x.mantissa_ * toUInt128 y.mantissa_ with hM_def
   set ze := x.exponent_ + y.exponent_ with hze_def
@@ -92,7 +92,7 @@ lemma Number.operator_mul_ok_of_exp_le (x y : Number) (mode : rounding_mode)
     rw [doNormalize_eq_spec]
     all_goals try min_fit
     unfold doNormalizeSpec
-    rw [if_pos (show (res.toNumber.mantissa_ == 0) = true from by
+    rw [ite_eq_left (show (res.toNumber.mantissa_ == 0) = true from by
       show (res.mantissa_ == 0) = true; rw [beq_iff_eq]; exact hrm)]
   · have hexp_out : res.exponent_ ≤ sd.2.1 + 1 :=
       Guard.doRoundUp_output_exp_le_of_ne sd.2.2 zn sd.1 sd.2.1 largeRange.min largeRange.max mode

@@ -14,7 +14,7 @@ open XRPL.Model.Protocol
 lemma sumRoundAndSubtract_frac_fczr (A c : Number) (e : Int) (mode : rounding_mode) (st : STAmount)
     (h : sumRoundAndSubtract A c e .fractional mode = .ok st) : st.FracCanonZero := by
   unfold sumRoundAndSubtract at h
-  rw [if_neg (by decide)] at h
+  rw [ite_eq_right (by decide)] at h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h

@@ -7,10 +7,8 @@ import XRPL.Properties.Protocol.Number.Common.NumberBridge
 
 /-! # When adding IOU amounts returns a result
 
-IOU addition adds two 19-digit Numbers and rounds the sum to 16 digits. The Number sum never fails for IOU
-operands, so the addition returns a result exactly when the 16-digit rounding does. In the three directed modes
-the two roundings together are one rounding. In `to_nearest` they are one rounding when the exact sum is itself a
-Number. -/
+The 19-digit Number sum never fails for IOU operands, so the addition succeeds exactly when the rounding to 16 digits
+does. The two roundings act as one in the directed modes, and in `to_nearest` when the exact sum is a Number. -/
 
 namespace XRPL.Model.Protocol
 
@@ -39,8 +37,8 @@ lemma Number.operator_add_roundsInRange_iff (x y sum : Number) (mode : rounding_
   obtain ⟨hT', hTv'⟩ := Number.iouTop_facts true
   obtain ⟨hN, hNv⟩ := Number.iouNext_facts false
   obtain ⟨hN', hNv'⟩ := Number.iouNext_facts true
-  simp only [Bool.false_eq_true, if_false, one_mul] at hTv hNv
-  simp only [if_true, neg_one_mul] at hTv' hNv'
+  simp only [Bool.false_eq_true, ite_false, one_mul] at hTv hNv
+  simp only [ite_true, neg_one_mul] at hTv' hNv'
   cases mode with
   | to_nearest =>
     obtain ⟨n, hn, hnv⟩ := hfit rfl
@@ -52,7 +50,7 @@ lemma Number.operator_add_roundsInRange_iff (x y sum : Number) (mode : rounding_
     simp only [STAmount.RoundsInRange]
     by_cases hv : x.toRat + y.toRat ≥ 0
     · -- the largest Number at or below a value that is not negative
-      rw [if_pos hv] at h
+      rw [ite_eq_left hv] at h
       obtain ⟨n, hlow, hval⟩ := h
       have h1 := Number.lower_le _ n hlow
       have h0 := Number.lower_tight _ n hlow Number.zero (Or.inl rfl) (by rw [Number.toRat_zero]; exact hv)
@@ -67,7 +65,7 @@ lemma Number.operator_add_roundsInRange_iff (x y sum : Number) (mode : rounding_
       · intro hlt
         linarith
     · -- the smallest Number at or above a negative value
-      rw [if_neg hv] at h
+      rw [ite_eq_right hv] at h
       obtain ⟨n, hup, hval⟩ := h
       have hv' : x.toRat + y.toRat < 0 := not_le.mp hv
       have h1 := Number.le_upper _ n hup
@@ -119,9 +117,10 @@ lemma Number.operator_add_roundsInRange_iff (x y sum : Number) (mode : rounding_
 lemma STAmount.ofIOUAmount_of_mantissa_zero (a : IOUAmount) (mode : rounding_mode) (hm : a.mantissa_ = 0) :
     STAmount.ofIOUAmount a mode = .ok ⟨.fractional, 0, -100, false⟩ := by
   have hmag : (0 : Int64).magnitude = 0 := by decide
-  unfold STAmount.ofIOUAmount STAmount.canonicalize STAmount.iou
+  rw [STAmount.ofIOUAmount_of_ne mode (by rw [hm]; decide)]
+  unfold STAmount.canonicalize STAmount.iou STAmount.signedDropsChecked UInt64.toInt64Checked
   simp [hm, STAmount.unchecked, STAmount.integral, NumericType.isIntegral,
-    IOUAmount.ofMantissaExp, IOUAmount.normalize, hmag, IOUAmount.signum, IOUAmount.zero]
+    IOUAmount.ofMantissaExp, IOUAmount.normalize, hmag, IOUAmount.signum, IOUAmount.zero, ok_bind]
 
 /-- The size of an in-range IOU amount is below `10^96`. -/
 lemma IOUAmount.InRange16.abs_toRat_lt {a : IOUAmount} (ha : a.InRange16) : |a.toRat| < (10 : ℚ) ^ (96 : ℤ) := by
@@ -163,7 +162,7 @@ lemma IOUAmount.operator_add_ok_iff (x y : IOUAmount) (mode : rounding_mode) (hx
   have hsn := Number.operator_add_isNormalized_any xn yn sum mode hxn_norm hyn_norm hadd
   have hiou : IOUAmount.operator_add x y mode = IOUAmount.ofNumber sum mode := by
     unfold IOUAmount.operator_add
-    rw [if_neg (by simpa using hym), if_neg (by simpa using hxm), hxn_eq, hyn_eq]
+    rw [ite_eq_right (by simpa using hym), ite_eq_right (by simpa using hxm), hxn_eq, hyn_eq]
     simp only
     rw [hadd]
   rw [← hxn_val, ← hyn_val] at hfit ⊢
@@ -212,8 +211,8 @@ lemma STAmount.operator_add_iou_ok_iff_iouAmount (v1 v2 : STAmount) (mode : roun
     unfold STAmount.integral; rw [hc1.is_fractional]; decide
   have hr1 := hc1.inRange16
   have hr2 := hc2.inRange16
-  rw [STAmount.operator_add, if_neg (by rw [hcmp]; decide), if_neg (by simpa using hv2ne),
-    if_neg (by simpa using hv1ne), if_neg hint1, STAmount.iou_canonical_id v1 mode hc1,
+  rw [STAmount.operator_add, ite_eq_right (by rw [hcmp]; decide), ite_eq_right (by simpa using hv2ne),
+    ite_eq_right (by simpa using hv1ne), ite_eq_right hint1, STAmount.iou_canonical_id v1 mode hc1,
     STAmount.iou_canonical_id v2 mode hc2]
   simp only
   cases hadd : IOUAmount.operator_add ⟨v1.signedDrops.toInt64, v1.mOffset⟩

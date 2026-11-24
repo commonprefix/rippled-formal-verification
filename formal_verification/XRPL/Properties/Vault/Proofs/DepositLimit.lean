@@ -14,9 +14,9 @@ lemma numberExponent_integral_le (n : Number) (exponent : Int) (nt : NumericType
     (hnt : nt.isIntegral = true) (hok : numberExponent n exponent nt = .ok e) : e ≤ max exponent 0 := by
   unfold numberExponent at hok
   by_cases hz : n.operator_eq Number.zero = true
-  · simp only [hz, if_true, pure, Except.pure, Except.ok.injEq] at hok
+  · simp only [hz, ite_true, pure, Except.pure, Except.ok.injEq] at hok
     omega
-  simp only [hz, Bool.false_eq_true, if_false] at hok
+  simp only [hz, Bool.false_eq_true, ite_false] at hok
   cases ha : STAmount.ofNumber nt n .downward with
   | error err => rw [ha] at hok; simp [bind, Except.bind, pure, Except.pure] at hok
   | ok a =>

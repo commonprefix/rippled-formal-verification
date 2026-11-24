@@ -4,10 +4,8 @@ import XRPL.Properties.Vault.Proofs.MaxValueFits
 
 /-! # `associateAsset` is a no-op
 
-Every vault transactor calls `associateAsset` on the vault SLE after updating it, which rounds
-each `kSmdNeedsAsset` field (`assetsTotal`, `assetsAvailable`, `assetsDeployed`, `assetsReserved`,
-`lossUnrealized`, `yieldUnrealized`, `assetsMaximum`) to the asset's precision. The model has no such
-step, and on a reachable vault every such amount is stored exactly, so the step changes nothing. -/
+Every vault transactor calls `associateAsset`, which rounds each asset amount of the vault to the asset's precision.
+The model omits it. On a reachable vault each such amount is stored exactly, so the step changes nothing. -/
 
 namespace XRPL.Model.SingleAssetVault
 

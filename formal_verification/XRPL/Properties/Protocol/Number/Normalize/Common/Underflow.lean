@@ -8,10 +8,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Underflow characterization for `Number.normalize`
 
-A zero result mantissa (with a nonzero input mantissa) means either the
-explicit zero branch fired (`e2 < minExponent ∨ m2 < minMantissa` after the
-scaling stages) or the final `doRoundUp` flushed. In both cases the input's magnitude is below the
-smallest positive `Number`, `10^18 · 10^minExponent`. -/
+A zero result from a nonzero input means the input is below the smallest positive `Number`,
+`10^18 · 10^minExponent`, in magnitude. -/
 
 /-- A fired `doNormalize_scaleDown` exits at or above `(maxMantissa+1)/10`:
 with `maxMantissa = largeRange.max = 10^19 − 1` the output is `≥ 10^18`. -/
@@ -23,13 +21,13 @@ lemma doNormalize_scaleDown_fired_output_ge
   induction m, e, g using doNormalize_scaleDown.induct (maxMantissa := largeRange.max)
     generalizing m' e' g' with
   | case1 m e g hgt' hmax =>
-    rw [doNormalize_scaleDown, dif_pos hgt', if_pos hmax] at h
+    rw [doNormalize_scaleDown, dite_eq_left hgt', ite_eq_left hmax] at h
     exact absurd h (by intro hh; cases hh)
   | case2 m e g hgt' hmax IH =>
-    rw [doNormalize_scaleDown, dif_pos hgt', if_neg hmax] at h
+    rw [doNormalize_scaleDown, dite_eq_left hgt', ite_eq_right hmax] at h
     by_cases hgt2 : m / 10 > largeRange.max
     · exact IH m' e' g' hgt2 h
-    · rw [doNormalize_scaleDown, dif_neg hgt2] at h
+    · rw [doNormalize_scaleDown, dite_eq_right hgt2] at h
       have hm'_eq : m / 10 = m' := (Prod.mk.inj (Except.ok.inj h)).1
       have hgt_nat : largeRange.max.toNat < m.toNat := UInt64.lt_iff_toNat_lt.mp hgt'
       rw [largeRange_max_val] at hgt_nat
@@ -45,10 +43,10 @@ lemma doNormalize_scaleUp_exit_exp (minMant m : UInt64) (e : Int) :
     (doNormalize_scaleUpSpec minMant m e).2 ≤ minExponent := by
   induction m, e using doNormalize_scaleUpSpec.induct (minMantissa := minMant) with
   | case1 m e hcond IH =>
-    rw [doNormalize_scaleUpSpec, if_pos hcond]
+    rw [doNormalize_scaleUpSpec, ite_eq_left hcond]
     exact IH
   | case2 m e hcond =>
-    rw [doNormalize_scaleUpSpec, if_neg hcond]
+    rw [doNormalize_scaleUpSpec, ite_eq_right hcond]
     intro hlt
     by_contra hgt
     push Not at hgt
@@ -68,7 +66,7 @@ lemma Number.normalize_underflow_truth_small_proof (n result : Number) (mode : r
   replace hok := doNormalize_ok_spec hok
   unfold doNormalizeSpec at hok
   rw [beq_eq_false_iff_ne.mpr hn_mant_ne] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   set su := doNormalize_scaleUpSpec largeRange.min n.mantissa_ n.exponent_ with hsu_def
   set m1 : UInt64 := su.1 with hm1_def
   set e1 : Int := su.2 with he1_def
@@ -184,7 +182,7 @@ lemma Number.normalize_underflow_truth_small_proof (n result : Number) (mode : r
     rw [show (decide (e2 < minExponent) || decide (m2 < largeRange.min)) = false from by
       rw [Bool.or_eq_false_iff]
       exact ⟨decide_eq_false (not_lt.mpr he2_ge), decide_eq_false hm2_ge⟩] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     obtain ⟨m3, e3, g3, hcap⟩ : ∃ m3 e3 g3,
         doNormalize_capAtMaxRep m2 e2 g2 = .ok (m3, e3, g3) := by
       match hcap : doNormalize_capAtMaxRep m2 e2 g2 with
@@ -220,17 +218,17 @@ lemma Number.normalize_underflow_truth_small_proof (n result : Number) (mode : r
     have hm3_ge_floor : mantissaFloor ≤ m3.toNat := by
       unfold doNormalize_capAtMaxRep at hcap
       by_cases hmr : m2 > maxRepUp
-      · rw [if_pos hmr] at hcap
+      · rw [ite_eq_left hmr] at hcap
         by_cases hexp3 : e2 ≥ maxExponent
-        · rw [if_pos hexp3] at hcap; exact absurd hcap (by intro h; cases h)
-        · rw [if_neg hexp3] at hcap
+        · rw [ite_eq_left hexp3] at hcap; exact absurd hcap (by intro h; cases h)
+        · rw [ite_eq_right hexp3] at hcap
           simp only [divu10] at hcap
           have hm3_eq : m3 = m2 / 10 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
           rw [hm3_eq, UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl]
           have hmr_nat : maxRepUp.toNat < m2.toNat := UInt64.lt_iff_toNat_lt.mp hmr
           rw [show maxRepUp.toNat = maxRepUpNat from rfl] at hmr_nat
           omega
-      · rw [if_neg hmr] at hcap
+      · rw [ite_eq_right hmr] at hcap
         have hm3_eq : m3 = m2 := ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
         rw [hm3_eq]
         rw [hminMant_v] at hm2_ge_min

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.RecheckApply
 import XRPL.Properties.Lending.Ledger.Common.RecheckPool
 import XRPL.Properties.Lending.Ledger.Common.ManageReachable
@@ -185,7 +186,7 @@ private lemma sumRoundAndSubtract_zero_zero (b : Int) (nt : NumericType) (st : S
     rw [STAmount.ofNumber_fractional_zero, Except.ok.injEq] at h
     rw [← h]
     unfold STAmount.toRat
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
 
 /-- The cover a default of a loan without principal pays an empty vault is zero. -/
 private lemma Loan.defaultCover_zero (loan : Loan) (v : Vault) (dc : Number) (h : loan.defaultCover v = .ok dc)
@@ -449,7 +450,7 @@ lemma Loan.delete_ne_notLawful (loan : Loan) (v : Vault)
   · cases hround : STAmount.roundToNumericType loan.broker.numericType loan.principalOutstanding .to_nearest with
     | error e =>
       have : (loan.delete v).run = .error e := by
-        simp only [Loan.delete, hp, if_true, Loan.deletePending]
+        simp only [Loan.delete, hp, ite_true, Loan.deletePending]
         unfold_ter
         simp [hround]
       rw [this] at h

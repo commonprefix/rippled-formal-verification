@@ -11,10 +11,8 @@ import XRPL.Properties.Vault.Proofs.Walk
 
 /-! # Grid rounding and the sum clamp
 
-Facts about `STAmount.roundToExponent` and `clampToSumExponent`. The clamp returns the
-delta's magnitude: unchanged for an integral amount, and for a fractional one rounded toward
-zero onto the grid of the post-sum exponent, which is never finer than the exponent it is
-given. -/
+`clampToSumExponent` keeps an integral delta and rounds a fractional one toward zero onto the grid of the post-sum
+exponent, which is never finer than the exponent it is given. -/
 
 namespace XRPL.Model.Protocol
 
@@ -26,7 +24,7 @@ lemma clamp_magnitude (delta : STAmount) :
     (if delta.negative then delta.operator_neg else delta).mValue = delta.mValue ∧
     (if delta.negative then delta.operator_neg else delta).toRat = |delta.toRat| := by
   by_cases hn : delta.negative = true
-  · rw [if_pos hn]
+  · rw [ite_eq_left hn]
     obtain ⟨h1, h2, h3⟩ := STAmount.operator_neg_fields delta
     refine ⟨h1, h2, h3, ?_⟩
     have hle : delta.toRat ≤ 0 := by
@@ -34,7 +32,7 @@ lemma clamp_magnitude (delta : STAmount) :
       have : (0 : ℚ) ≤ (delta.mValue.toNat : ℚ) * 10 ^ delta.mOffset := by positivity
       linarith
     rw [STAmount.operator_neg_toRat, abs_of_nonpos hle]
-  · rw [if_neg hn]
+  · rw [ite_eq_right hn]
     refine ⟨rfl, rfl, rfl, ?_⟩
     have hneg : delta.mIsNegative = false := by simpa [STAmount.negative] using hn
     rw [abs_of_nonneg (by rw [STAmount.toRat_of_nonneg delta hneg]; positivity)]
@@ -101,9 +99,9 @@ lemma numberExponent_ge (n : Number) (exponent : Int) (nt : NumericType) (e : In
     (hok : numberExponent n exponent nt = .ok e) : exponent ≤ e := by
   unfold numberExponent at hok
   by_cases hz : n.operator_eq Number.zero = true
-  · simp only [hz, if_true, pure, Except.pure, Except.ok.injEq] at hok
+  · simp only [hz, ite_true, pure, Except.pure, Except.ok.injEq] at hok
     exact le_of_eq hok
-  · simp only [hz, Bool.false_eq_true, if_false] at hok
+  · simp only [hz, Bool.false_eq_true, ite_false] at hok
     cases ha : STAmount.ofNumber nt n .downward with
     | error err => rw [ha] at hok; simp [bind, Except.bind, pure, Except.pure] at hok
     | ok a =>
@@ -173,7 +171,7 @@ lemma clampToSumExponent_zero (amount : Number) (delta result : STAmount) (expon
     have hzA : a.isZero = true := by unfold STAmount.isZero; rw [hval, hz]; rfl
     have hintA : ¬ a.integral = true := by unfold STAmount.integral at hfrac ⊢; rw [hnt, hfrac]; decide
     unfold STAmount.roundToExponent at hround
-    rw [if_neg hintA, if_pos hzA] at hround
+    rw [ite_eq_right hintA, ite_eq_left hzA] at hround
     rw [← Except.ok.inj hround, hval, hz]
 
 /-- A nonzero fractional clamp is the floor of the magnitude on the post-sum grid. -/
@@ -199,7 +197,7 @@ lemma clampToSumExponent_frac_floor (amount : Number) (delta result : STAmount) 
   refine ⟨deltaNum, e, hdn, he, hge, ?_⟩
   simp only [RoundsToRepresentableAt] at h
   change result.toRat = _ at h
-  rw [h, if_pos hv, hrat]
+  rw [h, ite_eq_left hv, hrat]
 
 /-- The fractional clamp never reports a negative amount, nor more than the delta's
 magnitude. -/

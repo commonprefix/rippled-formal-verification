@@ -6,9 +6,8 @@ import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.Nearest
 
 /-! # `operator_add` rounds to a neighbouring `Number`
 
-The result is the largest `Number` at or below the exact value (`downward`), the smallest at or above it (`upward`),
-the one of these two nearer zero (`towards_zero`), or either of them (`to_nearest`). `downward` and `upward` assume a
-nonzero result, since a value too small for a `Number` becomes zero. -/
+The result is the neighbouring `Number` on the side the mode asks for, or either neighbour in `to_nearest`.
+`downward` and `upward` assume a nonzero result, since a value too small for a `Number` becomes zero. -/
 
 namespace XRPL.Model.Protocol
 

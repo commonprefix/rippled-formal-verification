@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionLoanPayOverpaymentProps
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionLoanPayOverpaymentLoop
 import XRPL.Properties.Lending.Loan.Common.OverpaymentSkip
@@ -5,10 +6,8 @@ import XRPL.Properties.Protocol.Common.Wrap
 
 /-! # The overpayment tail of a LoanPay computes
 
-After its scheduled instalments an overpayment spends what is left of its amount on extra principal and
-re-amortizes the loan. Every step computes on a loan with the room of the instalment loop: the split of the
-overpayment, the re-amortized loan values, the rebuilt state and the amortization guards. On XRP the rebuilt
-total value has to be an XRP amount, which this proof gets from a bound on the payments left and the value owed. -/
+After its scheduled instalments an overpayment pays extra principal and re-amortizes the loan, and every step of that
+computes. On XRP this needs a bound on the payments left and the value owed. -/
 
 namespace XRPL.Model.Lending
 
@@ -142,7 +141,7 @@ lemma Loan.overpaymentComponents_computes (l : Loan) (ov : Number) (hovN : ov.is
 /-- The value and the principal of a theoretical state with payments left. -/
 private lemma LoanState.buildTheoretical_parts (pp rate : Number) (k : UInt32) (m : TenthBips16) (ts : LoanState)
     (hk0 : k ≠ 0) (h : LoanState.buildTheoretical pp rate k m = .ok ts) :
-    pp.operator_mul (Number.ofInt64 k.toInt64) .to_nearest = .ok ts.valueOutstanding ∧
+    pp.operator_mul (Number.ofInt64 k.toInt64 .to_nearest) .to_nearest = .ok ts.valueOutstanding ∧
       loanPrincipalFromPeriodicPayment pp rate k = .ok ts.principalOutstanding := by
   have hk0' : (k == 0) = false := by simpa using hk0
   unfold LoanState.buildTheoretical at h
@@ -283,8 +282,8 @@ lemma Loan.tryOverpayment_computes_room (l : Loan) (hroom : l.PayRoom) (hpr : l.
       (Number.max x Number.zero).toRat ≤ ts.principalOutstanding.toRat := by
     unfold Number.max
     by_cases hlt : x.operator_lt Number.zero = true
-    · rw [if_pos hlt, Number.toRat_zero]; exact ⟨le_rfl, htp0⟩
-    · rw [if_neg hlt]
+    · rw [ite_eq_left hlt, Number.toRat_zero]; exact ⟨le_rfl, htp0⟩
+    · rw [ite_eq_right hlt]
       have := mt (Number.operator_lt_iff x Number.zero hxN Number.zero_isNormalized).mpr hlt
       rw [Number.toRat_zero] at this
       exact ⟨by linarith, hxle⟩

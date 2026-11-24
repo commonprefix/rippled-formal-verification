@@ -63,7 +63,7 @@ private lemma shares_lower_mint (v : Vault) (amount shares : STAmount)
     have hPN_pos : 0 < P.toRat / navN.toRat := div_pos hPpos hnav_pos
     have hideal : v.idealSharesDepositAt navN.toRat amount.toRat = T0 / navN.toRat := by
       unfold RawVault.idealSharesDepositAt
-      rw [if_neg (ne_of_gt hnav_pos), RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, ← hT0_def]
+      rw [ite_eq_right (ne_of_gt hnav_pos), RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, ← hT0_def]
     obtain ⟨hTval, -⟩ := Number.truncate_floor Q T hQnorm (Number.negative_false_of_pos Q hQpos) hT
     have hshval : shares.toRat = T.toRat :=
       STAmount.ofNumber_integral_exact .int64 T .to_nearest shares (by decide) hTnorm hTden hsh

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayReachableWitness
 import XRPL.Properties.Lending.Loan.Common.ZeroValueWitness
 import XRPL.Properties.Lending.Loan.Common.SeparatePaymentsWitness
@@ -5,11 +6,9 @@ import XRPL.Properties.Lending.Loan.Common.PayLedger
 
 /-! # Witnesses for LoanPay transactions on reachable ledgers
 
-Runs of the existing ledger fixtures, then one LoanPay transaction, checked by `native_decide`. The loan of
-`603946999675283.3` on a Scale 1 vault, the loan of 6 at 14.5% on a Scale 0 vault, and loan D of 3 on the coarsened
-vault. A payment amount that a 16-digit asset amount cannot hold is rounded up to one it can. -/
+LoanPay runs on reachable ledgers that reach the bounds of the payment theorems. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

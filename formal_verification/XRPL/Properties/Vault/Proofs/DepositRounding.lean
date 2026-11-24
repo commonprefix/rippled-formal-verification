@@ -15,7 +15,7 @@ lemma Vault.roundedDepositAmount_integral_proof (v : Vault) (amountDeposit : STA
     (v.roundedDepositAmount amountDeposit).run = .ok (.ok amountDeposit) := by
   have hneg : amountDeposit.negative = false := STAmount.mIsNegative_false_of_pos amountDeposit hpos
   have hcl := clampToSumExponent_integral assetsTotal amountDeposit v.baseExponent hint
-  rw [hneg, if_neg (by decide)] at hcl
+  rw [hneg, ite_eq_right (by decide)] at hcl
   have hz : amountDeposit.isZero = false := by
     have hmv : amountDeposit.mValue ≠ 0 := fun h0 => by
       rw [(STAmount.toRat_eq_zero_iff amountDeposit).mpr h0] at hpos; exact lt_irrefl _ hpos

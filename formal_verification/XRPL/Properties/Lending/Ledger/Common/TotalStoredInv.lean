@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.LoanSteps
 import XRPL.Properties.Lending.Ledger.Common.VaultSteps
 import XRPL.Properties.Lending.Ledger.Common.WithdrawHolder
@@ -5,9 +6,8 @@ import XRPL.Properties.Vault.Proofs.TotalStored
 
 /-! # The lending ledger keeps a total the asset stores
 
-C++ `syncAssetsTotal` stores AssetsAvailable + AssetsDeployed as an amount of the asset after every balance update,
-and the update fails when that amount cannot be built. So on a reachable ledger the sum is such an amount: within
-`10^17` drops on XRP and `2^63 - 1` units on an MPT, up to the last digit the `Number` sum drops. -/
+C++ `syncAssetsTotal` stores AssetsAvailable + AssetsDeployed as an amount of the asset and fails when it can't, so on
+a reachable ledger the sum fits the asset, up to the last digit the `Number` sum drops. -/
 
 namespace XRPL.Model.Lending
 

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.InterestMonotone
 import XRPL.Properties.Lending.Loan.Common.SetPhase
 import XRPL.Properties.Lending.Loan.Common.SetUpdates
@@ -193,8 +194,8 @@ private lemma tenthBipsOfValue_nonneg {x r : Number} {rate : TenthBips32} (hx : 
     (h : tenthBipsOfValue x rate .to_nearest = .ok r) : 0 ≤ r.toRat := by
   obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts rate
   obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
-  have heq : tenthBipsOfValue x rate .to_nearest = (x.operator_mul rate.toNumber .to_nearest) >>=
-      (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest) := rfl
+  have heq : tenthBipsOfValue x rate .to_nearest = (x.operator_mul (rate.toNumber .to_nearest) .to_nearest) >>=
+      (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨p, hp, h⟩ := bind_ok_peel _ _ _ h
   have hpn := Number.operator_mul_isNormalized _ _ _ _ hx hrn hp
@@ -262,20 +263,20 @@ private lemma loanLatePaymentInterest_nonneg (l : Loan) (now : UInt32) (li : Num
   have hrn := loanPeriodicRate_isNormalized _ _ _ hrate
   have hr0 : 0 ≤ rate.toRat := by
     have heq : loanPeriodicRate l.rates.lateInterestRate (now - l.nextPaymentDueDate) =
-        (tenthBipsOfValue (Number.ofInt64 (now - l.nextPaymentDueDate).toInt64)
+        (tenthBipsOfValue (Number.ofInt64 (now - l.nextPaymentDueDate).toInt64 .to_nearest)
           l.rates.lateInterestRate .to_nearest) >>= (fun t => t.operator_div secondsInYear .to_nearest) := rfl
     rw [heq] at hrate
     obtain ⟨tb, htb, hrate⟩ := bind_ok_peel _ _ _ hrate
     have hin := Number.ofInt64_isNormalized (now - l.nextPaymentDueDate).toInt64
-    have hi0 : 0 ≤ (Number.ofInt64 (now - l.nextPaymentDueDate).toInt64).toRat := by
+    have hi0 : 0 ≤ (Number.ofInt64 (now - l.nextPaymentDueDate).toInt64 .to_nearest).toRat := by
       have := TenthBips32.toNumber_facts (now - l.nextPaymentDueDate)
-      rw [show Number.ofInt64 (now - l.nextPaymentDueDate).toInt64 =
-        TenthBips32.toNumber (now - l.nextPaymentDueDate) from rfl, this.2]
+      rw [show Number.ofInt64 (now - l.nextPaymentDueDate).toInt64 .to_nearest =
+        TenthBips32.toNumber (now - l.nextPaymentDueDate) .to_nearest from rfl, this.2]
       positivity
     have htbn := tenthBipsOfValue_normalized hin htb
     have htb0 := tenthBipsOfValue_nonneg hin hi0 htb
     obtain ⟨hyn, hyv⟩ := TenthBips32.toNumber_facts (31536000 : UInt32)
-    have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) := rfl
+    have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) .to_nearest := rfl
     rw [hy] at hrate
     exact rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ htbn hyn hrate) (by rw [hyv]; positivity)
   exact ⟨Number.operator_mul_isNormalized _ _ _ _ l.wf.principalOutstanding_norm hrn h,

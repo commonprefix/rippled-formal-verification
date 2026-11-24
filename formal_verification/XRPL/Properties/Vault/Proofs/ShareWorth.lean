@@ -2,13 +2,12 @@ import XRPL.Properties.Vault.Proofs.ExitOrderPayout
 import XRPL.Properties.Vault.Proofs.DepositCharge
 import XRPL.Properties.Vault.Proofs.ClawbackRecovery
 import XRPL.Properties.Vault.Proofs.MaxValueFits
+import XRPL.Properties.Vault.Proofs.Support.ShareSupply
 
 /-! # Every share of a reachable vault is worth at least one base unit
 
-A first deposit issues one share per base unit. A later deposit takes a whole number of base units, short
-of the issued shares' worth by less than one, so at least one per share. A withdrawal or a clawback pays a
-whole number of base units less than one above the burned shares' worth, which leaves at least one base unit
-for every share that stays. -/
+A deposit charges whole base units, less than one short of the issued shares' worth. A withdrawal or a clawback
+pays less than one base unit above the burned shares' worth, which leaves at least one unit per remaining share. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -140,13 +139,13 @@ private lemma Vault.Reachable.sharesTotal_le_cash_of_fits (v : Vault) (t : UInt3
     have hST : w.sharesTotal = Number.zero := (congrArg RawVault.sharesTotal hv).trans rfl
     have hAA : w.assetsAvailable = Number.zero := (congrArg RawVault.assetsAvailable hv).trans rfl
     rw [RawVault.WF.toExact_sharesTotal w.toRawVault w.wf, hST, hAA, Number.toRat_zero, zero_mul]
-  | deposit u t₁ t₂ amount isDonation r hru _ hc hty hpos hok hSsz ih =>
+  | deposit u t₁ t₂ amount isDonation r hru _ hc hty hpos hok ih =>
     have hnt := Vault.deposit_numericType u amount isDonation t₂ hpos r hok
     have hmaxu : u.numericType.isIntegral = true → u.numericType.maxValue.toNat ≤ maxRep.toNat := hnt ▸ hmax
     have hinv := ih hmaxu
     have hz := Vault.Reachable.openZone_proof u t₁ hru hmaxu
     obtain ⟨hAA', hz'⟩ := Vault.deposit_openZone u amount isDonation t₂ hpos hc hty hz r hok
-    have hST' := Vault.deposit_exact_sharesTotal u amount isDonation t₂ hpos hc hty r hok hSsz
+    have hST' := Vault.deposit_exact_sharesTotal u amount isDonation t₂ hpos hc hty r hok
     have hbe := Vault.deposit_baseExponent u amount isDonation t₂ hpos r hok
     have hbpos : (0 : ℚ) < 10 ^ u.baseExponent := zpow_pos (by norm_num) _
     obtain ⟨k', -, hk'⟩ := hz'.cash
@@ -214,7 +213,7 @@ private lemma Vault.Reachable.sharesTotal_le_cash_of_fits (v : Vault) (t : UInt3
     refine steps_ge_of_gt _ k' _ hbpos ?_
     rw [← hk', hAA', ← hcast]
     linarith
-  | clawback u t₁ t₂ assets holderShares waive r hru _ hc hty hhs _ hnn hok _ ih =>
+  | clawback u t₁ t₂ assets holderShares waive r hru _ hc hty hhs _ hnn hok ih =>
     obtain ⟨_, _, hv⟩ := Vault.clawback_frame u _ _ _ _ r hok
     have hnt : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     have hsc' : r.vault'.scale = u.scale := (congrArg RawVault.scale hv).trans rfl
@@ -279,48 +278,5 @@ lemma Vault.Reachable.sharesTotal_le_cash_proof (v : Vault) (t : UInt32) (hr : V
   · exact Vault.Reachable.sharesTotal_le_cash_of_fits v t hr hmax
   · rw [hS, zero_mul]
     exact v.exact.assetsAvailable_nonneg
-
-/-- A deposit into a reachable vault keeps the share total within the MPT maximum: the share total is at most the
-cash in base units, so within the Open-zone limit, and each issued share costs at least a base unit. -/
-lemma Vault.Reachable.deposit_mint_fits_proof (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
-    (amount : STAmount) (isDonation : Bool) (t : UInt32) (hpos : 0 < amount.toRat) (hc : amount.Canonical)
-    (hty : amount.mNumericType = v.numericType)
-    (r : VaultWithAmounts) (hok : (v.deposit amount isDonation t hpos).run = .ok (.ok r)) :
-    (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 := by
-  have hmax := Vault.maxValue_fits_of_canonical v amount hc hty
-  have hz := Vault.Reachable.openZone_proof v t0 hr hmax
-  have hinv := Vault.Reachable.sharesTotal_le_cash_of_fits v t0 hr hmax
-  have hbpos : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  have h9 : (9 : ℚ) * 10 ^ (15 + v.baseExponent) = 9 * 10 ^ 15 * 10 ^ v.baseExponent := by
-    rw [zpow_add₀ (by norm_num)]
-    norm_num
-    try ring
-  have hcash := hz.assetsAvailable_le_openLimit
-  rw [h9] at hcash
-  -- the share total is at most `9·10^15`
-  have hS : (v.toExact.sharesTotal : ℚ) ≤ 9 * 10 ^ 15 := by
-    by_contra h
-    push Not at h
-    nlinarith [mul_lt_mul_of_pos_right h hbpos]
-  cases isDonation with
-  | true =>
-    obtain ⟨ra, -, -, hra, -, -, -, -, -, -⟩ := Vault.deposit_ok_reduces v amount true t hpos r hok
-    have hrsh := (Vault.deposit_donation_proof v amount ra t hpos hc hra r hok).2
-    rw [hrsh, STAmount.zero_toRat]
-    linarith
-  | false =>
-    -- the issued shares cost at least a base unit each, and the charge stays within the Open-zone limit
-    obtain ⟨-, hlow, -, -⟩ := Vault.Reachable.deposit_charge_proof v amount t t0 hpos hr hc r hok
-    obtain ⟨-, -, -, -, -, -, -, -, -, -, hshpos, -⟩ :=
-      DepAcc.Vault.deposit_success_reduces v amount t hpos hc r hok
-    have hideal := hz.idealChargeDeposit_ge hinv _ hshpos.le
-    have hopen := Vault.deposit_open_bound v amount false t hpos hc hty v.assetsAvailable hz.assetsTotal_eq r hok
-    rw [h9] at hopen
-    have hA0 : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
-    have hsh : r.shares.toRat ≤ 9 * 10 ^ 15 + 2 := by
-      by_contra h
-      push Not at h
-      nlinarith [mul_lt_mul_of_pos_right h hbpos]
-    linarith
 
 end XRPL.Model.SingleAssetVault

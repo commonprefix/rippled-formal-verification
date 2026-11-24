@@ -6,9 +6,8 @@ import XRPL.Properties.Protocol.Number.Div.Common.Decompose
 
 /-! # What a clawback destroys and recovers
 
-A clawback destroys the shares the amount prices to, truncated, or the holder's whole balance for a zero amount. When
-the price of those shares exceeds the cash, it destroys the shares the cash prices to instead. It recovers their price,
-floored onto the grid of the cash it leaves, which on a reachable vault is the base grid. -/
+A clawback destroys the shares the amount prices to, or the shares the cash prices to when their price exceeds the
+cash. It recovers their price, floored onto the base grid on a reachable vault. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -404,10 +403,10 @@ lemma assetsToSharesWithdraw_amount_ne_zero (v : Vault) (amount shares : STAmoun
   obtain ⟨navN, -, hok⟩ := bind_ok_peel _ _ _ hok
   dsimp only at hok
   by_cases hmz : navN.mantissa_ = 0
-  · rw [if_pos (by simp [hmz])] at hok
+  · rw [ite_eq_left (by simp [hmz])] at hok
     obtain rfl := Except.ok.inj hok
     exact absurd hnz (by decide)
-  rw [if_neg (by simp [hmz])] at hok
+  rw [ite_eq_right (by simp [hmz])] at hok
   obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨amountN, hamN, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨P, hP, hok⟩ := bind_ok_peel _ _ _ hok

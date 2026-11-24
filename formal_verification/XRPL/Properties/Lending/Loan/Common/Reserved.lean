@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Common.Walk
 import XRPL.Properties.Lending.Loan.Common.BrokerDebt
 import XRPL.Properties.Lending.Loan.Common.Frame
@@ -196,11 +197,11 @@ lemma Loan.create_reserved (broker : LoanBroker) (v : Vault) (principal : Number
       have h' : v.assetsReserved.operator_add principal' .to_nearest = .ok ar' := h
       have := Number.operator_add_toRat_of_grid _ _ ar' n j b v.wf.assetsReserved_norm hpN'
         (by rw [hn]; norm_cast) (by rw [hp', hj]; norm_cast) ⟨by omega, by omega⟩ hs h'
-      rw [this, hn, hj, if_pos rfl]; push_cast; ring
+      rw [this, hn, hj, ite_eq_left rfl]; push_cast; ring
     | false =>
       have h' : v.assetsReserved.operator_add Number.zero .to_nearest = .ok ar' := h
       rw [Number.operator_add_zero_right, Except.ok.injEq] at h'
-      rw [← h', if_neg Bool.false_ne_true, add_zero]
+      rw [← h', ite_eq_right Bool.false_ne_true, add_zero]
   obtain ⟨_, _, _, _, -, -, -, -, -, -, hpo, -, -⟩ := computeLoanProperties_inv _ _ _ _ _ _ _ _ hchecks.properties_ok
   have hpov : props.principalOutstanding.toRat = principal.toRat :=
     STAmount.roundToNumericType_representable_grid broker.numericType principal _ .to_nearest props.loanScale hp
@@ -414,7 +415,7 @@ lemma Loan.canManage_not_pending (loan : Loan) (action : LoanManageAction) (now 
   unfold Loan.canManage at h
   cases hp : loan.isPending
   · rfl
-  · rw [if_pos hp] at h; cases h
+  · rw [ite_eq_left hp] at h; cases h
 
 /-- A payment that passed its check was on an active loan. -/
 lemma Loan.canPay_not_pending (loan : Loan) (paymentType : LoanPaymentType)
@@ -422,6 +423,6 @@ lemma Loan.canPay_not_pending (loan : Loan) (paymentType : LoanPaymentType)
   unfold Loan.canPay at h
   cases hp : loan.isPending
   · rfl
-  · rw [if_pos hp] at h; cases h
+  · rw [ite_eq_left hp] at h; cases h
 
 end XRPL.Model.Lending

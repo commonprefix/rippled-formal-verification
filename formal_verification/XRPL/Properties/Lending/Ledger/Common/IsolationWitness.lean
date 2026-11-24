@@ -3,11 +3,9 @@ import XRPL.Properties.Lending.Ledger.Common.IsolationDefs
 
 /-! # Witnesses for the isolation of loan transactions
 
-On the IOU vault of `CoarsenedVault.lean` two pending loans each fit the Open limit, and once one is accepted the
-other's LoanAccept exceeds it. A late payment of a large loan lifts AssetsAvailable past `10^16` base units, and a
-payment of `0.1` on another loan, which passed before, then rounds to no credit and is rejected. -/
+Runs where accepting or paying one loan makes another loan's LoanAccept or payment fail. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

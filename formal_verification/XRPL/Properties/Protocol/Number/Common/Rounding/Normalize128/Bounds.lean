@@ -28,7 +28,7 @@ theorem doNormalize128_rounds_to_nearest
     simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   -- scaleUp stage.
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
@@ -85,9 +85,9 @@ theorem doNormalize128_rounds_to_nearest
   have hrep₀ : represents g₀ ftilde₀ := by
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst, if_pos hst]
+    · rw [ite_eq_left hst, ite_eq_left hst]
       exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]
+    · rw [ite_eq_right hst, ite_eq_right hst]
       exact g0_represents_zero zn
   -- scaleDown stage.
   cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
@@ -102,12 +102,12 @@ theorem doNormalize128_rounds_to_nearest
         hδ₁_nn hδ₁_le hrep₀ hM₁_lt sd hsd
     -- Underflow check must be false (else the result is zero).
     by_cases hund : (sd.2.1 < minExponent || sd.1 < toUInt128 largeRange.min) = true
-    · rw [if_pos hund] at hok
+    · rw [ite_eq_left hund] at hok
       exfalso; apply hres
       have := Except.ok.inj hok
       rw [← this]
       rfl
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have he₂_ge : minExponent ≤ sd.2.1 := by
@@ -279,7 +279,7 @@ theorem doNormalize128_rounds_any
     simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   -- scaleUp stage.
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
@@ -336,9 +336,9 @@ theorem doNormalize128_rounds_any
   have hrep₀ : represents g₀ ftilde₀ := by
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst, if_pos hst]
+    · rw [ite_eq_left hst, ite_eq_left hst]
       exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]
+    · rw [ite_eq_right hst, ite_eq_right hst]
       exact g0_represents_zero zn
   -- scaleDown stage.
   cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
@@ -353,12 +353,12 @@ theorem doNormalize128_rounds_any
         hδ₁_nn hδ₁_le hrep₀ hM₁_lt sd hsd
     -- Underflow check must be false (else the result is zero).
     by_cases hund : (sd.2.1 < minExponent || sd.1 < toUInt128 largeRange.min) = true
-    · rw [if_pos hund] at hok
+    · rw [ite_eq_left hund] at hok
       exfalso; apply hres
       have := Except.ok.inj hok
       rw [← this]
       rfl
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have he₂_ge : minExponent ≤ sd.2.1 := by
@@ -528,7 +528,7 @@ theorem doNormalize128_rounds_direction
     simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   -- scaleUp stage.
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
@@ -584,9 +584,9 @@ theorem doNormalize128_rounds_direction
   have hrep₀ : represents g₀ ftilde₀ := by
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst, if_pos hst]
+    · rw [ite_eq_left hst, ite_eq_left hst]
       exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]
+    · rw [ite_eq_right hst, ite_eq_right hst]
       exact g0_represents_zero zn
   -- scaleDown stage.
   cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
@@ -600,12 +600,12 @@ theorem doNormalize128_rounds_direction
       doNormalize_scaleDown128_repr largeRange.max M₁ e₁ g₀ hmaxM_v δ₁ ftilde₀
         hδ₁_nn hδ₁_le hrep₀ hM₁_lt sd hsd
     by_cases hund : (sd.2.1 < minExponent || sd.1 < toUInt128 largeRange.min) = true
-    · rw [if_pos hund] at hok
+    · rw [ite_eq_left hund] at hok
       exfalso; apply hres
       have := Except.ok.inj hok
       rw [← this]
       rfl
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
@@ -664,13 +664,13 @@ theorem doNormalize128_rounds_direction
           have hg₀_sbit : g₀.sbit_ = zn := by
             rw [hg₀_def]
             by_cases hst : sticky = true
-            · rw [if_pos hst]; cases hzn : zn <;> rfl
-            · rw [if_neg hst]; cases hzn : zn <;> rfl
+            · rw [ite_eq_left hst]; cases hzn : zn <;> rfl
+            · rw [ite_eq_right hst]; cases hzn : zn <;> rfl
           have hsbit₃ : cp.2.2.sbit_ = zn := by
             rw [h3sbit, h2sbit, hg₀_sbit]
           have hg₀_xbit : sticky = true → g₀.xbit_ = true := by
             intro hst
-            rw [hg₀_def, if_pos hst]
+            rw [hg₀_def, ite_eq_left hst]
             cases hzn : zn <;> rfl
           have hxbit₃ : sticky = true → cp.2.2.xbit_ = true :=
             fun hst => h3xbit (h2xbit (hg₀_xbit hst))
@@ -678,7 +678,7 @@ theorem doNormalize128_rounds_direction
           have hφf : sticky = false → φ₃ = ftilde₃ := by
             intro hst
             have hft0 : ftilde₀ = 0 := by
-              rw [hft₀_def, if_neg (by rw [hst]; exact Bool.false_ne_true)]
+              rw [hft₀_def, ite_eq_right (by rw [hst]; exact Bool.false_ne_true)]
             have hδ0 : δ₁ = 0 := hδ₁_zero hst
             have h_zero : |δ₁ - ftilde₀| = 0 := by rw [hδ0, hft0]; norm_num
             have h_chain : |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 ≤ 0 := by

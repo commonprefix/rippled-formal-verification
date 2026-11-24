@@ -3,12 +3,9 @@ import XRPL.Properties.Vault.Common.WithdrawDefs
 
 /-! # Witness for a VaultWithdraw that ends in an exception
 
-A run from a new closed-ended XRP vault, checked by `native_decide`. The vault holds 100 drops and 100 shares after
-one deposit. An account that owns no shares asks to redeem `10^17 + 1` shares, which are worth `10^17 + 1` drops, one
-drop above the largest XRP amount. Pricing them ends in the out-of-range error before the holder's shares are
-checked (FV_M2_25). -/
+Redeeming `10^17 + 1` XRP-vault shares ends in an error before the holder's shares are checked (FV_M2_25). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -35,7 +32,7 @@ private def vwGenesis : LendingLedger := { vault := vwVault, shares := [], broke
 private lemma vwGenesis_genesis : vwGenesis.Genesis where
   created := ⟨none, none, vwSchedule, none, false, .native, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨vwVault.wf, vwVault.valid⟩⟩
+    exact dite_eq_left ⟨vwVault.wf, vwVault.valid⟩⟩
   holds_asset := Or.inr (Or.inl rfl)
   no_holders := rfl
   no_brokers := rfl

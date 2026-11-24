@@ -23,9 +23,6 @@ def _root_.UInt32.toInt64 (a : UInt32) : Int64 := a.toUInt64.toInt64
 def _root_.Nat.toInt64Checked (n : Nat) : Except Error Int64 :=
   if n < 2 ^ 63 then .ok n.toInt64 else .error .wrap
 
-def _root_.Int.toInt64Checked (i : Int) : Except Error Int64 :=
-  if -9223372036854775808 ≤ i ∧ i ≤ 9223372036854775807 then .ok i.toInt64 else .error .wrap
-
 def _root_.UInt64.toInt64Checked (a : UInt64) : Except Error Int64 :=
   if a.toNat < 2 ^ 63 then .ok a.toInt64 else .error .wrap
 

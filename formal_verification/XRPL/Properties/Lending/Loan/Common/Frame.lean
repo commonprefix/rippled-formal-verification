@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Common.PoolBalances
 import XRPL.Properties.Lending.Loan.LoanValid
 import XRPL.Model.Lending.Loan.LoanAccept
@@ -144,7 +145,6 @@ private lemma UnsettledPayment.payInstalments_keepsTerms {α : Type} (amount : N
     · simp only [pure, Except.pure, Except.ok.injEq] at h; subst h; exact Loan.KeepsTerms.refl _
     · obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨pc, -, h⟩ := bind_ok_peel _ _ _ h
-      try dsimp only at h
       obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       split at h
@@ -154,7 +154,6 @@ private lemma UnsettledPayment.payInstalments_keepsTerms {α : Type} (amount : N
         obtain ⟨loan', hl, h⟩ := bind_ok_peel _ _ _ h
         obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
         obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
-        try dsimp only at h
         have hk := Loan.doPayment_keepsTerms _ _ _ hl
         split at h
         · simp only [pure, Except.pure, Except.ok.injEq] at h; subst h; exact hk

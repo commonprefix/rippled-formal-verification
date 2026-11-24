@@ -4,9 +4,8 @@ import XRPL.Properties.Lending.Loan.Common.RegularPayoffLedger
 
 /-! # Loan reachability
 
-Every loan a ledger holds keeps the terms it was created with. `LendingLedger.Reaches l txs l'` is a
-run of the transactions `txs` from `l` to `l'`, and the loan at slot `i` is read before the run in `l` and after it
-in `l'`. -/
+Every loan a ledger holds keeps the terms it was created with. `LendingLedger.Reaches l txs l'` is a run of the
+transactions `txs` from `l` to `l'`. -/
 
 namespace XRPL.Model
 

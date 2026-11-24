@@ -36,7 +36,7 @@ lemma shares_spec_exact (v : Vault) (amount shares : STAmount)
     have hT0_pos : 0 < T0 := mul_pos hS_pos hpos
     have hideal : v.idealSharesDepositAt navN.toRat amount.toRat = T0 / navN.toRat := by
       unfold RawVault.idealSharesDepositAt
-      rw [if_neg (ne_of_gt hnav_pos), RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, ← hT0_def]
+      rw [ite_eq_right (ne_of_gt hnav_pos), RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, ← hT0_def]
     have hIpos : 0 < T0 / navN.toRat := div_pos hT0_pos hnav_pos
     -- the product stage
     have hPb : |P.toRat - T0| ≤ T0 * (5 / (2 ^ 63 + 7)) := by

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.PaymentShareBound
 import XRPL.Properties.Lending.Ledger.Common.DefaultCredit
 import XRPL.Properties.Lending.Loan.Common.PaymentRoom
@@ -38,7 +39,7 @@ private lemma sumRoundAndSubtract_credit_large (A c : Number) (b : Int) (st : ST
   obtain ⟨hstc, hcrx⟩ := sumRoundAndSubtract_downward_le A c b .fractional st hA hA0 hc hc0 ⟨by omega, by omega⟩ h
   obtain ⟨hcrv, hcrn⟩ := hcrx cr hcr
   unfold sumRoundAndSubtract at h
-  rw [if_neg (by decide)] at h
+  rw [ite_eq_right (by decide)] at h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨E, hE, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨sum, hsum, h⟩ := bind_ok_peel _ _ _ h

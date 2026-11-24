@@ -2,13 +2,9 @@ import XRPL.Properties.Lending.LoanBroker.Common.WitnessSupport
 
 /-! # Witness for a cover deposit above the XRP range
 
-The check's result is computed by the model and checked by `native_decide`. The broker comes from a reachable
-history on a closed-ended XRP vault: a create, then a deposit of 1 drop.
+A cover deposit taking CoverAvailable to `10^17 + 1` drops ends in an error before the Open limit check (FV_M3_10). -/
 
-A deposit of `10^17` drops takes CoverAvailable to `10^17 + 1` drops, one drop above the largest XRP amount. The
-check reads the scale of that sum as an XRP amount, so it ends in an error before it compares with the Open limit. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending.DepositRangeWit
 

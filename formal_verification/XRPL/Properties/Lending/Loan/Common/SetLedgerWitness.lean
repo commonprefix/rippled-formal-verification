@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Loan.Common.SetWitness
 Runs from a new IOU vault at Scale 6, checked by `native_decide`. A deposit, a broker and a LoanSet with the
 numbers of the `Loan.create` witnesses. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -27,7 +27,7 @@ private def slGenesis : LendingLedger := { vault := slVault, shares := [], broke
 private lemma slGenesis_genesis : slGenesis.Genesis where
   created := ⟨some 6, none, slSchedule, none, false, .fractional, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨slVault.wf, slVault.valid⟩⟩
+    exact dite_eq_left ⟨slVault.wf, slVault.valid⟩⟩
   holds_asset := Or.inl rfl
   no_holders := rfl
   no_brokers := rfl

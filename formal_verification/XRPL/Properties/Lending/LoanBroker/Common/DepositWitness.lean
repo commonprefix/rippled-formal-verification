@@ -4,7 +4,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.WitnessSupport
 
 Two deposits of `1.5` base units are credited one each, while one deposit of `3` is credited whole. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

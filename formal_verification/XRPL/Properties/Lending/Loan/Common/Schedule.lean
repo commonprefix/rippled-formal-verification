@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Frame
 import XRPL.Properties.Lending.Loan.Common.GuardProofs
 import XRPL.Properties.Lending.Loan.Common.ReachableProofs
@@ -211,7 +212,6 @@ private lemma UnsettledPayment.payInstalments_onSchedule {α : Type} (amount : N
       have hpr' : payment.loan.paymentRemaining ≠ 0 := by simpa using hpr
       obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨pc, -, h⟩ := bind_ok_peel _ _ _ h
-      try dsimp only at h
       obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       split at h
@@ -221,7 +221,6 @@ private lemma UnsettledPayment.payInstalments_onSchedule {α : Type} (amount : N
         obtain ⟨loan', hl, h⟩ := bind_ok_peel _ _ _ h
         obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
         obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
-        try dsimp only at h
         have hon' := Loan.doPayment_onSchedule _ _ _ hend hon hpr' hl
         have hend' : loan'.schedule.EndsInTime := by
           rw [(Loan.doPayment_keepsTerms _ _ _ hl).schedule]; exact hend
@@ -339,7 +338,7 @@ private lemma Loan.Created.onSchedule {start : Loan} {t₀ : UInt32} (hc : Loan.
   have hq : r.loan'.previousPaymentDueDate = 0 := (congrArg RawLoan.previousPaymentDueDate hraw :)
   have hT : 1 ≤ schedule.paymentTotal.toNat := by
     have := r.loan'.valid.paymentTotal_pos
-    rw [hs, UInt32.lt_iff_toNat_lt] at this; simpa using this
+    rw [hs, UInt32.lt_iff_toNat_lt] at this; simpa using! this
   have hI : 1 ≤ schedule.paymentInterval.toNat := by
     have := r.loan'.valid.paymentInterval_min
     rw [hs, UInt32.le_iff_toNat_le] at this

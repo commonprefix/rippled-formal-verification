@@ -5,7 +5,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 A default of an active loan takes the cover a pending loan of the same broker was checked against, and the pending
 loan is then accepted with the broker below minCover. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

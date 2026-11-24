@@ -4,9 +4,7 @@ import XRPL.Properties.Vault.Proofs.Walk
 
 /-! # Vault creation
 
-`Vault.create` builds the empty vault from the creation inputs and re-validates it with
-`to_lawful`. Reading the created record back is the base case of every `Vault.Reachable`
-induction. -/
+`Vault.create` builds the empty vault and validates it. It is the base case of every `Vault.Reachable` induction. -/
 
 namespace XRPL.Model.SingleAssetVault
 

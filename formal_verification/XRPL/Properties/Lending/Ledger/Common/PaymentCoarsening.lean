@@ -1,11 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.AssetFlowSteps
 import XRPL.Properties.Lending.Ledger.Common.PaymentShareValue
 
 /-! # A payment that reaches `10^16` base units coarsens the vault
 
-When AssetsAvailable plus a payment's principal and interest reaches `10^16` base units (the line), AssetsAvailable'
-reaches it too, whether AssetsAvailable was below the line or already past it. So a payment that leaves
-AssetsAvailable below the line was paid at base scale, with AssetsAvailable below the line before it as well. -/
+When AssetsAvailable plus a payment's principal and interest reaches `10^16` base units, AssetsAvailable' does too.
+So a payment that leaves AssetsAvailable below that line was paid at base scale. -/
 
 namespace XRPL.Model.Lending
 
@@ -91,7 +91,7 @@ private lemma vault_credit_reaches (A c : Number) (b : Int) (st : STAmount) (cr 
   obtain ⟨-, hcrx⟩ := sumRoundAndSubtract_downward_le A c b .fractional st hA hA0 hc hc0 ⟨by omega, by omega⟩ h
   obtain ⟨hcrv, hcrn⟩ := hcrx cr hcr
   unfold sumRoundAndSubtract at h
-  rw [if_neg (by decide)] at h
+  rw [ite_eq_right (by decide)] at h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨E, hE, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨sum, hsum, h⟩ := bind_ok_peel _ _ _ h
@@ -356,7 +356,7 @@ lemma LendingLedger.pay_below_line {L L' : LendingLedger} (hR : L.Reachable) {k 
   · -- an XRP or MPT vault: the credit is the sum floored to a whole unit, which keeps AssetsAvailable' past the line
     have hb0 : L.vault.baseExponent = 0 := hbint hint
     unfold sumRoundAndSubtract at hcred
-    rw [if_pos hint] at hcred
+    rw [ite_eq_left hint] at hcred
     obtain ⟨x, hx, hcred⟩ := bind_ok_peel _ _ _ hcred
     obtain rfl : x = credit := Except.ok.inj hcred
     have htneg := Number.negative_false_of_nonneg tot htotn htot0

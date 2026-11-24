@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.AcceptExits
 import XRPL.Properties.Lending.Loan.Common.SetUpdates
 import XRPL.Properties.Lending.Loan.Common.SetValue
@@ -33,7 +34,7 @@ private lemma STAmount.roundToNumericType_scale_exact (nt : NumericType) (x y : 
       | ok ret =>
         have hty := STAmount.ofNumber_mNumericType _ _ _ ret hof
         have hint : ret.integral = true := by unfold STAmount.integral; rw [hty]; rfl
-        simp only [hint, if_true]
+        simp only [hint, ite_true]
     rw [h] at hy
     exact STAmount.roundToNumericType_of_isRounded_false _ _ _ hx hst hy
   | fractional =>
@@ -45,7 +46,7 @@ private lemma STAmount.roundToNumericType_scale_exact (nt : NumericType) (x y : 
         unfold STAmount.roundToNumericType
         rw [STAmount.ofNumber_fractional_zero]
         dsimp only
-        rw [if_neg (by rw [hint]; decide), STAmount.roundToExponent_eq_self _ s _ (Or.inr (Or.inl rfl))]
+        rw [ite_eq_right (by rw [hint]; decide), STAmount.roundToExponent_eq_self _ s _ (Or.inr (Or.inl rfl))]
         exact STAmount.toNumber_zero_fractional _ .to_nearest hint rfl
       rw [h, Except.ok.injEq] at hy
       rw [← hy]
@@ -90,7 +91,7 @@ private lemma STAmount.roundToNumericType_scale_exact (nt : NumericType) (x y : 
       unfold STAmount.roundToNumericType at h
       rw [hof mode] at h
       simp only [] at h
-      rw [if_neg (by show ¬ (NumericType.fractional).isIntegral = true; decide)] at h
+      rw [ite_eq_right (by show ¬ (NumericType.fractional).isIntegral = true; decide)] at h
       cases hr : st.roundToExponent s mode with
       | error e => rw [hr] at h; cases h
       | ok rs => rw [hr] at h; exact ⟨rs, rfl, h⟩
@@ -363,7 +364,7 @@ lemma Loan.createPending_accept_proof (r rA : LoanWithDisbursement Vault)
   have hlA' := hsA.loss
   have hrA := hsA.reserved
   have hyA := hsA.yield
-  simp only [Loan.createChange, Loan.acceptChange, if_true, Number.operator_add_zero_right, Except.ok.injEq,
+  simp only [Loan.createChange, Loan.acceptChange, ite_true, Number.operator_add_zero_right, Except.ok.injEq,
     hPO] at h1P hdP hlP hrP hyP h1A hdA hlA' hrA hyA
   rw [show r.pool'.assetsAvailable = aaP from (congrArg RawVault.assetsAvailable hpf :)] at h1A
   rw [show r.pool'.assetsDeployed = adP from (congrArg RawVault.assetsDeployed hpf :)] at hdA
@@ -427,53 +428,5 @@ lemma Loan.createPending_accept_proof (r rA : LoanWithDisbursement Vault)
   have hfees : r.loan'.fees = fees := (congrArg RawLoan.fees hl :)
   rw [hPO, hfees] at haA
   simp only [Loan.createAmountToBorrower, Bool.false_eq_true, ↓reduceIte, haA]
-  exact congrArg (fun x => Except.ok (Except.ok x)) (Loan.accept_eta _ _ rA haccept).symm
-
-/-- A create sends the broker owner the amount its loan reports: the origination fee once active. -/
-lemma Loan.create_eta (r : LoanWithDisbursement Vault) (pending : Bool)
-    (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
-    r = { loan' := r.loan', pool' := r.pool', amountToBorrower := r.amountToBorrower } := by
-  obtain ⟨properties, loanState, debtTotal', principal', broker', hchecks, hround, hpool, hbroker, hloan⟩ :=
-    Loan.create_ok_inv broker v principal rates fees schedule allowsOverpayment pending r hok
-  obtain ⟨hcount, hdue⟩ := Loan.create_ok_fits broker v principal rates fees schedule allowsOverpayment pending r hok
-  obtain ⟨raw, hadj, hv'⟩ := Vault.poolAdjust_ok_inv v _ r.pool' hpool
-  rw [Loan.create_run_of_checks broker v principal rates fees schedule allowsOverpayment pending properties
-    loanState debtTotal' principal' raw r.pool' broker' hchecks hround hadj hv' hbroker hcount hdue, hloan] at hok
-  revert hok
-  cases Loan.createAmountToBorrower principal fees pending with
-  | error e => intro hok; cases hok
-  | ok a => intro hok; injection hok with hok; injection hok with hok; rw [← hok]
-
-/-- An active create sends PrincipalRequested out exactly: to the borrower, and the origination fee to the broker
-owner. -/
-theorem Loan.create_conserves (r : LoanWithDisbursement Vault) (hpn : principal.isNormalized)
-    (hp0 : 0 ≤ principal.toRat) (hst : STAmount.isRounded broker.numericType principal = false)
-    (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment false).run = .ok (.ok r)) :
-    r.amountToBorrower.toRat + r.amountToBroker.toRat = principal.toRat := by
-  obtain ⟨_, _, _, _, _, -, -, -, -, hloan⟩ :=
-    Loan.create_ok_inv broker v principal rates fees schedule allowsOverpayment false r hok
-  have hl := (RawLoan.to_lawful_ok hloan).1
-  have hfees : r.loan'.fees = fees := (congrArg RawLoan.fees hl :)
-  have hpend : r.loan'.isPending = false := (congrArg RawLoan.isPending hl :)
-  rw [Loan.create_eta (r := r) (pending := false) (hok := hok)]
-  simp only [hpend, hfees, Bool.false_eq_true, ↓reduceIte]
-  exact (Loan.create_amountToBorrower_proof broker v principal rates fees schedule allowsOverpayment false r hpn hp0
-    hst hok).1 rfl
-
-/-- An accept sends PrincipalOutstanding out exactly: to the borrower, and the origination fee to the broker
-owner. -/
-theorem Loan.accept_conserves (loan : Loan) (r : LoanWithDisbursement Vault)
-    (hok : (loan.accept v).run = .ok (.ok r)) :
-    r.amountToBorrower.toRat + r.amountToBroker.toRat = loan.principalOutstanding.toRat := by
-  have hl : ({ loan.toRawLoan with isPending := false } : RawLoan) = r.loan'.toRawLoan := by
-    simp only [Loan.accept] at hok
-    unfold_ter at hok
-    walk_ok
-    all_goals exact (RawLoan.to_lawful_ok ‹RawLoan.to_lawful _ = Except.ok _›).1.symm
-  have hfees : r.loan'.fees = loan.fees := (congrArg RawLoan.fees hl :).symm
-  have hpend : r.loan'.isPending = false := (congrArg RawLoan.isPending hl :).symm
-  rw [Loan.accept_eta loan v r hok]
-  simp only [hpend, hfees, Bool.false_eq_true, ↓reduceIte]
-  exact Loan.accept_amountToBorrower_proof loan v r hok
 
 end XRPL.Model.Lending

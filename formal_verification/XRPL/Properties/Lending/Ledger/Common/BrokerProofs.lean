@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.BrokerSteps
 import XRPL.Properties.Lending.Ledger.Common.Exits
 import XRPL.Properties.Lending.Ledger.Common.IntegralCoverInv
@@ -19,7 +20,7 @@ def NumericType.maxAmount (nt : NumericType) : ℚ :=
 /-- The largest IOU amount is `(10^16 - 1)·10^80`. -/
 lemma NumericType.maxAmount_fractional : NumericType.fractional.maxAmount = (10 ^ 16 - 1) * 10 ^ 80 := by
   unfold NumericType.maxAmount
-  rw [if_neg (by decide), show cMaxOffset = 80 from rfl, show cMaxValue.toNat = 9999999999999999 from rfl]
+  rw [ite_eq_right (by decide), show cMaxOffset = 80 from rfl, show cMaxValue.toNat = 9999999999999999 from rfl]
   norm_num
 
 /-- Every asset's maximum is below `10^96`. -/
@@ -28,7 +29,7 @@ lemma NumericType.maxAmount_lt (nt : NumericType) : nt.maxAmount < 10 ^ 96 := by
   · rw [NumericType.eq_fractional_of_not_integral hint, NumericType.maxAmount_fractional]
     norm_num
   · unfold NumericType.maxAmount
-    rw [if_pos hint]
+    rw [ite_eq_left hint]
     have h : (nt.maxValue.toNat : ℚ) < 2 ^ 64 := by exact_mod_cast UInt64.toNat_lt_size nt.maxValue
     linarith [show (2 : ℚ) ^ 64 < 10 ^ 96 by norm_num]
 
@@ -133,7 +134,7 @@ lemma LendingLedger.Reachable.roundedCoverAvailable_ok {l : LendingLedger} (hr :
     · rw [(Number.toRat_eq_zero_iff_eq_zero hn).mp h0.symm, STAmount.ofNumber_fractional_zero]
       exact ⟨_, rfl⟩
   · unfold NumericType.maxAmount at hmax
-    rw [if_pos hint] at hmax
+    rw [ite_eq_left hint] at hmax
     obtain ⟨c, hc, -⟩ := LoanBroker.roundedCoverAvailable_of_representable b
       (by rw [hnt]; exact hr.cover_representable_integral hint hb hmax)
     exact ⟨c, hc⟩

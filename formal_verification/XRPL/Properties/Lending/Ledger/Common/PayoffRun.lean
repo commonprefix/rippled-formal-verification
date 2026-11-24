@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.PaymentTotal
 import XRPL.Properties.Lending.Ledger.Common.PrincipalLeftLedger
 import XRPL.Properties.Lending.Loan.Common.NextPayment
@@ -5,9 +6,8 @@ import XRPL.Properties.Lending.Loan.Common.Reserved
 
 /-! # An active loan is paid off by its next payments
 
-At one close time, a late loan takes late payments and a loan that is not late takes regular payments. Each pays
-exactly the amount due of the loan's next instalment, succeeds under the conditions of `loan_ops_total`, and leaves
-fewer payments, so a run of them pays the loan off. -/
+At one close time a payment of exactly the next instalment's amount due succeeds under the conditions of
+`loan_ops_total` and leaves fewer payments, so a run of them pays the loan off. -/
 
 namespace XRPL.Model.Lending
 

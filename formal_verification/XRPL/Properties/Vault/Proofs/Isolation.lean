@@ -7,9 +7,8 @@ import XRPL.Properties.Vault.Common.GuardProofs
 
 /-! # Isolation of a withdrawal by shares
 
-Proof bodies behind `Isolation.lean`. Without a partial early-exit fee a reachable vault pays any withdrawal by shares
-it covers. Under one, the withdrawal needs the price of its shares not to fall: a donation and an update keep it, and a
-fee-paying withdrawal or a clawback keep it when the withdrawn shares are worth a whole number of base units. -/
+Proofs behind `Isolation.lean`. Under a partial early-exit fee a donation and an update keep the share price, and a
+withdrawal or a clawback keeps it when the withdrawn shares are worth whole base units. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -427,13 +426,12 @@ lemma Vault.Reachable.isolation_deposit_proof (v : Vault) (t0 t : UInt32) (hr : 
   have hsle := Vault.withdraw_shares_le_total v shares waive t hpos hc hty rW hW
   have hmax := Vault.Reachable.maxValue_fits v t0 hr (by linarith)
   have hz := Vault.Reachable.openZone_proof v t0 hr hmax
-  have hmint := Vault.Reachable.deposit_mint_fits_proof v t0 hr amount isDonation t hposX hcX htyX r hok
-  have hr' := Vault.Reachable.deposit v t0 t amount isDonation r hr ht hcX htyX hposX hok hmint
+  have hr' := Vault.Reachable.deposit v t0 t amount isDonation r hr ht hcX htyX hposX hok
   obtain ⟨a, s, hv⟩ := Vault.deposit_frame v amount isDonation t hposX r hok
   obtain ⟨hsch, hfr, hnt, hscl⟩ := Vault.cash_frame_terms hv
   have hmaxX := Vault.maxValue_fits_of_canonical v amount hcX htyX
   obtain ⟨-, hS'⟩ :=
-    Vault.deposit_vault_updates_exact_proof v amount isDonation t t0 hposX hr hcX htyX hmaxX r hok hmint
+    Vault.deposit_vault_updates_exact_proof v amount isDonation t t0 hposX hr hcX htyX hmaxX r hok
   have htr := Vault.Reachable.withdraw_transfer v r.vault' t0 t hr hr' hsch hfr hnt hscl shares
     waive waive' hc hty hpos rW hW
   cases isDonation with
@@ -545,7 +543,7 @@ lemma Vault.Reachable.isolation_clawback_proof (v : Vault) (t0 t : UInt32) (hr :
     (htyX : assets.mNumericType = v.numericType) (hhs : holderShares.ShareBalance)
     (hsole : waiveX = true ↔ v.IsSoleShareholder holderShares) (r : VaultWithAmounts)
     (hok : (v.clawback assets holderShares waiveX hnn).run = .ok (.ok r))
-    (hheld : r.shares.toRat ≤ holderShares.toRat) (hother : r.shares.toRat + shares.toRat ≤ v.toExact.sharesTotal)
+    (hother : r.shares.toRat + shares.toRat ≤ v.toExact.sharesTotal)
     (hwhole : v.earlyExitFeeRateAt t ≠ 0 → v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate →
       (∃ k : ℤ, v.idealAssetsWithdraw waiveX r.shares.toRat = k * 10 ^ v.baseExponent) ∧
       ∃ k : ℤ, v.idealAssetsWithdraw waive shares.toRat = k * 10 ^ v.baseExponent) (waive' : Bool) :
@@ -556,7 +554,7 @@ lemma Vault.Reachable.isolation_clawback_proof (v : Vault) (t0 t : UInt32) (hr :
   have hsle := Vault.withdraw_shares_le_total v shares waive t hpos hc hty rW hW
   have hmax := Vault.Reachable.maxValue_fits v t0 hr (by linarith)
   have hz := Vault.Reachable.openZone_proof v t0 hr hmax
-  have hr' := Vault.Reachable.clawback v t0 t assets holderShares waiveX r hr ht hcX htyX hhs hsole hnn hok hheld
+  have hr' := Vault.Reachable.clawback v t0 t assets holderShares waiveX r hr ht hcX htyX hhs hsole hnn hok
   obtain ⟨a, s, hv⟩ := Vault.clawback_frame v assets holderShares waiveX hnn r hok
   obtain ⟨hsch, hfr, hnt, hscl⟩ := Vault.cash_frame_terms hv
   obtain ⟨-, hS'⟩ := Vault.clawback_vault_updates_exact_proof v assets holderShares waiveX t0 hnn hr hcX hhs hmax r hok

@@ -2,20 +2,10 @@ import XRPL.Properties.Vault.Proofs.Support.ReachableHistory
 
 /-! # Witnesses for the exit-order bounds
 
-Each run is computed by the model and checked by `native_decide`. Every vault comes from a reachable
-history: a create with a closed-ended schedule, a deposit, then a donation, all at close time 0. The
-withdrawals run at close time 1500, in the redemption phase.
+Two-holder runs in the redemption phase where going first gains a unit, going second gains a unit, and going
+second gains two units. -/
 
-* Going first gains a unit: 3 assets and 2 shares, A and B hold one each. Alone, A's share prices at
-  `1.5`, paid `2`. After B, who also gets `2`, A gets the remaining `1`.
-* Going second gains a unit when A and B are the only holders: 5 assets and 2 shares. Alone, A's
-  share prices at `2.5`, paid `2`. After B, who gets `2`, A gets the remaining `3`.
-* Going second gains two units: a fractional vault of `2000000000000001` assets and
-  `1800000000000001` shares, A and B hold `900000000000000` each. Alone, A's shares price at
-  `999999999999999.9`, floored to `999999999999999`. After B, who gets the same, A's shares are
-  worth `1000000000000000.89`, priced on the base grid at `1000000000000001`. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.ExitWit
 

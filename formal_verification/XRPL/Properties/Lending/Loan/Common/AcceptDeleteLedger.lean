@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.AssetFit
 import XRPL.Properties.Lending.Ledger.Common.Exits
 import XRPL.Properties.Lending.Ledger.Common.LoanReplay
@@ -11,9 +12,8 @@ import XRPL.Properties.Lending.Loan.Common.SetUpdates
 
 /-! # Proof bodies for LoanAccept and LoanDelete on a ledger
 
-A successful LoanAccept or LoanDelete ran `Loan.accept` or `Loan.delete` on the stored loan read with its broker,
-and a successful LoanSet ran `Loan.create` on the stored broker. Each proof below reaches those operations and
-reuses the proof for the `Loan` operation. -/
+Each proof reaches the `Loan.accept`, `Loan.delete` or `Loan.create` a successful transaction ran on the stored
+objects and reuses the proof for that `Loan` operation. -/
 
 namespace XRPL.Model.Lending
 
@@ -119,12 +119,12 @@ private lemma LendingLedger.apply_loanSet_of_create {l : LendingLedger} (hnd : l
   unfold LendingLedger.applyLoanSet
   rw [hsched]
   dsimp only
-  rw [if_neg (by decide)]
+  rw [ite_eq_right (by decide)]
   simp only [hb]
   rw [hc]
   unfold LendingLedger.loanSetChecked
   dsimp only
-  rw [if_neg (by rw [show TER.tesSUCCESS.isTesSuccess = true from rfl]; decide)]
+  rw [ite_eq_right (by rw [show TER.tesSUCCESS.isTesSuccess = true from rfl]; decide)]
   rw [ExceptT.run_map, ExceptT.run_map, hcr]
   rfl
 
@@ -154,7 +154,7 @@ lemma LendingLedger.createPending_accept_proof {l l₁ l₂ lc : LendingLedger} 
     simp only [Except.ok.injEq] at h'
     rw [← h']
     show { l with now := if l.now ≤ startDate then startDate else l.now } = _
-    rw [if_pos (UInt32.le_of_lt ht)]
+    rw [ite_eq_left (UInt32.le_of_lt ht)]
   subst hlc
 
   -- the active LoanSet at StartDate runs the same create on the same schedule, and its checks pass
@@ -205,7 +205,7 @@ lemma LendingLedger.createPending_deletePending_restores_proof {l l₁ l₂ : Le
   obtain ⟨e, loan, rD, he, hat, -, hdel, -, hv₂, -, -, hbr⟩ := LendingLedger.loanDelete_ok hdelete
   obtain rfl := hat.eq hat₁
   obtain rfl := Option.some.inj (he.symm.trans (LendingLedger.loan?_ofCreate hl₁))
-  rw [hbr, if_pos rfl] at hb'
+  rw [hbr, ite_eq_left rfl] at hb'
   obtain rfl := Option.some.inj hb'
   obtain ⟨hp, hpos⟩ := LendingTx.preflight_loanSet_principal l j principal rates fees paymentInterval paymentTotal
     gracePeriod startDate true allowsOverpayment (by rw [hpre]; rfl)
@@ -230,7 +230,7 @@ lemma LendingLedger.deletePending_principal_proof {l l' : LendingLedger} (hr : l
   obtain ⟨e₀, loan₀, r, he₀, hat₀, -, hok, -, hv, -, -, hbr⟩ := LendingLedger.loanDelete_ok h
   obtain rfl := hat.eq hat₀
   obtain rfl := Option.some.inj (he.symm.trans he₀)
-  rw [hbr, if_pos rfl] at hb'
+  rw [hbr, ite_eq_left rfl] at hb'
   obtain rfl := Option.some.inj hb'
   have hf := hr.deletePending_fits hat hp
   rw [hv]
@@ -246,7 +246,7 @@ lemma LendingLedger.deleteActive_last_proof {l l' : LendingLedger} (hr : l.Reach
   obtain ⟨e₀, loan₀, r, he₀, hat₀, hc, hok, -, -, -, -, hbr⟩ := LendingLedger.loanDelete_ok h
   obtain rfl := hat.eq hat₀
   obtain rfl := Option.some.inj (he.symm.trans he₀)
-  rw [hbr, if_pos rfl] at hb'
+  rw [hbr, ite_eq_left rfl] at hb'
   obtain rfl := Option.some.inj hb'
   exact Loan.deleteActive_last_proof loan l.vault r hp (Loan.canDelete_active_paid loan hc hp) hlast
     (hr.lastLoan_debt hat hlast) hok

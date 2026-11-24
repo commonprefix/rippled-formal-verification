@@ -7,9 +7,8 @@ import XRPL.Properties.Lending.Loan.Common.AcceptProofs
 
 /-! # Proof bodies for LoanSet on a ledger
 
-A successful LoanSet on broker `j` ran `Loan.create` on the ledger's copy of that broker, with a principal its
-preflight and checks accepted. The ledger after holds the created vault and reads the created loan at the end of
-the loan list. Each proof below reaches that create and reuses the proof for `Loan.create`. -/
+A successful LoanSet on broker `j` ran `Loan.create` on that broker and appends the created loan. Each proof reaches
+that create and reuses the proof for `Loan.create`. -/
 
 namespace XRPL.Model.Lending
 

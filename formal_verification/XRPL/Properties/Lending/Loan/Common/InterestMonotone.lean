@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.InterestDue
 
 /-! # interestDue never rises unless late or overpayment interest covers a negative interest part
@@ -28,13 +29,13 @@ private lemma STAmount.roundToNumericType_zero_some (nt : NumericType) (mode : r
 private lemma tenthBipsOfValue_zero_rate' (rate : TenthBips32) :
     tenthBipsOfValue Number.zero rate .to_nearest = .ok Number.zero := by
   have heq : tenthBipsOfValue Number.zero rate .to_nearest =
-      (Number.zero.operator_mul rate.toNumber .to_nearest) >>=
-        (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest) := rfl
+      (Number.zero.operator_mul (rate.toNumber .to_nearest) .to_nearest) >>=
+        (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest) := rfl
   rw [heq]
-  have hm : Number.zero.operator_mul rate.toNumber .to_nearest = .ok Number.zero := by
+  have hm : Number.zero.operator_mul (rate.toNumber .to_nearest) .to_nearest = .ok Number.zero := by
     rw [Number.operator_mul_eq_spec]
     unfold Number.operator_mulSpec
-    rw [if_pos (by decide)]
+    rw [ite_eq_left (by decide)]
     rfl
   rw [hm]
   exact zero_div_unity .to_nearest
@@ -329,9 +330,8 @@ private lemma Loan.tryOverpayment_interestDue_le (l : Loan) (opc : PaymentCompon
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   -- Match the steps by their shape only. A full search unfolds the `Number` operators of the other steps.
   exact ⟨rfl, Loan.reamortized_interestDue_le l hlo hint hi (by with_reducible assumption)
@@ -387,9 +387,8 @@ private lemma UnsettledPayment.applyOverpayment_interest (payment p' : Unsettled
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact ⟨rfl, le_refl _⟩
-    | skip
   have hopc := ‹Loan.overpaymentComponents _ _ = _›
   have hovn := STAmount.roundToNumericType_isNormalized _ _ _ _ _
     ‹STAmount.roundToNumericType _ _ rounding_mode.downward _ = _›
@@ -412,9 +411,8 @@ private lemma UnsettledPayment.applyOverpayment_interestDue_le (payment p' : Uns
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact le_refl _
-    | skip
   obtain ⟨-, hle⟩ := Loan.tryOverpayment_interestDue_le _ _ _ hlo hint hi ‹Loan.tryOverpayment _ _ = _›
   have h1 := (RawLoan.to_lawful_ok ‹RawLoan.to_lawful _ = _›).1
   dsimp only

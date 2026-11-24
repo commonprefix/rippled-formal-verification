@@ -38,7 +38,7 @@ lemma computeDeposit_donation_reduces (v : Vault) (amount : STAmount) (amounts :
   walk_ok
   simp only [Bool.not_eq_true] at *
   subst_vars
-  exact ⟨_, by first | rfl | trivial, ‹_›, ‹_›, ‹_›⟩
+  exact ⟨_, by trivial, ‹_›, ‹_›, ‹_›⟩
 
 /-- Every rejection `computeDeposit` returns: `tecPRECISION_LOSS`, `tecINTERNAL`, or `tecPATH_DRY`
 for an overflow. -/

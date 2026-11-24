@@ -5,7 +5,7 @@ import XRPL.Properties.Vault.Proofs.Support.ReachableHistory
 
 A reachable history on a closed-ended IOU vault with base exponent `-6`. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

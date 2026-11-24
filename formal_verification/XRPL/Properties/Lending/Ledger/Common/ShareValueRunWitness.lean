@@ -5,11 +5,9 @@ import XRPL.Properties.Vault.Proofs.MaxValueFits
 
 /-! # Sequences that lower shareValue
 
-Two one-transaction sequences for the sequence row on shareValue. In the first a VaultWithdraw of a holder that is
-not the only one pays a price rounded to nearest above the worth of the share. In the second a payment on a coarsened
-vault is credited below what it pays. -/
+One-transaction runs that lower shareValue: a VaultWithdraw (FV_M2_3) and a payment on a coarsened vault (FV_M4_25). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -47,17 +45,13 @@ private lemma LendingLedger.Reaches.single_cases {start l' l : LendingLedger} {t
 transaction, its first ledger and its last ledger. -/
 private lemma LendingLedger.along_single {start l' : LendingLedger} {tx : LendingTx}
     (hok : (start.apply tx).run = .ok (.ok l')) (hkeep : start.lowersShareValue tx = false)
-    (hS : start.vault.sharesTotal ≠ Number.zero) (hS' : l'.vault.sharesTotal ≠ Number.zero)
-    (hfit : start.vault.sharesTotal.toRat + start.sharesCreatedOf tx ≤ 2 ^ 63 - 1) :
-    start.KeepsShareValueAlong [tx] ∧ start.SharesLeftAlong [tx] ∧ start.SharesFitAlong [tx] := by
-  refine ⟨fun pre l t hp hr => ?_, fun pre l hp hr => ?_, fun pre l t hp hr => ?_⟩
+    (hS : start.vault.sharesTotal ≠ Number.zero) (hS' : l'.vault.sharesTotal ≠ Number.zero) :
+    start.KeepsShareValueAlong [tx] ∧ start.SharesLeftAlong [tx] := by
+  refine ⟨fun pre l t hp hr => ?_, fun pre l hp hr => ?_⟩
   · obtain ⟨rfl, rfl⟩ := single_step hp
     obtain rfl := hr.nil_inv
     exact hkeep
   · rcases hr.single_cases hok hp with rfl | rfl <;> assumption
-  · obtain ⟨rfl, rfl⟩ := single_step hp
-    obtain rfl := hr.nil_inv
-    exact hfit
 
 /-- A one-transaction sequence is not coarsened along the way when its first and last ledgers are not. -/
 private lemma LendingLedger.notCoarsenedAlong_single {start l' : LendingLedger} {tx : LendingTx}
@@ -92,7 +86,7 @@ private def ndGenesis : LendingLedger := { vault := ndVault, shares := [], broke
 private lemma ndGenesis_genesis : ndGenesis.Genesis where
   created := ⟨none, none, ndSchedule, none, false, NumericType.int64, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨ndVault.wf, ndVault.valid⟩⟩
+    exact dite_eq_left ⟨ndVault.wf, ndVault.valid⟩⟩
   holds_asset := Or.inr (Or.inr rfl)
   no_holders := rfl
   no_brokers := rfl
@@ -133,7 +127,7 @@ shareValue. One share of 2, worth `1.5`, is redeemed for `2`, and shareValue fal
 lemma LendingLedger.no_dilution_withdraw_witness :
     ∃ (start l : LendingLedger) (txs : List LendingTx), start.Reachable ∧ LendingLedger.Reaches start txs l ∧
       start.KeepsShareValueAlong txs ∧ start.SharesLeftAlong txs ∧ start.NotCoarsenedAlong txs ∧
-      start.SharesFitAlong txs ∧ l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue := by
+      l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue := by
   have h := ndCheck_true
   unfold ndCheck at h
   split at h
@@ -144,17 +138,15 @@ lemma LendingLedger.no_dilution_withdraw_witness :
   rename_i l' hl'
   simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true'] at h
   obtain ⟨⟨⟨⟨⟨hlt, hsole⟩, hS⟩, hS'⟩, hnc⟩, hnc'⟩ := h
-  obtain ⟨hk, hs, hf⟩ := LendingLedger.along_single hl' hsole hS hS' (by
-    show l.vault.sharesTotal.toRat + (0 : ℚ) ≤ 2 ^ 63 - 1
-    linarith [Vault.sharesTotal_le_maxRep l.vault])
+  obtain ⟨hk, hs⟩ := LendingLedger.along_single hl' hsole hS hS'
   exact ⟨l, l', [ndWithdraw], LendingLedger.Reachable.of_run ndGenesis_genesis hl, .single hl', hk, hs,
-    LendingLedger.notCoarsenedAlong_single hl' hnc hnc', hf, hlt⟩
+    LendingLedger.notCoarsenedAlong_single hl' hnc hnc', hlt⟩
 
 /-- A sequence that meets every condition of the sequence row except a vault that is not coarsened, and lowers
 shareValue. On a coarsened vault an instalment of `1.5` without interest is credited as `1`. -/
 lemma LendingLedger.no_dilution_coarsened_witness :
     ∃ (start l : LendingLedger) (txs : List LendingTx), start.Reachable ∧ LendingLedger.Reaches start txs l ∧
-      start.KeepsShareValueAlong txs ∧ start.SharesLeftAlong txs ∧ start.SharesFitAlong txs ∧
+      start.KeepsShareValueAlong txs ∧ start.SharesLeftAlong txs ∧
       start.WholeWorthAlong txs ∧ l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue := by
   obtain ⟨l, l', i, paymentType, amount, -, -, hr, hok, -, -, hlt⟩ :=
     LendingLedger.payment_share_value_falls_reachable
@@ -168,10 +160,8 @@ lemma LendingLedger.no_dilution_coarsened_witness :
       rw [RawVault.WF.toExact_sharesTotal _ l.vault.wf, h0, Number.toRat_zero, div_zero]
     have hnonneg : 0 ≤ l'.vault.toRawVault.shareValue := Vault.perShareValue_nonneg l'.vault
     linarith
-  obtain ⟨hk, hs, hf⟩ := LendingLedger.along_single hok rfl hS (by rw [hST]; exact hS) (by
-    show l.vault.sharesTotal.toRat + (0 : ℚ) ≤ 2 ^ 63 - 1
-    linarith [Vault.sharesTotal_le_maxRep l.vault])
-  exact ⟨l, l', [.loanPay i paymentType amount], hr, .single hok, hk, hs, hf,
+  obtain ⟨hk, hs⟩ := LendingLedger.along_single hok rfl hS (by rw [hST]; exact hS)
+  exact ⟨l, l', [.loanPay i paymentType amount], hr, .single hok, hk, hs,
     LendingLedger.wholeWorthAlong_single trivial, hlt⟩
 
 end XRPL.Model.Lending

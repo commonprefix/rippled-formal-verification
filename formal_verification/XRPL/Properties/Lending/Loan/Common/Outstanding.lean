@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.ManageProofs
 import XRPL.Properties.Lending.Loan.Common.PayMonotone
 import XRPL.Properties.Lending.Loan.Common.ReachableProofs

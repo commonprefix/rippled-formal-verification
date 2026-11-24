@@ -18,7 +18,7 @@ lemma IOUAmount.ofNumber_zero_mantissa (n : Number) (mode : rounding_mode)
     rw [doNormalize_eq_spec]
     all_goals try min_fit
     unfold doNormalizeSpec
-    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr h, if_pos rfl]
+    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr h, ite_eq_left rfl]
   unfold IOUAmount.ofNumber IOUAmount.fromNumber Number.normalizeToRange
   rw [hd]
   rfl
@@ -26,9 +26,10 @@ lemma IOUAmount.ofNumber_zero_mantissa (n : Number) (mode : rounding_mode)
 /-- `ofIOUAmount` of the zero `IOUAmount` is the canonical zero record. -/
 lemma STAmount.ofIOU_zero (mode : rounding_mode) :
     STAmount.ofIOUAmount IOUAmount.zero mode = .ok ⟨.fractional, 0, -100, false⟩ := by
-  unfold STAmount.ofIOUAmount STAmount.canonicalize STAmount.iou
+  rw [STAmount.ofIOUAmount_of_ne mode (by decide)]
+  unfold STAmount.canonicalize STAmount.iou STAmount.signedDropsChecked
   simp only [STAmount.unchecked, STAmount.integral, NumericType.isIntegral,
-    Bool.false_eq_true, if_false]
+    Bool.false_eq_true, ite_false]
   rfl
 
 /-- Convert the per-mode magnitude characterization into `RoundsToRepresentableAt`. -/
@@ -54,7 +55,7 @@ private lemma conclude (result value : STAmount) (s : ℤ) (mode : rounding_mode
       positivity
     have h_abs : |value.toRat| = value.toRat := abs_of_nonneg h_nn
     rw [hn] at h_res_val
-    simp only [Bool.false_eq_true, if_false, one_mul] at h_res_val
+    simp only [Bool.false_eq_true, ite_false, one_mul] at h_res_val
     rcases mode with _ | _ | _ | _
     · rcases h_tn rfl with h | h
       · refine Or.inl ?_
@@ -72,18 +73,18 @@ private lemma conclude (result value : STAmount) (s : ℤ) (mode : rounding_mode
     · show result.toRat = _
       have h := h_tz rfl
       rw [h_abs] at h
-      rw [if_pos (show value.toRat ≥ 0 from h_nn), h_res_val, ← h]
+      rw [ite_eq_left (show value.toRat ≥ 0 from h_nn), h_res_val, ← h]
       push_cast
       ring
     · show result.toRat = _
       have h := h_dn rfl
-      rw [hn, if_neg Bool.false_ne_true, h_abs] at h
+      rw [hn, ite_eq_right Bool.false_ne_true, h_abs] at h
       rw [h_res_val, ← h]
       push_cast
       ring
     · show result.toRat = _
       have h := h_up rfl
-      rw [hn, if_neg Bool.false_ne_true, h_abs] at h
+      rw [hn, ite_eq_right Bool.false_ne_true, h_abs] at h
       rw [h_res_val, ← h]
       push_cast
       ring
@@ -103,7 +104,7 @@ private lemma conclude (result value : STAmount) (s : ℤ) (mode : rounding_mode
       rw [h_abs, neg_div, Int.floor_neg]
       omega
     rw [hn] at h_res_val
-    simp only [if_true] at h_res_val
+    simp only [ite_true] at h_res_val
     rcases mode with _ | _ | _ | _
     · rcases h_tn rfl with h | h
       · refine Or.inr ?_
@@ -118,18 +119,18 @@ private lemma conclude (result value : STAmount) (s : ℤ) (mode : rounding_mode
         ring
     · show result.toRat = _
       have h := h_tz rfl
-      rw [if_neg (show ¬ value.toRat ≥ 0 from not_le.mpr h_lt), h_conv_c, h_res_val, ← h]
+      rw [ite_eq_right (show ¬ value.toRat ≥ 0 from not_le.mpr h_lt), h_conv_c, h_res_val, ← h]
       push_cast
       ring
     · show result.toRat = _
       have h := h_dn rfl
-      rw [hn, if_pos rfl] at h
+      rw [hn, ite_eq_left rfl] at h
       rw [h_conv_f, h_res_val, ← h]
       push_cast
       ring
     · show result.toRat = _
       have h := h_up rfl
-      rw [hn, if_pos rfl] at h
+      rw [hn, ite_eq_left rfl] at h
       rw [h_conv_c, h_res_val, ← h]
       push_cast
       ring
@@ -173,15 +174,15 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
     have := hc.mant_lo
     omega
   unfold STAmount.roundToExponent at hok
-  rw [if_neg (by rw [h_int]; exact Bool.false_ne_true),
-      if_neg (by
+  rw [ite_eq_right (by rw [h_int]; exact Bool.false_ne_true),
+      ite_eq_right (by
         show ¬ value.isZero = true
         unfold STAmount.isZero
         rw [beq_eq_false_iff_ne.mpr h_mv_ne]
         exact Bool.false_ne_true)] at hok
   by_cases h_exp : value.exponent ≥ s
   · -- The value is already on the grid.
-    rw [if_pos h_exp] at hok
+    rw [ite_eq_left h_exp] at hok
     have h_result : result = value := (Except.ok.inj hok).symm
     have h_e_ge : s ≤ value.mOffset := h_exp
     have h_split : (10 : ℚ) ^ value.mOffset
@@ -199,7 +200,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
       rcases hn : value.mIsNegative with _ | _ <;> simp <;> ring
     · rw [h_result]
   · -- Active branch: reference, sum, subtraction.
-    rw [if_neg h_exp] at hok
+    rw [ite_eq_right h_exp] at hok
     push Not at h_exp
     have h_ev : value.mOffset < s := h_exp
     rw [show STAmount.checked value.mNumericType kMinValue s value.negative mode
@@ -308,20 +309,20 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
       show (if !value.mIsNegative then (-1 : ℚ) else 1) * (kMinValue.toNat : ℚ) * 10 ^ s = _
       rw [h_kMin_toNat]
       rcases hb : value.mIsNegative with _ | _
-      · simp only [Bool.not_false, if_true, Bool.false_eq_true, if_false]
+      · simp only [Bool.not_false, ite_true, Bool.false_eq_true, ite_false]
         push_cast
         ring
-      · simp only [Bool.not_true, Bool.false_eq_true, if_false, if_true]
+      · simp only [Bool.not_true, Bool.false_eq_true, ite_false, ite_true]
         push_cast
         ring
     set τ : ℚ := s1n.toRat + s2n.toRat with hτ_def
     have hτ_val : τ = (if value.mIsNegative then (-1 : ℚ) else 1) * (k : ℚ) * 10 ^ s := by
       rw [hτ_def, hs1_val, hs2_val, h_sum_val, h_negRef_val]
       rcases hb : value.mIsNegative with _ | _
-      · simp only [Bool.false_eq_true, if_false]
+      · simp only [Bool.false_eq_true, ite_false]
         push_cast
         ring
-      · simp only [if_true]
+      · simp only [ite_true]
         push_cast
         ring
     have h_res_val : result.toRat = (if value.mIsNegative then (-1 : ℚ) else 1)
@@ -359,9 +360,9 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
         have hw_norm : w.isNormalized := by
           rw [hw_def]
           rcases hb : value.mIsNegative with _ | _
-          · simp only [Bool.false_eq_true, if_false]
+          · simp only [Bool.false_eq_true, ite_false]
             exact hw₀_norm
-          · simp only [if_true]
+          · simp only [ite_true]
             rcases hw₀_norm with hz | ⟨h1, h2, h3, h4, h5⟩
             · exfalso
               apply hw₀_mant
@@ -377,15 +378,15 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
         have h_w_neg_val : w.negative_ = value.mIsNegative := by
           rw [hw_def]
           rcases hb : value.mIsNegative with _ | _
-          · simp only [Bool.false_eq_true, if_false]
+          · simp only [Bool.false_eq_true, ite_false]
             exact hw₀_neg
-          · simp only [if_true]
+          · simp only [ite_true]
         have hw_val : w.toRat = τ := by
           rw [hτ_val, hw_def]
           rcases hb : value.mIsNegative with _ | _
-          · simp only [Bool.false_eq_true, if_false, one_mul]
+          · simp only [Bool.false_eq_true, ite_false, one_mul]
             exact hw₀_val
-          · simp only [if_true]
+          · simp only [ite_true]
             rw [Number.toRat_set_neg_true_of_nn w₀ hw₀_neg, hw₀_val]
             ring
         have h_n₂_val : n₂.toRat = τ := by
@@ -397,9 +398,9 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
         have hτ_ne : τ ≠ 0 := by
           rw [hτ_val]
           rcases hb : value.mIsNegative with _ | _
-          · simp only [Bool.false_eq_true, if_false, one_mul]
+          · simp only [Bool.false_eq_true, ite_false, one_mul]
             exact ne_of_gt h_kpow_pos
-          · simp only [if_true]
+          · simp only [ite_true]
             intro h
             have h1 : (k : ℚ) * 10 ^ s = 0 := by linarith
             exact ne_of_gt h_kpow_pos h1
@@ -444,7 +445,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
             unfold IOUAmount.ofNumber IOUAmount.fromNumber
             rw [h_ntr]
             simp only []
-            rw [if_neg h_no_over, if_pos hlt]
+            rw [ite_eq_right h_no_over, ite_eq_left hlt]
           have h_sumI_zero : sumI₂ = IOUAmount.zero :=
             Except.ok.inj (h_of₂.symm.trans h_of_zero)
           rw [h_sumI_zero, STAmount.ofIOU_zero mode] at h_pack₂
@@ -458,7 +459,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
           unfold IOUAmount.ofNumber IOUAmount.fromNumber
           rw [h_ntr]
           simp only []
-          rw [if_neg h_no_over, if_neg (not_lt.mpr hexp_ge)]
+          rw [ite_eq_right h_no_over, ite_eq_right (not_lt.mpr hexp_ge)]
         have h_sumI₂_eq : sumI₂ = ⟨if w.negative_ then -(w.mantissa_ / 10 / 10 / 10).toInt64
             else (w.mantissa_ / 10 / 10 / 10).toInt64, w.exponent_ + 3⟩ :=
           Except.ok.inj (h_of₂.symm.trans h_of_explicit)
@@ -548,9 +549,9 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
           have h2 : |w.toRat| = (k : ℚ) * 10 ^ s := by
             rw [hw_val, hτ_val]
             rcases hb : value.mIsNegative with _ | _
-            · simp only [Bool.false_eq_true, if_false, one_mul]
+            · simp only [Bool.false_eq_true, ite_false, one_mul]
               exact abs_of_nonneg (le_of_lt h_kpow_pos)
-            · simp only [if_true]
+            · simp only [ite_true]
               rw [show (-1 : ℚ) * (k : ℚ) * 10 ^ s = -((k : ℚ) * 10 ^ s) from by ring,
                   abs_neg]
               exact abs_of_nonneg (le_of_lt h_kpow_pos)

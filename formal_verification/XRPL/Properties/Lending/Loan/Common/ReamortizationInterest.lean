@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Amortization
 import XRPL.Properties.Lending.Loan.Common.PayUnits
 import XRPL.Properties.Lending.Loan.Common.RoundToNearest
@@ -132,8 +133,8 @@ lemma tenthBipsOfValue_pos_le {G pm : Number} {rate : TenthBips32} (hG : G.isNor
   obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts rate
   obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
   have hu : ((kTenthBipsPerUnity.toNat : ℕ) : ℚ) = 100000 := by rfl
-  have heq : tenthBipsOfValue G rate .to_nearest = (G.operator_mul rate.toNumber .to_nearest) >>=
-      (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest) := rfl
+  have heq : tenthBipsOfValue G rate .to_nearest = (G.operator_mul (rate.toNumber .to_nearest) .to_nearest) >>=
+      (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨p, hp, h⟩ := bind_ok_peel _ _ _ h
   have hpn := Number.operator_mul_isNormalized _ _ _ _ hG hrn hp
@@ -211,16 +212,16 @@ lemma Number.clamp_zero_cases (x cap : Number) (hx : x.isNormalized) (hcap : cap
   · left
     have := (Number.operator_lt_iff _ _ hx Number.zero_isNormalized).mp h1
     rw [Number.toRat_zero] at this
-    exact ⟨this, by rw [if_pos h1]⟩
+    exact ⟨this, by rw [ite_eq_left h1]⟩
   · have h1' : 0 ≤ x.toRat := by
       have := (Number.operator_lt_eq_false_iff _ _ hx Number.zero_isNormalized).mp (by simpa using h1)
       rwa [Number.toRat_zero] at this
-    rw [if_neg h1]
+    rw [ite_eq_right h1]
     by_cases h2 : cap.operator_lt x = true
     · right; left
-      exact ⟨(Number.operator_lt_iff _ _ hcap hx).mp h2, h1', by rw [if_pos h2]⟩
+      exact ⟨(Number.operator_lt_iff _ _ hcap hx).mp h2, h1', by rw [ite_eq_left h2]⟩
     · right; right
-      exact ⟨h1', (Number.operator_lt_eq_false_iff _ _ hcap hx).mp (by simpa using h2), by rw [if_neg h2]⟩
+      exact ⟨h1', (Number.operator_lt_eq_false_iff _ _ hcap hx).mp (by simpa using h2), by rw [ite_eq_right h2]⟩
 
 /-- A lawful fractional loan's amounts are on the LoanScale grid. TotalValueOutstanding and ManagementFeeOutstanding
 are below `10^16` units, PrincipalOutstanding and ManagementFeeOutstanding are not negative. -/
@@ -544,9 +545,8 @@ lemma Loan.tryOverpayment_interestDue_nonneg (l : Loan) (opc : PaymentComponents
   unfold Loan.tryOverpayment at h
   simp only [bind, Except.bind] at h
   walk_ok
-  all_goals first
+  all_goals try first
     | (have hn := Except.ok.inj ‹pure none = Except.ok (some re)›; cases hn)
-    | skip
   obtain rfl := Option.some.inj (Except.ok.inj ‹pure (some _) = Except.ok (some re)›)
   exact Loan.reamortized_interestDue_nonneg l opc hlo hfrac hi hpd ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
     ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›

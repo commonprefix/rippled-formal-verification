@@ -38,7 +38,7 @@ def lean_stamount_to_number (s : STAmount) (mode : rounding_mode) : Except Error
 
 @[export lean_stamount_unchecked_from_int64]
 def lean_stamount_unchecked_from_int64 (numericType : NumericType) (v : Int64) (offset : Int64)
-    : STAmount :=
+    : Except Error STAmount :=
   STAmount.uncheckedFromInt64 numericType v offset.toInt
 
 @[export lean_stamount_checked]

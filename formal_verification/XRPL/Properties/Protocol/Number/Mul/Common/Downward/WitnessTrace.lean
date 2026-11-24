@@ -7,13 +7,11 @@ namespace XRPL.Model.Protocol
 
 /-! # Witness for `Number.operator_mul_rounding_bound_downward`
 
-The bound `10/(2^63+2)` is tight: the relative error at
-`x = 9223372036854775810`, `y = 1000000000000000001` exceeds `9/(2^63+2)`,
-proving that no bound of the form `k/(2^63+2)` with `k ≤ 9` suffices. -/
+One product has a relative error above `9/(2^63+2)`, so the bound `10/(2^63+2)` is tight. -/
 
 local syntax "sd_step" : tactic
 local macro_rules | `(tactic| sd_step) => `(tactic|
-  (conv_lhs => rw [scaleDown128Spec]; rw [dif_pos (by decide)]; rfl))
+  (conv_lhs => rw [scaleDown128Spec]; rw [dite_eq_left (by decide)]; rfl))
 
 /-- `scaleDown128Spec` trace for the downward witness inputs. -/
 lemma scaleDown128_downward_witness :
@@ -28,7 +26,7 @@ lemma scaleDown128_downward_witness :
   sd_step; sd_step; sd_step; sd_step; sd_step
   sd_step; sd_step; sd_step; sd_step; sd_step
   sd_step; sd_step; sd_step; sd_step
-  conv_lhs => rw [scaleDown128Spec]; rw [dif_neg (by decide)]
+  conv_lhs => rw [scaleDown128Spec]; rw [dite_eq_right (by decide)]
   rfl
 
 /-- `operator_mul` trace for the downward witness inputs. -/
@@ -42,7 +40,7 @@ lemma Number.operator_mul_downward_witness :
   unfold Number.operator_mulSpec
   have hx_ne : (⟨false, 9223372036854775810, 0⟩ : Number).operator_eq Number.zero = false := by decide
   have hy_ne : (⟨false, 1000000000000000001, 0⟩ : Number).operator_eq Number.zero = false := by decide
-  simp only [hx_ne, hy_ne, Bool.false_eq_true, if_false, bne_self_eq_false, add_zero]
+  simp only [hx_ne, hy_ne, Bool.false_eq_true, ite_false, bne_self_eq_false, add_zero]
   rw [scaleDown128_downward_witness]
   have h_rup : ({ digits_ := 10530320965215537013, xbit_ := true, sbit_ := false } : Guard).doRoundUp
       false (mantissaFloorSucc : UInt64) (19 : Int) largeRange.min largeRange.max .downward
@@ -60,19 +58,19 @@ lemma Number.operator_mul_downward_witness :
     all_goals try min_fit
     unfold doNormalizeSpec
     rw [show ((9223372036854775810 : UInt64) == 0) = false from rfl]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     rw [show doNormalize_scaleUpSpec largeRange.min (9223372036854775810 : UInt64) (18 : Int)
           = ((9223372036854775810 : UInt64), (18 : Int)) by
-          unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
+          unfold doNormalize_scaleUpSpec; rw [ite_eq_right (by decide)]]
     rw [show doNormalize_scaleDown largeRange.max (9223372036854775810 : UInt64) (18 : Int) Guard.new
           = .ok ((9223372036854775810 : UInt64), (18 : Int), Guard.new) by
-          unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
+          unfold doNormalize_scaleDown; rw [dite_eq_right (by decide)]]
     simp only []
     rw [show ((18 : Int) < minExponent || (9223372036854775810 : UInt64) < largeRange.min) = false from by decide]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     rw [show doNormalize_capAtMaxRep (9223372036854775810 : UInt64) (18 : Int) Guard.new
           = .ok ((9223372036854775810 : UInt64), (18 : Int), Guard.new) by
-        unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
+        unfold doNormalize_capAtMaxRep; rw [ite_eq_right (by decide)]]
     simp only []
     have h_rup2 : Guard.new.doRoundUp false (9223372036854775810 : UInt64) (18 : Int)
         largeRange.min largeRange.max .downward .normalize2 =

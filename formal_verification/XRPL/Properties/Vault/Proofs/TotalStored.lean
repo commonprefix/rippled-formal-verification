@@ -7,9 +7,8 @@ import XRPL.Properties.Protocol.Common.AmountArith
 
 /-! # Every vault operation leaves a total the asset stores
 
-C++ `adjustVaultBalances` ends with `syncAssetsTotal`, which stores AssetsAvailable + AssetsDeployed as an amount of
-the asset. So after a successful deposit, withdrawal or clawback the vault's total is such an amount. A burn of
-shares and an update do not touch the two balances. -/
+C++ `syncAssetsTotal` stores AssetsAvailable + AssetsDeployed as an amount of the asset, so after a successful
+deposit, withdrawal or clawback the vault's total is such an amount. A burn and an update leave both balances. -/
 
 namespace XRPL.Model.Protocol
 

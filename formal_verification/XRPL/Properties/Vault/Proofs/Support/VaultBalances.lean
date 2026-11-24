@@ -7,9 +7,8 @@ import XRPL.Properties.Vault.Common.Reduction
 
 /-! # Vault balance updates
 
-The value of the cash a deposit, withdrawal or clawback moves, and the cash update itself. A
-canonical-or-zero amount converts to a `Number` of the same value, the clamp keeps that form, and
-the update refuses only a negative new cash, which a deposit's nonnegative charge never gives. -/
+The cash a deposit, withdrawal or clawback moves converts to a `Number` of the same value. The cash update refuses
+only a negative new cash, which a deposit never gives. -/
 
 namespace XRPL.Model.Protocol
 
@@ -242,7 +241,7 @@ lemma STAmount.ofNumber_frac_ne_zero_of_ge (n : Number) (mode : rounding_mode) (
 /-- A `Number` that is not negative has a nonnegative sign. -/
 lemma Number.signum_nonneg_of_negative_false (n : Number) (h : n.negative_ = false) : 0 ≤ n.signum := by
   unfold Number.signum
-  simp only [h, Bool.false_eq_true, if_false]
+  simp only [h, Bool.false_eq_true, ite_false]
   split <;> norm_num
 
 /-- A canonical MPT amount is below `2^63` in magnitude. -/
@@ -396,7 +395,7 @@ lemma Vault.adjustAssetsAndShares_rejected_bad_ledger (v : Vault) (assets shares
   walk_ok
   all_goals simp only [Number.operator_add_zero_right, Except.ok.injEq] at *
   all_goals subst_vars
-  all_goals first | rfl | simp_all
+  all_goals simp_all
 
 /-- A canonical deposit amount in the vault's asset bounds an integral asset type within `maxRep`. -/
 lemma Vault.maxValue_fits_of_canonical (v : Vault) (a : STAmount) (hc : a.Canonical)

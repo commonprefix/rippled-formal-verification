@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.VaultOutflow
 import XRPL.Properties.Lending.Loan.Common.DeleteExits
 import XRPL.Properties.Lending.Loan.Common.SetPhase

@@ -21,7 +21,7 @@ lemma sharesToAssetsDeposit_integral_canonical (v : Vault) (shares c : STAmount)
   unfold sharesToAssetsDeposit at hok
   obtain ⟨navN, hat, hok⟩ := bind_ok_peel _ _ _ hok
   by_cases hmz : navN.mantissa_ = 0
-  · rw [if_pos hmz] at hok
+  · rw [ite_eq_left hmz] at hok
     obtain ⟨c', hc, hlast⟩ := bind_ok_peel _ _ _ hok
     have heq : c' = c :=
       Except.ok.inj (show Except.ok c' = .ok c from hlast)
@@ -30,7 +30,7 @@ lemma sharesToAssetsDeposit_integral_canonical (v : Vault) (shares c : STAmount)
     exact STAmount.canonicalize_integral_canonical _ c .to_nearest
       (show (STAmount.unchecked v.numericType shares.mantissa
         (shares.exponent - (v.scale.toNat : ℤ)) false).integral = true from hvint) hc
-  · rw [if_neg hmz] at hok
+  · rw [ite_eq_right hmz] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨n1, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -53,7 +53,7 @@ private lemma sharesToAssetsDeposit_disj_canonical (v : Vault)
   by_cases hint : v.numericType.isIntegral = true
   · -- integral vault: both branches pack through `canonicalize`/`ofNumber` integral
     by_cases hmz : navN.mantissa_ = 0
-    · rw [if_pos hmz] at hok
+    · rw [ite_eq_left hmz] at hok
       obtain ⟨c', hc, hlast⟩ := bind_ok_peel _ _ _ hok
       have hceq : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
       rw [hceq] at hc
@@ -61,7 +61,7 @@ private lemma sharesToAssetsDeposit_disj_canonical (v : Vault)
       exact Or.inr (STAmount.canonicalize_integral_canonical _ c .to_nearest
         (show (STAmount.unchecked v.numericType shares.mantissa
           (shares.exponent - (v.scale.toNat : ℤ)) false).integral = true from hint) hc).1
-    · rw [if_neg hmz] at hok
+    · rw [ite_eq_right hmz] at hok
       obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -76,7 +76,7 @@ private lemma sharesToAssetsDeposit_disj_canonical (v : Vault)
       | fractional => rfl
       | integral mv mo ms msh => rw [hnt] at hint; simp [NumericType.isIntegral] at hint
     by_cases hmz : navN.mantissa_ = 0
-    · rw [if_pos hmz] at hok
+    · rw [ite_eq_left hmz] at hok
       obtain ⟨c', hc, hlast⟩ := bind_ok_peel _ _ _ hok
       have hceq : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
       rw [hceq] at hc
@@ -87,7 +87,7 @@ private lemma sharesToAssetsDeposit_disj_canonical (v : Vault)
       rcases hcz.2 with hio | hzero
       · exact Or.inl hio
       · exact absurd hzero hc0
-    · rw [if_neg hmz] at hok
+    · rw [ite_eq_right hmz] at hok
       obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨shN, hshN, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨P, hP, hok⟩ := bind_ok_peel _ _ _ hok
@@ -135,12 +135,12 @@ lemma sharesToAssetsDeposit_mNumericType (v : Vault) (shares c : STAmount)
   unfold sharesToAssetsDeposit at hok
   obtain ⟨navN, hat, hok⟩ := bind_ok_peel _ _ _ hok
   by_cases hmz : navN.mantissa_ = 0
-  · rw [if_pos hmz] at hok
+  · rw [ite_eq_left hmz] at hok
     obtain ⟨c', hcx, hlast⟩ := bind_ok_peel _ _ _ hok
     have hceq : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
     rw [hceq, STAmount.checked] at hcx
     exact STAmount.canonicalize_mNumericType _ c .to_nearest hcx
-  · rw [if_neg hmz] at hok
+  · rw [ite_eq_right hmz] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -161,7 +161,7 @@ private lemma sharesToAssetsDeposit_le_maxRep (v : Vault) (shares c : STAmount)
   unfold sharesToAssetsDeposit at hok
   obtain ⟨navN, hat, hok⟩ := bind_ok_peel _ _ _ hok
   by_cases hmz : navN.mantissa_ = 0
-  · rw [if_pos hmz] at hok
+  · rw [ite_eq_left hmz] at hok
     obtain ⟨c', hcx, hlast⟩ := bind_ok_peel _ _ _ hok
     have hceq : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
     rw [hceq, STAmount.checked] at hcx
@@ -179,7 +179,7 @@ private lemma sharesToAssetsDeposit_le_maxRep (v : Vault) (shares c : STAmount)
       (show (STAmount.unchecked v.numericType shares.mantissa
         (shares.exponent - (v.scale.toNat : ℤ)) false).integral = true from hint) hoff hval hcx
     exact hle
-  · rw [if_neg hmz] at hok
+  · rw [ite_eq_right hmz] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -219,7 +219,7 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (shares c : STAmount)
   obtain ⟨navN, hat, hsad⟩ := bind_ok_peel _ _ _ hsad
   by_cases hmz : navN.mantissa_ = 0
   · -- empty vault
-    rw [if_pos hmz] at hsad
+    rw [ite_eq_left hmz] at hsad
     obtain ⟨c', hc, hlast⟩ := bind_ok_peel _ _ _ hsad
     have hceq : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
     rw [hceq] at hc
@@ -260,7 +260,7 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (shares c : STAmount)
           (shares.exponent - (v.scale.toNat : ℤ)) false)
         c .to_nearest hnt_frac rfl hsh_hi hc
   · -- nonempty vault: a positive total and positive shares give a positive quotient `Q`
-    rw [if_neg hmz] at hsad
+    rw [ite_eq_right hmz] at hsad
     obtain ⟨_, _, hsad⟩ := bind_ok_peel _ _ _ hsad
     obtain ⟨shN, hshN, hsad⟩ := bind_ok_peel _ _ _ hsad
     obtain ⟨P, hP, hsad⟩ := bind_ok_peel _ _ _ hsad
@@ -339,11 +339,11 @@ lemma Vault.idealChargeDepositAt_le (v : Vault) (navN : Number) (hat : v.assetsT
     v.idealChargeDepositAt navN.toRat shares ≤ v.idealChargeDeposit shares := by
   unfold RawVault.idealChargeDeposit RawVault.idealChargeDepositAt RawVault.depositNav
   by_cases hm : navN.mantissa_ = 0
-  · rw [if_pos ((Vault.assetsTotal_eq_zero_iff v navN hat).mp hm),
-      if_pos (Number.toRat_eq_zero_of_mantissa_zero navN hm)]
+  · rw [ite_eq_left ((Vault.assetsTotal_eq_zero_iff v navN hat).mp hm),
+      ite_eq_left (Number.toRat_eq_zero_of_mantissa_zero navN hm)]
   have hN := (Vault.assetsTotal_pos v navN hat hm).2
   have hle := Vault.assetsTotal_le_exact v navN hat
-  rw [if_neg (ne_of_gt (lt_of_lt_of_le hN hle)), if_neg (ne_of_gt hN)]
+  rw [ite_eq_right (ne_of_gt (lt_of_lt_of_le hN hle)), ite_eq_right (ne_of_gt hN)]
   exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hle hs) (by positivity)
 
 end XRPL.Model.SingleAssetVault

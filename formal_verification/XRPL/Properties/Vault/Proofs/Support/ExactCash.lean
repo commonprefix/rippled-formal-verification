@@ -23,7 +23,7 @@ lemma exponent_headroom_of_neg (n : Number) (hn : n.isNormalized) (hlo : -10 ^ 9
   have hneg := Number.exponent_headroom_of_lt n.operator_neg (Number.operator_neg_isNormalized n hn)
     (by rw [Number.toRat_neg]; linarith) (by rw [Number.toRat_neg]; linarith)
   have he : n.operator_neg.exponent_ = n.exponent_ := by
-    unfold Number.operator_neg; rw [if_neg (by simpa using hm)]
+    unfold Number.operator_neg; rw [ite_eq_right (by simpa using hm)]
   rwa [he] at hneg
 
 /-- A cash the asset stores exactly converts into the asset. -/
@@ -173,7 +173,7 @@ lemma Vault.cash_exponent_of_exact {v : Vault} (hexact : STAmount.isRounded v.nu
   unfold numberExponent
   have hz0 : ¬ v.assetsAvailable.operator_eq Number.zero = true :=
     Number.not_operator_eq_zero_of_mantissa_ne (Number.mantissa_ne_zero_of_toRat_ne_zero hA.ne')
-  simp only [hz0, Bool.false_eq_true, if_false, hY, bind, Except.bind, pure, Except.pure]
+  simp only [hz0, Bool.false_eq_true, ite_false, hY, bind, Except.bind, pure, Except.pure]
 
 /-- The 19-digit worth of some shares sits within `2·10⁻¹⁸` times their exact worth on a vault priced at its cash,
 and converting it into the asset gives their price. -/
@@ -373,7 +373,7 @@ lemma Vault.dust_ok_of_exact (v : Vault) (hexact : STAmount.isRounded v.numericT
     have hu : (10 : ℚ) ^ st.exponent ≤ 10 ^ E := zpow_le_zpow_right₀ (by norm_num) hcle
     have := (abs_le.mp hh).2
     linarith
-  simp only [Vault.checkDebitNotDust, hpNz, Bool.false_eq_true, if_false, bind, Except.bind, pure, Except.pure,
+  simp only [Vault.checkDebitNotDust, hpNz, Bool.false_eq_true, ite_false, bind, Except.bind, pure, Except.pure,
     tryCatch, tryCatchThe, MonadExceptOf.tryCatch, Except.tryCatch, hsub, hcash, hst, hne]
 
 /-- An XRP or MPT amount, canonical or zero, is a whole number. -/
@@ -494,7 +494,7 @@ private lemma STAmount.isFractionalNonPositive_pos (a : STAmount) (ht : a.mNumer
   unfold STAmount.isFractionalNonPositive
   have hint : ¬ a.integral = true := by
     show ¬ a.mNumericType.isIntegral = true; rw [ht]; decide
-  rw [if_neg hint]
+  rw [ite_eq_right hint]
   have hz0 : STAmount.zero a.numericType = ⟨.fractional, 0, -100, false⟩ := by
     show STAmount.zero a.mNumericType = _; rw [ht]; rfl
   rw [hz0]
@@ -531,7 +531,7 @@ lemma Vault.clamp_ok_of_exact (v : Vault) (hexact : STAmount.isRounded v.numeric
     refine ⟨c, hcl, ?_, hcc, hct', hc0.le, hle⟩
     by_cases hint : v.numericType.isIntegral = true
     · unfold STAmount.isFractionalNonPositive
-      rw [if_pos (by show c.mNumericType.isIntegral = true; rw [hct']; exact hint)]
+      rw [ite_eq_left (by show c.mNumericType.isIntegral = true; rw [hct']; exact hint)]
     · exact STAmount.isFractionalNonPositive_pos c
         (by rw [hct']; exact NumericType.eq_fractional_of_not_integral (by simpa using hint)) hc0
   by_cases hint : v.numericType.isIntegral = true
@@ -563,8 +563,8 @@ lemma Vault.clamp_ok_of_exact (v : Vault) (hexact : STAmount.isRounded v.numeric
   obtain ⟨E', hE'⟩ : ∃ E', numberExponent S2 v.baseExponent .fractional = .ok E' := by
     unfold numberExponent
     by_cases hz0 : S2.operator_eq Number.zero = true
-    · rw [if_pos hz0]; exact ⟨_, rfl⟩
-    · rw [if_neg hz0]
+    · rw [ite_eq_left hz0]; exact ⟨_, rfl⟩
+    · rw [ite_eq_right hz0]
       have hS2pos : 0 < S2.toRat := lt_of_le_of_ne hS20 (fun h => hz0
         ((Number.operator_eq_iff _ _ hS2n Number.zero_isNormalized).mpr (by rw [← h, Number.toRat_zero])))
       obtain ⟨st, hst⟩ := STAmount.ofNumber_fractional_downward_ok S2 hS2n hS2pos
@@ -590,13 +590,13 @@ lemma Vault.clamp_ok_of_exact (v : Vault) (hexact : STAmount.isRounded v.numeric
     obtain ⟨pt, pv, po, pn⟩ := p
     obtain rfl : pn = false := hpneg
     have hpv : (pv == 0) = false := by simpa using hpm
-    simp only [STAmount.operator_neg, STAmount.negative, hpv, Bool.false_eq_true, if_false, Bool.not_false,
-      if_true, Bool.not_true]
+    simp only [STAmount.operator_neg, STAmount.negative, hpv, Bool.false_eq_true, ite_false, Bool.not_false,
+      ite_true, Bool.not_true]
   have hnt : p.operator_neg.numericType = .fractional := by
     show p.operator_neg.mNumericType = _; rw [STAmount.operator_neg_mNumericType, hpt, hfr]
   have hclamp : clampToSumExponent v.assetsAvailable p.operator_neg v.baseExponent =
       STAmount.roundToExponent p E' .towards_zero := by
-    simp only [clampToSumExponent, hnfr, Bool.false_eq_true, if_false, hmag, hdN, hnt, hps, bind, Except.bind,
+    simp only [clampToSumExponent, hnfr, Bool.false_eq_true, ite_false, hmag, hdN, hnt, hps, bind, Except.bind,
       pure, Except.pure]
   rw [hclamp]
   have hpE' : (10 : ℚ) ^ E' ≤ p.toRat := le_trans (zpow_le_zpow_right₀ (by norm_num) hE'E) hlo
@@ -613,7 +613,7 @@ lemma Vault.clamp_ok_of_exact (v : Vault) (hexact : STAmount.isRounded v.numeric
   have hround := STAmount.roundToExponent_rounded_any_proof p c E' .towards_zero hpio (by omega) hE'80 hc
   simp only [RoundsToRepresentableAt] at hround
   change c.toRat = _ at hround
-  rw [if_pos hp0.le] at hround
+  rw [ite_eq_left hp0.le] at hround
   rw [hround]
   have hpp : (0 : ℚ) < 10 ^ E' := zpow_pos (by norm_num) _
   have hq : (1 : ℚ) ≤ p.toRat / 10 ^ E' := by rw [le_div_iff₀ hpp]; linarith

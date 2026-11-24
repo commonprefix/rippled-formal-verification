@@ -1,12 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionLoanPay
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionLoanPayOverpaymentTail
 
 /-! # A LoanPay of any type never ends in a model error
 
-`LendingLedger.loanPay_no_exception_proof` covers an overpayment only up to the amount due of the next
-instalment. Here the overpayment tail is covered too: the scheduled instalments compute, the tail computes or
-fails its loan re-check, and the settlement ends in a result code. On XRP the re-amortization needs a bound on the
-payments left and the value owed, a range of this proof and not a known exception. -/
+Extends `LendingLedger.loanPay_no_exception_proof` to the whole overpayment tail. On XRP the re-amortization needs a
+bound on the payments left and the value owed, a range of this proof and not a known exception. -/
 
 namespace XRPL.Model.Lending
 
@@ -72,7 +71,7 @@ lemma LendingLedger.loanPay_no_exception_full_proof (l : LendingLedger) (hr : l.
       unfold Loan.canPay at hc''
       cases hpend : loan.isPending
       · rfl
-      · rw [hpend, if_pos rfl] at hc''; cases hc''
+      · rw [hpend, ite_eq_left rfl] at hc''; cases hc''
     obtain ⟨t, -, hreach⟩ := hr.loanAt_reachable hat
     obtain ⟨-, hntl⟩ := hr.loanAt_scale hat
     have hroom : loan.PayRoom := hr.payRoom hat

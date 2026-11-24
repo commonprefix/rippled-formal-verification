@@ -6,9 +6,7 @@ import XRPL.Properties.Lending.Loan.Common.PayBounds
 
 /-! # Payments that keep AssetsAvailable plus the payment below `10^16` base units
 
-On a reachable ledger a payment pays principal and interest in whole base units. While AssetsAvailable plus that
-payment stays below `10^16` base units, the vault credits it on the base grid, so neither AssetsTotal nor the share
-value falls. -/
+Such a payment is credited on the base grid, so neither AssetsTotal nor the share value falls. -/
 
 namespace XRPL.Model.Lending
 

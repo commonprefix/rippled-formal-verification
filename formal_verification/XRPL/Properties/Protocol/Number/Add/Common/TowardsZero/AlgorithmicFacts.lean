@@ -17,12 +17,12 @@ theorem Number.operator_add_algorithmic_facts_same_sign_towards_zero (x y result
       g.doRoundUp false zm ze' largeRange.min largeRange.max .towards_zero .overflow = .ok res_pos ∧
       |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ ∧
       res_pos.mantissa_ ≠ 0 ∧
-      represents g f ∧
+      (∃ ft : ℚ, represents g ft ∧ (0 < ft → 0 < f) ∧ (ft = 0 → f = 0)) ∧
       result.negative_ = x.negative_ ∧
       mantissaFloorSucc ≤ zm.toNat ∧
       result.mantissa_ ≠ 0 ∧
       result.isNormalized ∧
-      |x.toRat + y.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := by
+      |x.toRat + y.toRat| < 10 ^ 19 * (10 : ℚ) ^ ze' := by
   obtain ⟨zm, ze', f, g, res_pos, h_floor_le, h_le_maxRepUp, hf_nn, hf_lt,
       _h_floor_constraint, h_value, h_rup, h_abs_result, h_respos_ne, h_rep, h_neg,
       _h_sbit, h_floor_succ, h_isNorm, h_truth_top, h_result_ne⟩ :=

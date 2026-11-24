@@ -3,11 +3,10 @@ import XRPL.Properties.Vault.Common.ReachableDefs
 
 /-! # Concrete reachable histories for the witnesses
 
-A witness runs an operation on a concrete reachable vault. The vault comes from a history the model
-computes: a create, then deposits and donations at one close time. Each step checks the input facts
-C++ guarantees, so any history the function returns is reachable. -/
+A history is a create, then deposits and donations at one close time. Each step checks the facts C++ guarantees, so
+any vault the function returns is reachable. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Protocol
 
@@ -23,10 +22,10 @@ def STAmount.canonicalB (a : STAmount) : Bool :=
 lemma STAmount.canonical_of_canonicalB (a : STAmount) (h : a.canonicalB = true) : a.Canonical := by
   unfold STAmount.canonicalB at h
   refine ⟨fun hi => ?_, fun hf => ?_⟩
-  · rw [if_pos hi] at h
+  · rw [ite_eq_left hi] at h
     simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
     exact ⟨⟨hi, h.1.1, h.1.2⟩, h.2⟩
-  · rw [if_neg (by rw [hf]; decide)] at h
+  · rw [ite_eq_right (by rw [hf]; decide)] at h
     simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
     exact ⟨h.1.1.1.1, h.1.1.1.2, h.1.1.2, h.1.2, h.2⟩
 
@@ -36,17 +35,14 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-- Deposits and donations at close time `t`, each a canonical amount of the vault's asset that keeps
-the share issuance within the MPT maximum. -/
+/-- Deposits and donations at close time `t`, each a canonical amount of the vault's asset. -/
 def depositHistory (v : Vault) (t : UInt32) : List (STAmount × Bool) → Option Vault
   | [] => some v
   | (a, isDonation) :: rest =>
     if a.canonicalB = true ∧ a.mNumericType = v.numericType then
       if hpos : 0 < a.toRat then
         match (v.deposit a isDonation t hpos).run with
-        | .ok (.ok r) =>
-          if (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 then depositHistory r.vault' t rest
-          else none
+        | .ok (.ok r) => depositHistory r.vault' t rest
         | _ => none
       else none
     else none
@@ -61,9 +57,8 @@ lemma depositHistory_reachable (v : Vault) (t : UInt32) (steps : List (STAmount 
     split_ifs at h with hc hpos
     split at h
     · rename_i r hrun
-      split_ifs at h with hmint
       exact ih r.vault' (Vault.Reachable.deposit v t t a isDonation r hr (UInt32.le_refl t)
-        (STAmount.canonical_of_canonicalB a hc.1) hc.2 hpos hrun hmint) h
+        (STAmount.canonical_of_canonicalB a hc.1) hc.2 hpos hrun) h
     · exact absurd h (by simp)
 
 /-- A create at close time `t`, then deposits and donations at the same time. -/

@@ -9,10 +9,8 @@ import XRPL.Properties.Protocol.Number.Totality
 
 /-! # Amounts held at an exponent
 
-`Number.isAtExponent value exponent nt` says `value` is a whole number of units at `exponent`, with a unit count an
-STAmount of the type can carry. This file gives its exact reading (`Number.AtExponent`) and the
-consequence the lending invariants rest on: a `to_nearest` subtraction of two such amounts always succeeds
-and is exact while the difference stays below `2^63` units. -/
+`Number.isAtExponent` says a value is a whole number of units at an exponent. A `to_nearest` subtraction of two such
+amounts succeeds and is exact while the difference stays below `2^63` units. -/
 
 namespace XRPL.Model.Protocol
 
@@ -56,9 +54,9 @@ lemma Number.roundsToRepresentable_eq (d : Number) (truth : ℚ)
   by_cases h0 : truth = 0
   · subst h0
     rcases hR with ⟨n, hn, hd⟩ | ⟨n, hn, hd⟩
-    · unfold Number.lower at hn; rw [if_pos rfl] at hn
+    · unfold Number.lower at hn; rw [ite_eq_left rfl] at hn
       rw [hd, ← Option.some.inj hn, Number.toRat_zero]
-    · unfold Number.upper at hn; rw [if_pos rfl] at hn
+    · unfold Number.upper at hn; rw [ite_eq_left rfl] at hn
       rw [hd, ← Option.some.inj hn, Number.toRat_zero]
   · have hwne : w.toRat ≠ 0 := by rw [hwt]; exact h0
     rcases hR with ⟨n, hn, hd⟩ | ⟨n, hn, hd⟩

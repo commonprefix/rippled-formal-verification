@@ -88,13 +88,13 @@ theorem Number.normalize_rounded_to_nearest_proof (n result : Number)
     unfold Number.normalize at hok
     replace hok := doNormalize_ok_spec hok
     unfold doNormalizeSpec at hok
-    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr hnz, if_pos rfl] at hok
+    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr hnz, ite_eq_left rfl] at hok
     have h_result : result = Number.zero := (Except.ok.inj hok).symm
     rw [h_truth0]
     left
     refine ⟨Number.zero, ?_, ?_⟩
     · unfold Number.lower
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
     · rw [h_result]
   -- Underflow: the flushed zero is a grid neighbor of the tiny input.
   by_cases hres : result.mantissa_ = 0

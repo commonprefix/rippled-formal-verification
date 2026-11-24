@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.SetInterest
 import XRPL.Properties.Lending.Loan.Common.SetVault
 import XRPL.Properties.Protocol.Number.ToRep.ToRep

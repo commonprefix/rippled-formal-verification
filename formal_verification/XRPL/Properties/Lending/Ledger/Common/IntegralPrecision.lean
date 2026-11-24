@@ -4,10 +4,8 @@ import XRPL.Properties.Lending.Ledger.Common.YieldSum
 
 /-! # associateAsset on the vault, its brokers and its loans
 
-YieldUnrealized is whole base units within the Open limit, and a loan's outstanding amounts are whole base units
-below the asset's mantissa bound, so the asset stores them exactly. On an XRP or MPT vault every amount
-associateAsset rounds, CoverAvailable included, is a whole number within the asset's maximum, so the rounding
-changes nothing. -/
+YieldUnrealized and a loan's outstanding amounts are whole base units in range, so the asset stores them exactly.
+On an XRP or MPT vault every amount associateAsset rounds is a whole number within the maximum, so nothing changes. -/
 
 namespace XRPL.Model.Lending
 

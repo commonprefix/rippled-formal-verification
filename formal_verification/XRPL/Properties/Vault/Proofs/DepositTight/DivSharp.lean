@@ -38,7 +38,7 @@ private lemma doNormalize128_rounds_to_nearest_sharp
     simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
@@ -94,9 +94,9 @@ private lemma doNormalize128_rounds_to_nearest_sharp
   have hrep₀ : represents g₀ ftilde₀ := by
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst, if_pos hst]
+    · rw [ite_eq_left hst, ite_eq_left hst]
       exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]
+    · rw [ite_eq_right hst, ite_eq_right hst]
       exact g0_represents_zero zn
   cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
@@ -110,12 +110,12 @@ private lemma doNormalize128_rounds_to_nearest_sharp
         hδ₁_nn hδ₁_le hrep₀ hM₁_lt sd hsd
     -- Underflow check must be false (else the result is zero).
     by_cases hund : (sd.2.1 < minExponent || sd.1 < toUInt128 largeRange.min) = true
-    · rw [if_pos hund] at hok
+    · rw [ite_eq_left hund] at hok
       exfalso; apply hres
       have := Except.ok.inj hok
       rw [← this]
       rfl
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have he₂_ge : minExponent ≤ sd.2.1 := by

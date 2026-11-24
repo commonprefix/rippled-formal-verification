@@ -23,12 +23,12 @@ lemma doNormalize128_scaleUp_exit_exp (minMant : UInt64) (m : UInt128) (e : Int)
     rw [show doNormalize128_scaleUpSpec minMant m e
         = doNormalize128_scaleUpSpec minMant (m * 10) (e - 1) from by
       rw [doNormalize128_scaleUpSpec.eq_def]
-      simp only [if_pos hcond]]
+      simp only [ite_eq_left hcond]]
     exact IH
   | case2 m e hcond =>
     rw [show doNormalize128_scaleUpSpec minMant m e = (m, e) from by
       rw [doNormalize128_scaleUpSpec.eq_def]
-      simp only [if_neg hcond]]
+      simp only [ite_eq_right hcond]]
     intro hlt
     by_contra hgt
     push Not at hgt
@@ -46,21 +46,21 @@ lemma doNormalize_scaleDown128_fired_output_ge
   | case1 m e g hgt' hmax =>
     rw [show doNormalize_scaleDown128Spec largeRange.max m e g = .error .normalize1 from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_pos hgt', if_pos hmax]] at h
+      rw [dite_eq_left hgt', ite_eq_left hmax]] at h
     exact absurd h (by intro hh; cases hh)
   | case2 m e g hgt' hnge ih =>
     rw [show doNormalize_scaleDown128Spec largeRange.max m e g
         = doNormalize_scaleDown128Spec largeRange.max (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
         from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_pos hgt', if_neg hnge]] at h
+      rw [dite_eq_left hgt', ite_eq_right hnge]] at h
     by_cases hgt2 : m / 10 > toUInt128 largeRange.max
     · exact ih out hgt2 h
     · rw [show doNormalize_scaleDown128Spec largeRange.max (m / 10) (e + 1)
             (g.push (toUInt64 (m % 10)))
           = .ok (m / 10, e + 1, g.push (toUInt64 (m % 10))) from by
         rw [doNormalize_scaleDown128Spec.eq_def]
-        rw [dif_neg hgt2]] at h
+        rw [dite_eq_right hgt2]] at h
       obtain rfl := (Except.ok.inj h).symm
       have h10 : ((10 : UInt128)).toNat = 10 := by decide
       have h_div : (m / 10 : UInt128).toNat = m.toNat / 10 := by
@@ -84,19 +84,19 @@ lemma doNormalize_scaleDown128_output_le
     rw [show doNormalize_scaleDown128Spec largeRange.max m e g
         = .error .normalize1 from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_pos hgt', if_pos hmax]] at h
+      rw [dite_eq_left hgt', ite_eq_left hmax]] at h
     exact absurd h (by intro hh; cases hh)
   | case2 m e g hgt' hnge ih =>
     rw [show doNormalize_scaleDown128Spec largeRange.max m e g
         = doNormalize_scaleDown128Spec largeRange.max (m / 10) (e + 1)
             (g.push (toUInt64 (m % 10))) from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_pos hgt', if_neg hnge]] at h
+      rw [dite_eq_left hgt', ite_eq_right hnge]] at h
     exact ih out h
   | case3 m e g hgt' =>
     rw [show doNormalize_scaleDown128Spec largeRange.max m e g = .ok (m, e, g) from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_neg hgt']] at h
+      rw [dite_eq_right hgt']] at h
     obtain rfl := (Except.ok.inj h).symm
     have hle : m.toNat ≤ (toUInt128 largeRange.max).toNat := by
       by_contra hc
@@ -131,7 +131,7 @@ theorem doNormalize128_doRoundUp_stage
     simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
@@ -146,13 +146,13 @@ theorem doNormalize128_doRoundUp_stage
     rw [hsd] at hok
     simp only [] at hok
     by_cases hund : (sd.2.1 < minExponent || sd.1 < toUInt128 largeRange.min) = true
-    · rw [if_pos hund] at hok
+    · rw [ite_eq_left hund] at hok
       exfalso
       apply hres
       have h := Except.ok.inj hok
       rw [← h]
       rfl
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
@@ -182,10 +182,10 @@ theorem doNormalize128_doRoundUp_stage
           · -- mantissaFloor ≤ cp.1.
             unfold doNormalize_capAtMaxRep at hcap
             by_cases hmr : toUInt64 sd.1 > maxRepUp
-            · rw [if_pos hmr] at hcap
+            · rw [ite_eq_left hmr] at hcap
               by_cases hexp3 : sd.2.1 ≥ maxExponent
-              · rw [if_pos hexp3] at hcap; exact absurd hcap (by intro h; cases h)
-              · rw [if_neg hexp3] at hcap
+              · rw [ite_eq_left hexp3] at hcap; exact absurd hcap (by intro h; cases h)
+              · rw [ite_eq_right hexp3] at hcap
                 simp only [divu10] at hcap
                 have hm3_eq : cp.1 = toUInt64 sd.1 / 10 :=
                   ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
@@ -195,7 +195,7 @@ theorem doNormalize128_doRoundUp_stage
                   UInt64.lt_iff_toNat_lt.mp hmr
                 rw [show maxRepUp.toNat = maxRepUpNat from rfl, hM₂u_toNat] at hmr_nat
                 omega
-            · rw [if_neg hmr] at hcap
+            · rw [ite_eq_right hmr] at hcap
               have hm3_eq : cp.1 = toUInt64 sd.1 :=
                 ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
               rw [hm3_eq, hM₂u_toNat]
@@ -203,17 +203,17 @@ theorem doNormalize128_doRoundUp_stage
           · -- cp.1 ≤ maxRepUp.
             unfold doNormalize_capAtMaxRep at hcap
             by_cases hmr : toUInt64 sd.1 > maxRepUp
-            · rw [if_pos hmr] at hcap
+            · rw [ite_eq_left hmr] at hcap
               by_cases hexp3 : sd.2.1 ≥ maxExponent
-              · rw [if_pos hexp3] at hcap; exact absurd hcap (by intro h; cases h)
-              · rw [if_neg hexp3] at hcap
+              · rw [ite_eq_left hexp3] at hcap; exact absurd hcap (by intro h; cases h)
+              · rw [ite_eq_right hexp3] at hcap
                 simp only [divu10] at hcap
                 have hm3_eq : cp.1 = toUInt64 sd.1 / 10 :=
                   ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
                 rw [hm3_eq, UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl,
                     hM₂u_toNat, show maxRepUp.toNat = maxRepUpNat from rfl]
                 omega
-            · rw [if_neg hmr] at hcap
+            · rw [ite_eq_right hmr] at hcap
               have hm3_eq : cp.1 = toUInt64 sd.1 :=
                 ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
               have hmr_nat : ¬ maxRepUp.toNat < (toUInt64 sd.1).toNat := fun h =>
@@ -224,15 +224,15 @@ theorem doNormalize128_doRoundUp_stage
             intro hm3_lt
             unfold doNormalize_capAtMaxRep at hcap
             by_cases hmr : toUInt64 sd.1 > maxRepUp
-            · rw [if_pos hmr] at hcap
+            · rw [ite_eq_left hmr] at hcap
               by_cases hexp3 : sd.2.1 ≥ maxExponent
-              · rw [if_pos hexp3] at hcap; exact absurd hcap (by intro h; cases h)
-              · rw [if_neg hexp3] at hcap
+              · rw [ite_eq_left hexp3] at hcap; exact absurd hcap (by intro h; cases h)
+              · rw [ite_eq_right hexp3] at hcap
                 simp only [divu10] at hcap
                 have he3_eq : cp.2.1 = sd.2.1 + 1 :=
                   ((Prod.mk.inj (Prod.mk.inj (Except.ok.inj hcap)).2).1).symm
                 omega
-            · rw [if_neg hmr] at hcap
+            · rw [ite_eq_right hmr] at hcap
               have hm3_eq : cp.1 = toUInt64 sd.1 :=
                 ((Prod.mk.inj (Except.ok.inj hcap)).1).symm
               exfalso
@@ -335,7 +335,7 @@ theorem doNormalize128_algorithmic_facts
     simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
@@ -390,23 +390,23 @@ theorem doNormalize128_algorithmic_facts
   have hrep₀ : represents g₀ ftilde₀ := by
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst, if_pos hst]
+    · rw [ite_eq_left hst, ite_eq_left hst]
       exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]
+    · rw [ite_eq_right hst, ite_eq_right hst]
       exact g0_represents_zero zn
   have h_g0_sbit : g₀.sbit_ = zn := by
     rw [hg₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst]
+    · rw [ite_eq_left hst]
       by_cases hz : zn
-      · rw [if_pos hz, hz]; rfl
-      · rw [if_neg hz]
+      · rw [ite_eq_left hz, hz]; rfl
+      · rw [ite_eq_right hz]
         rw [Bool.not_eq_true] at hz
         rw [hz]; rfl
-    · rw [if_neg hst]
+    · rw [ite_eq_right hst]
       by_cases hz : zn
-      · rw [if_pos hz, hz]; rfl
-      · rw [if_neg hz]
+      · rw [ite_eq_left hz, hz]; rfl
+      · rw [ite_eq_right hz]
         rw [Bool.not_eq_true] at hz
         rw [hz]; rfl
   cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
@@ -420,13 +420,13 @@ theorem doNormalize128_algorithmic_facts
       doNormalize_scaleDown128_repr largeRange.max M₁ e₁ g₀ hmaxM_v δ₁ ftilde₀
         hδ₁_nn (le_of_lt hδ₁_lt) hrep₀ hM₁_lt sd hsd
     by_cases hund : (sd.2.1 < minExponent || sd.1 < toUInt128 largeRange.min) = true
-    · rw [if_pos hund] at hok
+    · rw [ite_eq_left hund] at hok
       exfalso
       apply hres
       have h := Except.ok.inj hok
       rw [← h]
       rfl
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
@@ -484,7 +484,7 @@ theorem doNormalize128_algorithmic_facts
           have h_eq_nonsticky : sticky = false → φ₃ = ftilde₃ := by
             intro hst'
             have hft₀_eq : ftilde₀ = 0 := by
-              rw [hft₀_def, if_neg (by rw [hst']; exact Bool.false_ne_true)]
+              rw [hft₀_def, ite_eq_right (by rw [hst']; exact Bool.false_ne_true)]
             have hδ₁_eq : δ₁ = 0 := hδ₁_zero hst'
             have hslip_top : |δ₁ - ftilde₀| * (10 : ℚ) ^ e₁ = 0 := by
               rw [hδ₁_eq, hft₀_eq, sub_zero, abs_zero, zero_mul]
@@ -511,10 +511,10 @@ theorem doNormalize128_algorithmic_facts
             by_cases hst : sticky = true
             · exfalso
               have hxbit₀ : g₀.xbit_ = true := by
-                rw [hg₀_def, if_pos hst]
+                rw [hg₀_def, ite_eq_left hst]
                 by_cases hz : zn
-                · rw [if_pos hz]; rfl
-                · rw [if_neg hz]; rfl
+                · rw [ite_eq_left hz]; rfl
+                · rw [ite_eq_right hz]; rfl
               have hxbit₃ : cp.2.2.xbit_ = true := h3xbit (h2xbit hxbit₀)
               obtain ⟨x3, hx3_nn, _, hf3_eq, hx3_iff, _⟩ := h3rep
               have hx3_pos : 0 < x3 := hx3_iff.mp hxbit₃
@@ -552,7 +552,7 @@ theorem doNormalize128_underflow_value_small
     simp at hM_pos
   rw [doNormalize128_eq_spec] at hok
   unfold doNormalize128Spec at hok
-  rw [if_neg hM_ne] at hok
+  rw [ite_eq_right hM_ne] at hok
   simp only [] at hok
   rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
@@ -605,9 +605,9 @@ theorem doNormalize128_underflow_value_small
   have hrep₀ : represents g₀ ftilde₀ := by
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
-    · rw [if_pos hst, if_pos hst]
+    · rw [ite_eq_left hst, ite_eq_left hst]
       exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]
+    · rw [ite_eq_right hst, ite_eq_right hst]
       exact g0_represents_zero zn
   cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
@@ -668,7 +668,7 @@ theorem doNormalize128_underflow_value_small
             omega
           · rw [show doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ = .ok (M₁, e₁, g₀) from by
               rw [doNormalize_scaleDown128Spec.eq_def]
-              rw [dif_neg hM₁_gt]] at hsd
+              rw [dite_eq_right hM₁_gt]] at hsd
             have hpair := Except.ok.inj hsd
             exact ⟨((Prod.mk.inj hpair).1).symm,
                    ((Prod.mk.inj (Prod.mk.inj hpair).2).1).symm⟩
@@ -699,7 +699,7 @@ theorem doNormalize128_underflow_value_small
           exact zpow_le_zpow_right₀ (by norm_num) he₁_le_min
         linarith
     · -- The rounding step flushed to zero: `doRoundUp_flush_value_small` bounds the value.
-      rw [if_neg hund] at hok
+      rw [ite_eq_right hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by

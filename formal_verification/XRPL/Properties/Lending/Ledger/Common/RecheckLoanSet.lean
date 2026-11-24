@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.RecheckApply
 import XRPL.Properties.Lending.Ledger.Common.AssetFit
 import XRPL.Properties.Lending.Loan.Common.SetLawful
@@ -454,9 +455,9 @@ lemma LendingLedger.loanSetChecked_error (l : LendingLedger) (i : Nat) (broker :
     right
     dsimp only at h
     by_cases ht : ter.isTesSuccess = true
-    · rw [if_neg (by simp [ht])] at h
+    · rw [ite_eq_right (by simp [ht])] at h
       exact ⟨by rw [(TER.isTesSuccess_iff _).mp ht], TerExcept.map_error h⟩
-    · rw [if_pos (by simp [ht])] at h
+    · rw [ite_eq_left (by simp [ht])] at h
       cases h
 
 /-- A LoanSet that fails the model found its broker and failed in the checks or the create. -/
@@ -472,11 +473,11 @@ lemma LendingLedger.applyLoanSet_error (l : LendingLedger) (i : Nat) (principal 
   rw [ht] at h
   dsimp only at h
   by_cases hs : t.isTesSuccess = true
-  · rw [if_neg (by simp [hs])] at h
+  · rw [ite_eq_right (by simp [hs])] at h
     cases hb : l.broker? i with
     | none => rw [hb] at h; cases h
     | some broker => rw [hb] at h; exact ⟨broker, rfl, h⟩
-  · rw [if_pos (by simp [hs])] at h; cases h
+  · rw [ite_eq_left (by simp [hs])] at h; cases h
 
 /-- On an integral asset a zero-rate total value is within twenty units of PrincipalRequested. `P / n × n`
 moves by less than `2·10^-18` of PrincipalRequested, and the whole-unit rounding by at most a half. -/
@@ -580,7 +581,7 @@ private lemma computeLoanProperties_zero_rate_close (principal : Number) (interv
   rw [hst'] at htvo
   have hty := STAmount.ofNumber_mNumericType _ _ _ amountSt hst'
   have hsint : amountSt.integral = true := by unfold STAmount.integral; rw [hty]; exact hint
-  simp only [hsint, if_true] at htvo
+  simp only [hsint, ite_true] at htvo
   have hic := (STAmount.ofNumber_integral_canonical _ _ _ amountSt hint hst').1
   have hsz : amountSt.mValue.toNat ≤ 2 ^ 63 - 1 := by
     by_cases hz : amountSt.mValue = 0
@@ -663,13 +664,13 @@ private lemma Loan.create_zero_rate_lt (broker : LoanBroker) (v : Vault) (princi
     rw [heq] at hmfo
     obtain ⟨raw, hraw, hmfo⟩ := bind_ok_peel _ _ _ hmfo
     have heq2 : tenthBipsOfValue ti broker.managementFeeRate.toTenthBips32 .to_nearest =
-        (ti.operator_mul broker.managementFeeRate.toTenthBips32.toNumber .to_nearest) >>=
-          (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest) := rfl
+        (ti.operator_mul (broker.managementFeeRate.toTenthBips32.toNumber .to_nearest) .to_nearest) >>=
+          (fun p => p.operator_div (kTenthBipsPerUnity.toNumber .to_nearest) .to_nearest) := rfl
     rw [heq2] at hraw
     obtain ⟨pr, hpr, hraw⟩ := bind_ok_peel _ _ _ hraw
     obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts broker.managementFeeRate.toTenthBips32
     obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
-    have hu5 : kTenthBipsPerUnity.toNumber.toRat = 100000 := by rw [huv]; rfl
+    have hu5 : (kTenthBipsPerUnity.toNumber .to_nearest).toRat = 100000 := by rw [huv]; rfl
     have hr32 : (broker.managementFeeRate.toTenthBips32.toNat : ℚ) < 2 ^ 32 := by
       have := broker.managementFeeRate.toTenthBips32.toNat_lt_size
       have hs : UInt32.size = 2 ^ 32 := rfl
@@ -699,7 +700,7 @@ private lemma Loan.create_zero_rate_lt (broker : LoanBroker) (v : Vault) (princi
       rw [hof] at hmfo
       have hty := STAmount.ofNumber_mNumericType _ _ _ ret hof
       have hsint : ret.integral = true := by unfold STAmount.integral; rw [hty]; exact hint
-      simp only [hsint, if_true] at hmfo
+      simp only [hsint, ite_true] at hmfo
       have hic := (STAmount.ofNumber_integral_canonical _ _ _ ret hint hof).1
       have hsz : ret.mValue.toNat ≤ 2 ^ 63 - 1 := by
         have := hic.in_range

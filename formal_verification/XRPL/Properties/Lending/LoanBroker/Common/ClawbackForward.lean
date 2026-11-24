@@ -75,8 +75,8 @@ private lemma LoanBroker.clamp_units (lb : LoanBroker) (v : Vault) (hz : lb.Open
   obtain ⟨e, he⟩ : ∃ e, numberExponent s v.baseExponent .fractional = .ok e := by
     unfold numberExponent
     by_cases hsz : s.operator_eq Number.zero = true
-    · rw [if_pos hsz]; exact ⟨_, rfl⟩
-    · rw [if_neg hsz]
+    · rw [ite_eq_left hsz]; exact ⟨_, rfl⟩
+    · rw [ite_eq_right hsz]
       obtain ⟨st, hst, -⟩ := STAmount.ofNumber_fractional_ok_fczr s .downward hsn
         (by rw [abs_of_nonneg hs0]; linarith [show (9 : ℚ) * 10 ^ 15 < 10 ^ 90 by norm_num])
       rw [hst]; exact ⟨_, rfl⟩
@@ -93,7 +93,7 @@ private lemma LoanBroker.clamp_units (lb : LoanBroker) (v : Vault) (hz : lb.Open
   have hR := STAmount.roundToExponent_rounded_any_proof d c v.baseExponent .towards_zero hdi (by omega) (by omega) hc
   simp only [RoundsToRepresentableAt] at hR
   change c.toRat = _ at hR
-  rw [if_pos hd0.le, hdv, mul_div_assoc, div_self hp.ne', mul_one, Int.floor_natCast] at hR
+  rw [ite_eq_left hd0.le, hdv, mul_div_assoc, div_self hp.ne', mul_one, Int.floor_natCast] at hR
   refine ⟨c, ?_, ?_⟩
   · simp only [clampToSumExponent, hfr, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, hdN, hps, habs]
     exact hc

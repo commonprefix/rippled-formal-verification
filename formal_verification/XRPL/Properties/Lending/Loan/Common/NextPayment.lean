@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.DueLoop
 
 /-! # The next payment of a loan computes its instalment
@@ -23,7 +24,7 @@ def Loan.nextPaymentType (loan : Loan) (now : UInt32) : LoanPaymentType :=
 private lemma loanPeriodicRate_computes (ir : TenthBips32) (interval : UInt32) :
     ∃ rate, loanPeriodicRate ir interval = .ok rate := by
   have heq : loanPeriodicRate ir interval =
-      (tenthBipsOfValue (Number.ofInt64 interval.toInt64) ir .to_nearest) >>=
+      (tenthBipsOfValue (Number.ofInt64 interval.toInt64 .to_nearest) ir .to_nearest) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   have hin := Number.ofInt64_isNormalized interval.toInt64
   have hiv := Number.ofInt64_count interval
@@ -42,7 +43,7 @@ private lemma loanPeriodicRate_computes (ir : TenthBips32) (interval : UInt32) :
       _ ≤ 2 ^ 32 * 2 ^ 32 / 100000 * 2 := by gcongr
       _ < 10 ^ 200 := by norm_num
   obtain ⟨hyn, hyv⟩ := TenthBips32.toNumber_facts (31536000 : UInt32)
-  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) := rfl
+  have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) .to_nearest := rfl
   have hyv' : ((31536000 : UInt32).toNat : ℚ) = 31536000 := rfl
   obtain ⟨r, hr⟩ := Number.operator_div_ok_of_abs t secondsInYear .to_nearest htN (by rw [hy]; exact hyn) htl'
     (by

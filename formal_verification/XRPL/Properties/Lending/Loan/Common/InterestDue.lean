@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Outstanding
 import XRPL.Properties.Lending.Loan.Common.Grid
 import XRPL.Properties.Lending.Loan.Common.ReamortizationInterest
@@ -36,15 +37,15 @@ private lemma Number.min_val (x y : Number) (hx : x.isNormalized) (hy : y.isNorm
     (Number.min x y).toRat = min x.toRat y.toRat := by
   unfold Number.min
   by_cases h : y.operator_lt x = true
-  · rw [if_pos h]; exact (min_eq_right ((Number.operator_lt_iff _ _ hy hx).mp h).le).symm
-  · rw [if_neg h]; exact (min_eq_left ((Number.operator_lt_eq_false_iff _ _ hy hx).mp (by simpa using h))).symm
+  · rw [ite_eq_left h]; exact (min_eq_right ((Number.operator_lt_iff _ _ hy hx).mp h).le).symm
+  · rw [ite_eq_right h]; exact (min_eq_left ((Number.operator_lt_eq_false_iff _ _ hy hx).mp (by simpa using h))).symm
 
 private lemma Number.max_val (x y : Number) (hx : x.isNormalized) (hy : y.isNormalized) :
     (Number.max x y).toRat = max x.toRat y.toRat := by
   unfold Number.max
   by_cases h : x.operator_lt y = true
-  · rw [if_pos h]; exact (max_eq_right ((Number.operator_lt_iff _ _ hx hy).mp h).le).symm
-  · rw [if_neg h]; exact (max_eq_left ((Number.operator_lt_eq_false_iff _ _ hx hy).mp (by simpa using h))).symm
+  · rw [ite_eq_left h]; exact (max_eq_right ((Number.operator_lt_iff _ _ hx hy).mp h).le).symm
+  · rw [ite_eq_right h]; exact (max_eq_left ((Number.operator_lt_eq_false_iff _ _ hx hy).mp (by simpa using h))).symm
 
 /-- A clamp into `[lo, hi]` has the clamped value. -/
 private lemma Number.clamp_val (x lo hi : Number) (hx : x.isNormalized) (hlo : lo.isNormalized)
@@ -52,15 +53,15 @@ private lemma Number.clamp_val (x lo hi : Number) (hx : x.isNormalized) (hlo : l
     (Number.clamp x lo hi).toRat = max lo.toRat (min x.toRat hi.toRat) := by
   unfold Number.clamp
   by_cases h1 : x.operator_lt lo = true
-  · rw [if_pos h1]
+  · rw [ite_eq_left h1]
     have := (Number.operator_lt_iff _ _ hx hlo).mp h1
     rw [max_eq_left ((min_le_left _ _).trans this.le)]
-  · rw [if_neg h1]
+  · rw [ite_eq_right h1]
     have h1' := (Number.operator_lt_eq_false_iff _ _ hx hlo).mp (by simpa using h1)
     by_cases h2 : hi.operator_lt x = true
-    · rw [if_pos h2]
+    · rw [ite_eq_left h2]
       rw [min_eq_right ((Number.operator_lt_iff _ _ hhi hx).mp h2).le, max_eq_right hle]
-    · rw [if_neg h2]
+    · rw [ite_eq_right h2]
       have h2' := (Number.operator_lt_eq_false_iff _ _ hhi hx).mp (by simpa using h2)
       rw [min_eq_left h2', max_eq_right h1']
 
@@ -69,13 +70,13 @@ private lemma Number.floorZero {s : Int} {x : Number} (hx : Number.OnGrid s x) :
     Number.OnGrid s (if x.signum < 0 then Number.zero else x) ∧
       (if x.signum < 0 then Number.zero else x).toRat = max 0 x.toRat := by
   by_cases h : x.signum < 0
-  · rw [if_pos h, Number.toRat_zero]
+  · rw [ite_eq_left h, Number.toRat_zero]
     have : x.toRat < 0 := by
       by_contra hc
       push Not at hc
       exact absurd ((Number.signum_nonneg_iff_toRat hx.1).mpr hc) (by omega)
     exact ⟨Number.OnGrid.zero s, (max_eq_left this.le).symm⟩
-  · rw [if_neg h]
+  · rw [ite_eq_right h]
     have : 0 ≤ x.toRat := (Number.signum_nonneg_iff_toRat hx.1).mp (by omega)
     exact ⟨hx, (max_eq_right this).symm⟩
 
@@ -542,9 +543,8 @@ private lemma UnsettledPayment.applyOverpayment_interestDue (payment p' : Unsett
   simp only [UnsettledPayment.applyOverpayment] at h
   unfold_ter at h
   walk_ok
-  all_goals first
+  all_goals try first
     | exact hi
-    | skip
   have hopc := ‹Loan.overpaymentComponents _ _ = _›
   have hovn := STAmount.roundToNumericType_isNormalized _ _ _ _ _
     ‹STAmount.roundToNumericType _ _ rounding_mode.downward _ = _›

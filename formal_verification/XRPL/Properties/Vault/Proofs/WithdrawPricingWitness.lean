@@ -3,12 +3,9 @@ import XRPL.Properties.Vault.Common.WithdrawDefs
 
 /-! # Witness for the withdrawal payout with no fee
 
-Each vault comes from a reachable history the model computes: a create, a deposit, then a donation.
+A reachable vault of 3 assets and 2 shares pays `2` for one share worth `1.5`, a full half unit above the worth. -/
 
-* `vI`: an integral vault of 3 assets / 2 shares, one share is worth `1.5` and a withdrawal of it pays `2`
-  (ties to even), a full half unit above the worth. -/
-
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.WdPriceWit
 

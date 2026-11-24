@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Model.Lending.Loan.LoanManage
 import XRPL.Properties.Lending.Common.PoolBalances
 import XRPL.Properties.Lending.Loan.LoanValid

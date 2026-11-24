@@ -30,8 +30,8 @@ private lemma Vault.assetsTotal_ge_available (v : Vault) (assetsTotal : Number) 
     have h' := h
     replace h' := Number.operator_add_ok_spec h'
     unfold Number.operator_addSpec at h'
-    rw [Number.operator_eq_zero_false_of_mantissa_ne _ hd, if_neg Bool.false_ne_true,
-      Number.eq_zero_of_mantissa_zero _ hAA ha, if_pos (by decide)] at h'
+    rw [Number.operator_eq_zero_false_of_mantissa_ne _ hd, ite_eq_right Bool.false_ne_true,
+      Number.eq_zero_of_mantissa_zero _ hAA ha, ite_eq_left (by decide)] at h'
     obtain rfl := Except.ok.inj h'
     rw [Number.toRat_eq_zero_of_mantissa_zero _ ha]
     exact ⟨hAD, hAD0⟩
@@ -68,7 +68,7 @@ lemma Vault.exceedsOpenLimit_false_bound (v : Vault) (x : Number) (hx : x.isNorm
   obtain ⟨hatN, hatge⟩ := Vault.assetsTotal_ge_available v atot hat
   have hat0 : 0 ≤ atot.toRat := le_trans v.exact.assetsAvailable_nonneg hatge
   obtain ⟨n₁, hlo₁, hs₁v⟩ := Number.operator_add_rounded_towards_zero _ _ _ hatN v.wf.yieldUnrealized_norm hs₁
-  rw [if_pos (by linarith)] at hlo₁
+  rw [ite_eq_left (by linarith)] at hlo₁
   have hs₁ge : atot.toRat ≤ s₁.toRat := by
     rw [hs₁v]; exact Number.lower_tight _ n₁ hlo₁ atot hatN (by linarith)
   have hYge : v.yieldUnrealized.toRat ≤ s₁.toRat := by
@@ -100,7 +100,7 @@ lemma Vault.exceedsOpenLimit_false_bound (v : Vault) (x : Number) (hx : x.isNorm
       rw [hmv]; push_cast at hge ⊢; linarith
     have hm0 : 0 < m.toRat := by rw [hmv]; push_cast; positivity
     obtain ⟨n, hlo, hcapv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hs₁N hx hcap
-    rw [if_pos (by linarith)] at hlo
+    rw [ite_eq_left (by linarith)] at hlo
     have hmn := Number.lower_tight _ n hlo m hm htruth
     have hlt : limit.toRat < capacity.toRat := by
       rw [hcapv]
@@ -151,7 +151,7 @@ lemma LoanState.build_interestDue_grid (tvo p mfo : Number) (s : ℤ) (a j m : �
 /-- An integral vault has base exponent `0`. -/
 lemma Vault.baseExponent_integral (v : Vault) (h : v.numericType.isIntegral = true) : v.baseExponent = 0 := by
   unfold XRPL.Model.SingleAssetVault.Vault.baseExponent NumericType.baseExponent
-  rw [if_pos h]
+  rw [ite_eq_left h]
 
 /-- The loan value rounds to nearest or up. -/
 lemma valueMode_cases (rate : Number) : valueMode rate = .to_nearest ∨ valueMode rate = .upward := by

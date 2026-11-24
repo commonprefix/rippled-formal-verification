@@ -2,9 +2,8 @@ import XRPL.Properties.Lending.Ledger.Common.RunSums
 
 /-! # What each transaction moves in or out of the vault's balances
 
-Each `…Of` reads one amount off the operation a transaction runs on the ledger `l`, and is zero for every other
-kind of transaction. The sum of the same name adds it up along a sequence of transactions, each read on the ledger
-it runs on. -/
+Each `…Of` reads one amount off the operation a transaction runs and is zero for other transactions. The sum of the
+same name adds it up along a sequence. -/
 
 namespace XRPL.Model.Lending
 

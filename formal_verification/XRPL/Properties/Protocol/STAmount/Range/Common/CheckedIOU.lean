@@ -67,9 +67,9 @@ lemma doNormalize_largeRange_ok_of_exp (neg : Bool) (m : UInt64) (e : Int) (mode
   all_goals try min_fit
   unfold doNormalizeSpec
   by_cases hz : (m == 0) = true
-  · rw [if_pos hz]
+  · rw [ite_eq_left hz]
     exact ⟨_, rfl⟩
-  rw [if_neg hz]
+  rw [ite_eq_right hz]
   rcases hsu : doNormalize_scaleUpSpec largeRange.min m e with ⟨m1, e1⟩
   have he1 : e1 ≤ e := by
     have := doNormalize_scaleUp_exp_le largeRange.min m e
@@ -81,9 +81,9 @@ lemma doNormalize_largeRange_ok_of_exp (neg : Bool) (m : UInt64) (e : Int) (mode
   rw [doNormalize_scaleDown_id _ m1 e1 _ (by rw [UInt64.le_iff_toNat_le, largeRange_max_val]; omega)]
   simp only []
   by_cases hund : (decide (e1 < minExponent) || decide (m1 < largeRange.min)) = true
-  · rw [if_pos hund]
+  · rw [ite_eq_left hund]
     exact ⟨_, rfl⟩
-  rw [if_neg hund]
+  rw [ite_eq_right hund]
   obtain ⟨m', e', g', hcap, he'⟩ := doNormalize_capAtMaxRep_ok_of_exp m1 e1
     (if neg then Guard.new.set_negative else Guard.new) (by omega)
   rw [hcap]
@@ -101,7 +101,7 @@ lemma IOUAmount.normalize_eq_ofNumber (a : IOUAmount) (mode : rounding_mode) (h 
       | .error err => .error err
       | .ok v => IOUAmount.ofNumber v mode := by
   unfold IOUAmount.normalize IOUAmount.ofNumber
-  rw [if_neg h]
+  rw [ite_eq_right h]
   rfl
 
 /-- An IOU `checked` returns a result exactly when the 19-digit Number of the signed mantissa exists and its
@@ -136,7 +136,7 @@ lemma STAmount.checked_fractional_ok_iff_from_rep (m : UInt64) (e : Int) (neg : 
     · omega
   rw [STAmount.checked]
   unfold STAmount.canonicalize
-  rw [if_neg h_int, STAmount.iou_eq mode h_int, h_sd]
+  rw [ite_eq_right h_int, STAmount.iou_eq mode h_int hm, h_sd]
   unfold IOUAmount.ofMantissaExp
   rw [IOUAmount.normalize_eq_ofNumber _ mode hsd_ne]
   dsimp only [STAmount.unchecked]
@@ -166,8 +166,9 @@ lemma STAmount.checked_ok_iff_fractional (m : UInt64) (e : Int) (neg : Bool) (mo
       have hsd : (STAmount.unchecked .fractional 0 e neg).signedDrops.toInt64 = 0 := by cases neg <;> rfl
       rw [STAmount.checked]
       unfold STAmount.canonicalize
-      rw [if_neg (by simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]),
-        STAmount.iou_eq mode (by simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]), hsd]
+      rw [ite_eq_right (by simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]),
+        STAmount.iou_eq mode (by simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral])
+          (show (0 : UInt64).toNat < 2 ^ 63 by decide), hsd]
       rfl
     rw [hok, STAmount.unchecked_toRat, STAmount.roundsInRange_fractional_iff]
     exact iff_of_true ⟨_, rfl⟩ (roundsWithinUnits_of_abs_le mode _ _ _ hu80 (by simp))
@@ -178,9 +179,9 @@ lemma STAmount.checked_ok_iff_fractional (m : UInt64) (e : Int) (neg : Bool) (mo
     have h' := congrArg Int64.toInt h
     rw [hsd_int, show Int64.minValue.toInt = -9223372036854775808 from by decide] at h'
     cases neg
-    · simp only [Bool.false_eq_true, if_false, one_mul] at h'
+    · simp only [Bool.false_eq_true, ite_false, one_mul] at h'
       omega
-    · simp only [if_true, neg_one_mul] at h'
+    · simp only [ite_true, neg_one_mul] at h'
       omega
   -- the exact value, as the signed mantissa times the power of ten
   have hval : (STAmount.unchecked .fractional m e neg).toRat = (sd.toInt : ℚ) * 10 ^ e := by

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.WindDownLoans
 import XRPL.Properties.Lending.Ledger.Common.ShareSum
 import XRPL.Properties.Lending.Ledger.Common.DustHolders
@@ -8,11 +9,9 @@ import XRPL.Properties.Lending.Ledger.Common.RedemptionDefaultWitness
 
 /-! # A vault that no wind-down deletes
 
-A reachable ledger past RedemptionDate with no broker or loan left, one base unit of cash and two holders owning half
-the shares each. Each holder's shares are worth half a base unit, so every VaultWithdraw pays nothing and fails, and
-VaultDelete finds the shares. -/
+Holder shares worth half a base unit each (FV_M4_24), or a loan still in grace (FV_M4_49), block VaultDelete. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -227,8 +226,6 @@ private def wdDustCheck : Bool :=
       decide (l.vault.phase l.now = .redemption) &&
       l.brokers.all Option.isNone && l.loans.all Option.isNone && l.shares.length == 2 &&
       l.vault.numericType == NumericType.fractional &&
-      decide ((l.shares.map Number.toRat).sum = l.vault.sharesTotal.toRat) &&
-      l.shares.all (fun x => x.toRat.den == 1) &&
       decide (2 * (l.sharesOf 0).toRat ≤ l.vault.sharesTotal.toRat) &&
       decide (2 * (l.sharesOf 1).toRat ≤ l.vault.sharesTotal.toRat) &&
       l.vault.assetsDeployed == Number.zero && l.vault.lossUnrealized == Number.zero &&
@@ -278,7 +275,6 @@ lemma LendingLedger.wind_down_dust_witness :
         e.loan.paymentRemaining ≠ 0 → l.NotCoarsened) ∧
       (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
         b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
-      l.SharesSum ∧
       ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' →
         (∀ tx ∈ txs, tx.isWindDown = true) → (l'.apply .vaultDelete).run ≠ .ok (.ok l'') := by
   have hc := wdDustCheck_true
@@ -287,7 +283,7 @@ lemma LendingLedger.wind_down_dust_witness :
   case h_2 => cases hc
   rename_i l hl
   simp only [Bool.and_eq_true, Bool.not_eq_true', decide_eq_true_eq, beq_iff_eq] at hc
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hnd, hsch⟩, hpast⟩, hph⟩, hb⟩, hlo⟩, hlen⟩, hnt⟩, hsum⟩, hwhole⟩, h0⟩, h1⟩,
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hnd, hsch⟩, hpast⟩, hph⟩, hb⟩, hlo⟩, hlen⟩, hnt⟩, h0⟩, h1⟩,
     hAD⟩, hLU⟩, hYU⟩, hA⟩, hcash⟩, hdel⟩ := hc
   have hr : l.Reachable := LendingLedger.Reachable.of_run dhGenesis_genesis hl
   have hnone := LendingLedger.loan?_of_all_none hlo
@@ -317,7 +313,6 @@ lemma LendingLedger.wind_down_dust_witness :
   refine ⟨l, dhSchedule, hr, hnd, hsch, hpast,
     fun i e he => (by rw [hnone i] at he; cases he), fun i e he => (by rw [hnone i] at he; cases he),
     fun i e he => (by rw [hnone i] at he; cases he), fun j b hb' => (by rw [hbnone j] at hb'; cases hb'),
-    ⟨hsum, fun x hx => by simpa using List.all_eq_true.mp hwhole x hx⟩,
     fun txs l' l'' hreach hw hdel' => ?_⟩
   have hl' : l' = l := LendingLedger.Reaches.keeps (P := (· = l))
     (fun l₀ tx l₁ h₀ hw₀ ha => by subst h₀; exact absurd ha (hstuck tx l₁ hw₀)) rfl hreach hw
@@ -336,7 +331,7 @@ private lemma LendingLedger.brokerDelete_with_loans {l l' : LendingLedger} {j : 
   unfold_ter at hu
   rw [hcan] at hu
   simp only at hu
-  rw [if_pos (show (!TER.tecHAS_OBLIGATIONS.isTesSuccess) = true from rfl)] at hu
+  rw [ite_eq_left (show (!TER.tecHAS_OBLIGATIONS.isTesSuccess) = true from rfl)] at hu
   simp at hu
 
 /-- A VaultDelete fails while a broker is left. -/
@@ -350,9 +345,8 @@ private lemma LendingLedger.vaultDelete_with_broker {l l' : LendingLedger}
   repeat' split at h
   all_goals simp_all
 
-/-- After `rdTxs`, one second past RedemptionDate: one broker and one active loan whose grace period has not ended,
-whose default is too soon and which can't be deleted, a vault that is not coarsened, and holder shares that add up
-to SharesTotal. -/
+/-- After `rdTxs`, one second past RedemptionDate, an active loan in its grace period can be neither defaulted nor
+deleted, on a vault that is not coarsened and whose holder shares add up to SharesTotal. -/
 private def wdGraceCheck : Bool :=
   match niGenesis.run rdTxs with
   | .ok l =>
@@ -365,8 +359,6 @@ private def wdGraceCheck : Bool :=
         decide (l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat <
           10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) &&
         decide (b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) &&
-        decide ((l.shares.map Number.toRat).sum = l.vault.sharesTotal.toRat) &&
-        l.shares.all (fun x => x.toRat.den == 1) &&
         (match e.loan.withBroker b with
           | .ok loan =>
             (match loan.canDelete with
@@ -393,7 +385,6 @@ lemma LendingLedger.wind_down_grace_witness :
         e.loan.paymentRemaining ≠ 0 → l.NotCoarsened) ∧
       (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
         b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
-      l.SharesSum ∧
       (∀ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' → (∀ i, l'.loan? i = none) →
         l'.NoDust) ∧
       ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' →
@@ -407,7 +398,7 @@ lemma LendingLedger.wind_down_grace_witness :
   case h_2 => cases hc
   rename_i s e0 b0 hs he0 hb0
   simp only [Bool.and_eq_true, Bool.not_eq_true', decide_eq_true_eq, beq_iff_eq, bne_iff_ne, ne_eq] at hc
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hnd, hpast⟩, hgr⟩, hlen⟩, hblen⟩, hbi⟩, hcount⟩, hpend⟩, hnc⟩, hca⟩, hsum⟩, hwhole⟩,
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hnd, hpast⟩, hgr⟩, hlen⟩, hblen⟩, hbi⟩, hcount⟩, hpend⟩, hnc⟩, hca⟩,
     hmatch⟩ := hc
   have hr : l.Reachable := LendingLedger.Reachable.of_run niGenesis_genesis hl
   -- the loan and the broker are the only ones, and the loan's default and deletion both fail
@@ -484,8 +475,7 @@ lemma LendingLedger.wind_down_grace_witness :
       (P := fun l₀ => l₀.loans = l.loans ∧ l₀.brokers = l.brokers ∧ l₀.now = l.now) hstep ⟨rfl, rfl, rfl⟩ hreach hw
   refine ⟨l, s, hr, hnd, hs, hpast, ⟨0, e0, he0, hgr⟩,
     fun i e he hp => absurd hp (by obtain ⟨-, rfl⟩ := hlone l i e rfl he; simp [hpend]),
-    fun _ _ _ _ _ => hnc, fun j b hb => by obtain ⟨-, rfl⟩ := hbone l j b rfl hb; exact hca,
-    ⟨hsum, fun x hx => by simpa using List.all_eq_true.mp hwhole x hx⟩, ?_, ?_⟩
+    fun _ _ _ _ _ => hnc, fun j b hb => by obtain ⟨-, rfl⟩ := hbone l j b rfl hb; exact hca, ?_, ?_⟩
   · intro txs l' hw hnone
     have hall : ∀ tx ∈ txs, tx.isWindDown = true := by
       clear hnone

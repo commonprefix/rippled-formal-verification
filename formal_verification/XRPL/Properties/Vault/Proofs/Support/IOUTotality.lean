@@ -64,8 +64,8 @@ lemma STAmount.ofNumber_fractional_ok_below (r : Number) (hn : r.isNormalized) (
     simpa using Number.signum_nonneg_of_negative_false r hneg
   have hnorm' : r.normalizeToRange kMinValue kMaxValue .to_nearest = .ok (mant, exp) := hnorm
   unfold STAmount.ofNumber
-  rw [if_neg (by decide), hs]
-  simp only [Bool.false_eq_true, if_false, hnorm']
+  rw [ite_eq_right (by decide), hs]
+  simp only [Bool.false_eq_true, ite_false, hnorm']
   have h_int : ¬ (STAmount.unchecked .fractional mant.toUInt64 exp false).integral = true := by
     simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
   have h_fit : mant.toUInt64.toNat < 2 ^ 63 := by omega
@@ -82,7 +82,7 @@ lemma STAmount.ofNumber_fractional_ok_below (r : Number) (hn : r.isNormalized) (
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    rw [STAmount.iou_eq .to_nearest h_int]
+    rw [STAmount.iou_eq .to_nearest h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp false .to_nearest hmtu_lo hmtu_hi
@@ -90,7 +90,7 @@ lemma STAmount.ofNumber_fractional_ok_below (r : Number) (hn : r.isNormalized) (
   rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hmant_pos)), ok_bind,
     STAmount.checked]
   unfold STAmount.canonicalize
-  rw [if_neg h_int, hiou, if_neg (by omega)]
+  rw [ite_eq_right h_int, hiou, ite_eq_right (by omega)]
   split_ifs <;> exact ⟨_, rfl⟩
 
 /-- A downward IOU `ofNumber` of a positive value below `10^96` never throws. Rounding down never carries past
@@ -138,8 +138,8 @@ lemma STAmount.ofNumber_fractional_downward_ok (r : Number) (hn : r.isNormalized
     simpa using Number.signum_nonneg_of_negative_false r hneg
   have hnorm' : r.normalizeToRange kMinValue kMaxValue .downward = .ok (mant, exp) := hnorm
   unfold STAmount.ofNumber
-  rw [if_neg (by decide), hs]
-  simp only [Bool.false_eq_true, if_false, hnorm']
+  rw [ite_eq_right (by decide), hs]
+  simp only [Bool.false_eq_true, ite_false, hnorm']
   have h_int : ¬ (STAmount.unchecked .fractional mant.toUInt64 exp false).integral = true := by
     simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
   have h_fit : mant.toUInt64.toNat < 2 ^ 63 := by omega
@@ -156,7 +156,7 @@ lemma STAmount.ofNumber_fractional_downward_ok (r : Number) (hn : r.isNormalized
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    rw [STAmount.iou_eq .downward h_int]
+    rw [STAmount.iou_eq .downward h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp false .downward hmtu_lo hmtu_hi
@@ -164,7 +164,7 @@ lemma STAmount.ofNumber_fractional_downward_ok (r : Number) (hn : r.isNormalized
   rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hmant_pos)), ok_bind,
     STAmount.checked]
   unfold STAmount.canonicalize
-  rw [if_neg h_int, hiou, if_neg (by omega)]
+  rw [ite_eq_right h_int, hiou, ite_eq_right (by omega)]
   split_ifs <;> exact ⟨_, rfl⟩
 
 /-- A `Number` converts to an IOU amount without error while its exponent is at most `76`. The 16-digit
@@ -189,11 +189,11 @@ lemma STAmount.ofIOU_ofNumber_ok (n : Number) (mode : rounding_mode)
     unfold IOUAmount.ofNumber IOUAmount.fromNumber
     rw [hnorm]
     simp only
-    rw [if_neg (by unfold cMaxOffset; omega)]
+    rw [ite_eq_right (by unfold cMaxOffset; omega)]
   by_cases hmin : e < cMinOffset
-  · rw [hof, if_pos hmin]
+  · rw [hof, ite_eq_left hmin]
     exact ⟨_, STAmount.ofIOU_zero mode⟩
-  · have hof' : IOUAmount.ofNumber n mode = .ok ⟨m, e⟩ := by rw [hof, if_neg hmin]
+  · have hof' : IOUAmount.ofNumber n mode = .ok ⟨m, e⟩ := by rw [hof, ite_eq_right hmin]
     rw [hof']
     have hmr := normalizeToRange_16_mantissa_range n mode m e hlo hhi he_lo he_hi hnorm
     have hcmin : cMinValue.toNat = 10 ^ 15 := by decide
@@ -259,7 +259,7 @@ private lemma Number.add_exponent_le_any (x y n : Number) (t : Int) (mode : roun
       rw [hv]; exact hlow l hl
     | towards_zero =>
       obtain ⟨m, hm, hv⟩ := Number.operator_add_rounded_towards_zero x y n hx hy hok
-      rw [if_pos h0] at hm
+      rw [ite_eq_left h0] at hm
       rw [hv]; exact hlow m hm
   have hp : (0 : ℚ) < 10 ^ t := zpow_pos (by norm_num) _
   exact Number.exponent_le_of_toRat_lt n t hn (Number.negative_false_of_nonneg n hn hb.1) ht.1
@@ -286,8 +286,8 @@ lemma STAmount.roundToExponent_ok_any (value : STAmount) (s : Int) (mode : round
     rw [zpow_sub₀ (by norm_num : (10 : ℚ) ≠ 0)]; field_simp
   have hts : minExponent + 18 ≤ s - 3 ∧ s - 3 ≤ maxExponent - 1 := by unfold minExponent maxExponent; omega
   unfold STAmount.roundToExponent
-  rw [if_neg (by rw [h_int]; exact Bool.false_ne_true), if_neg (by rw [hz]; exact Bool.false_ne_true),
-    if_neg (not_le.mpr hexp)]
+  rw [ite_eq_right (by rw [h_int]; exact Bool.false_ne_true), ite_eq_right (by rw [hz]; exact Bool.false_ne_true),
+    ite_eq_right (not_le.mpr hexp)]
   have hchk : STAmount.checked value.mNumericType kMinValue s value.negative mode =
       .ok ⟨.fractional, kMinValue, s, false⟩ := by
     rw [hc.is_fractional]
@@ -402,8 +402,8 @@ lemma STAmount.roundToExponent_top_ok (value : STAmount) (hc : value.IOUCanonica
   have hkMin : kMinValue.toNat = 10 ^ 15 := by decide
   have hexp : ¬ (80 : ℤ) ≤ value.exponent := by show ¬ (80 : ℤ) ≤ value.mOffset; omega
   unfold STAmount.roundToExponent
-  rw [if_neg (by rw [h_int]; exact Bool.false_ne_true), if_neg (by rw [hz]; exact Bool.false_ne_true),
-    if_neg hexp]
+  rw [ite_eq_right (by rw [h_int]; exact Bool.false_ne_true), ite_eq_right (by rw [hz]; exact Bool.false_ne_true),
+    ite_eq_right hexp]
   have hchk : STAmount.checked value.mNumericType kMinValue 80 value.negative .towards_zero =
       .ok ⟨.fractional, kMinValue, 80, false⟩ := by
     rw [hc.is_fractional]
@@ -451,7 +451,7 @@ lemma STAmount.roundToExponent_top_ok (value : STAmount) (hc : value.IOUCanonica
     have ht0 : 0 ≤ v1n.toRat + v2n.toRat := by rw [hv1_val, hv2_val, hrefv]; linarith
     have hRd : n.RoundsToRepresentable (v1n.toRat + v2n.toRat) .downward := by
       unfold Number.RoundsToRepresentable at hR ⊢
-      rw [if_pos ht0] at hR
+      rw [ite_eq_left ht0] at hR
       exact hR
     obtain ⟨P, hPn, hPv⟩ := Number.exists_normalized_int_mul_pow 1 95 (by norm_num)
       ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
@@ -506,7 +506,7 @@ lemma STAmount.roundToExponent_top_ok (value : STAmount) (hc : value.IOUCanonica
       unfold IOUAmount.ofNumber IOUAmount.fromNumber
       rw [hnorm]
       simp only []
-      rw [if_neg (by unfold cMaxOffset; omega), if_neg (by unfold cMinOffset; omega)]
+      rw [ite_eq_right (by unfold cMaxOffset; omega), ite_eq_right (by unfold cMinOffset; omega)]
     rw [hof]
     simp only []
     have hne : (⟨m, e⟩ : IOUAmount).mantissa_ ≠ 0 := by
@@ -572,7 +572,7 @@ lemma STAmount.roundToExponent_top_ok (value : STAmount) (hc : value.IOUCanonica
   rw [htv] at hR
   have ht0 : 0 ≤ (k : ℚ) * 10 ^ (80 : ℤ) := by positivity
   unfold Number.RoundsToRepresentable at hR
-  rw [if_pos ht0] at hR
+  rw [ite_eq_left ht0] at hR
   obtain ⟨l, hl, hnv⟩ := hR
   have hle := Number.lower_le _ l hl
   have hl0 := Number.lower_tight _ l hl Number.zero Number.zero_isNormalized (by rw [Number.toRat_zero]; exact ht0)

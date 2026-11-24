@@ -13,9 +13,8 @@ import XRPL.Properties.Lending.Ledger.Common.WithdrawHolder
 
 /-! # Vault transactions pass their lawfulness re-check
 
-A vault transaction on a reachable ledger never fails the model with `notLawful`, given the C++ checks and
-balances the model runs elsewhere or not at all. A VaultClawback on an MPT vault needs the vault below `10^16`
-units. -/
+A vault transaction on a reachable ledger never fails with `notLawful`, given the C++ checks the model leaves out.
+A VaultClawback on an MPT vault needs the vault below `10^16` units (FV_M4_36, FV_M4_38). -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -74,13 +73,9 @@ private lemma Vault.checkOpenLimit_ne_notLawful (v : Vault) (amount : STAmount) 
     STAmount.toNumber_ne_notLawful, postSumExponent_ne_notLawful,
     XRPL.Model.Lending.Vault.exceedsOpenLimit_ne_notLawful]
 
-/-- A deposit never fails its lawfulness re-check when the minted shares keep SharesTotal within the share
-MPT maximum. -/
+/-- A deposit never fails its lawfulness re-check. -/
 lemma Vault.deposit_lawful (v : Vault) (amount : STAmount) (isDonation : Bool) (t : UInt32)
-    (hpos : 0 < amount.toRat) (hc : amount.Canonical) (hty : amount.mNumericType = v.numericType)
-    (hsupply : ∀ ra amounts, (v.roundedDepositAmount amount).run = .ok (.ok ra) →
-      (computeDeposit v ra isDonation).run = .ok (.ok amounts) →
-      (v.toExact.sharesTotal : ℚ) + amounts.shares.toRat ≤ 2 ^ 63 - 1) :
+    (hpos : 0 < amount.toRat) (hc : amount.Canonical) (hty : amount.mNumericType = v.numericType) :
     (v.deposit amount isDonation t hpos).run ≠ .error .notLawful := by
   intro h
   simp only [Vault.deposit] at h
@@ -93,11 +88,14 @@ lemma Vault.deposit_lawful (v : Vault) (amount : STAmount) (isDonation : Bool) (
     | exact Vault.adjustAssetsAndShares_ne_notLawful _ _ _ ‹_›
     | exact Vault.checkOpenLimit_ne_notLawful _ _ ‹_›
     | exact RawVault.assetsTotal_ne_notLawful _ ‹_›
+    | exact STAmount.ofNumber_ne_notLawful _ _ _ ‹_›
   have hrounded : (v.roundedDepositAmount amount).run = .ok (.ok _) := ‹v.roundedDepositAmount amount = _›
   have hcomp : (computeDeposit v _ isDonation).run = .ok (.ok _) := ‹computeDeposit v _ isDonation = _›
   have hadj : (v.adjustAssetsAndShares _ _).run = .ok (.ok _) := ‹v.adjustAssetsAndShares _ _ = _›
   obtain ⟨hwf, hval⟩ := Vault.deposit_success_lawful v amount isDonation t hc hty _ _ _ ⟨‹_›, ‹_›, ‹_›, ‹_›⟩
-    hrounded hcomp hadj (hsupply _ _ hrounded hcomp)
+    hrounded hcomp hadj (by
+      rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
+      exact Vault.shareSupply_le v _ _ (computeDeposit_shares_offset v _ isDonation _ hcomp) ‹_› ‹_›)
   obtain ⟨v', hv', -⟩ := RawVault.to_lawful_ok_of hwf hval
   have hbad := hv'.symm.trans ‹RawVault.to_lawful _ = Except.error Error.notLawful›
   cases hbad
@@ -461,15 +459,9 @@ lemma LendingTx.preflight_vaultDeposit_canonical (l : LendingLedger) (hasset : V
     exact this.2
   exact isCanonicalAmount_canonical amount _ hasset.maxValue_le hc.1 hnz
 
-/-- A deposit never fails its lawfulness re-check when its shares keep SharesTotal within the share MPT
-maximum. -/
+/-- A deposit never fails its lawfulness re-check. -/
 lemma LendingLedger.vaultDeposit_ne_notLawful (l : LendingLedger) (hr : l.Reachable) (h : Nat) (amount : STAmount)
-    (isDonation : Bool)
-    -- the new shares keep SharesTotal within the share MPT maximum, which C++ accountSend enforces (tecPATH_DRY)
-    -- and the model does not run
-    (hsupply : ∀ ra amounts, (l.vault.roundedDepositAmount amount).run = .ok (.ok ra) →
-      (computeDeposit l.vault ra isDonation).run = .ok (.ok amounts) →
-      (l.vault.toExact.sharesTotal : ℚ) + amounts.shares.toRat ≤ 2 ^ 63 - 1) :
+    (isDonation : Bool) :
     (l.apply (.vaultDeposit h amount isDonation)).run ≠ .error .notLawful := by
   apply LendingLedger.apply_ne_notLawful_of_vault rfl
   intro hpre _ hrun
@@ -479,7 +471,7 @@ lemma LendingLedger.vaultDeposit_ne_notLawful (l : LendingLedger) (hr : l.Reacha
   · rename_i hpos
     unfold_ter at hrun
     walk_ok'
-    · exact Vault.deposit_lawful l.vault amount isDonation l.now hpos hc hty hsupply
+    · exact Vault.deposit_lawful l.vault amount isDonation l.now hpos hc hty
         (by simpa only [ExceptT.run] using ‹_›)
     · exact STAmount.toNumber_ne_notLawful _ _ ‹_›
     · exact Number.operator_add_ne_notLawful _ _ _ ‹_›

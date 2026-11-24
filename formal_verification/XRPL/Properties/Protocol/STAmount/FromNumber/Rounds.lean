@@ -2,11 +2,8 @@ import XRPL.Properties.Protocol.STAmount.FromNumber.Common.RoundsProofs
 
 /-! # An amount made from a Number is rounded in the requested mode
 
-`STAmount.ofNumber` should return the amount just below the Number (`downward`), just above it (`upward`), the
-one nearer zero (`towards_zero`) or the nearest one (`to_nearest`). The unit is `10 ^ result.mOffset`, which is 1
-for XRP and MPT. The code drops the sign, rounds the size and puts the sign back, so `downward` and `upward` round
-a negative Number the wrong way. Those two theorems assume a Number that is not negative (`hnonneg`), and their
-`_attained` witnesses show a negative Number that breaks them. -/
+`STAmount.ofNumber` rounds the magnitude and then restores the sign, so `downward` and `upward` round a negative
+Number the wrong way. Those theorems assume `hnonneg`, and their `_attained` witnesses show the failure. -/
 
 namespace XRPL.Model.Protocol
 

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.LoanCountInv
 import XRPL.Properties.Lending.Loan.Common.Outstanding
 import XRPL.Properties.Lending.Loan.Common.SetPhase
@@ -142,13 +143,13 @@ private lemma LendingLedger.ScaleInv.commitLoan {l : LendingLedger} (hinv : l.Sc
   · rw [LendingLedger.loan?_commitLoan] at he
     rw [hv, hs.baseExponent_eq]
     by_cases hj : j = (if u.loanIndex < l.loans.length then u.loanIndex else l.loans.length)
-    · rw [if_pos hj] at he; exact (hloan e he).1
-    · rw [if_neg hj] at he; exact hinv.loanScale j e he
+    · rw [ite_eq_left hj] at he; exact (hloan e he).1
+    · rw [ite_eq_right hj] at he; exact hinv.loanScale j e he
   · rw [LendingLedger.loan?_commitLoan] at he
     rw [hv, hs.numericType]
     by_cases hj : j = (if u.loanIndex < l.loans.length then u.loanIndex else l.loans.length)
-    · rw [if_pos hj] at he; exact (hloan e he).2
-    · rw [if_neg hj] at he; exact hinv.loanBroker j e he
+    · rw [ite_eq_left hj] at he; exact (hloan e he).2
+    · rw [ite_eq_right hj] at he; exact hinv.loanBroker j e he
 
 /-- A loan operation that keeps the loan's terms and its broker's numeric type keeps the invariant. -/
 private lemma LendingLedger.ScaleInv.ofLoan {l : LendingLedger} (hinv : l.ScaleInv) {i : Nat} {e : LoanEntry}
@@ -214,11 +215,11 @@ lemma LendingLedger.ScaleInv.broker_step {l : LendingLedger} (hinv : l.ScaleInv)
   show b'.numericType = l.vault.numericType
   rw [LendingLedger.broker?_commitBroker] at hb'
   by_cases hj : j = (if u.index < l.brokers.length then u.index else l.brokers.length)
-  · rw [if_pos hj] at hb'
+  · rw [ite_eq_left hj] at hb'
     rcases LendingLedger.applyBroker_numericType l tx u hu b' hb' with h0 | ⟨b, hb, hnt⟩
     · exact h0
     · rw [hnt]; exact hinv.brokers _ b hb
-  · rw [if_neg hj] at hb'; exact hinv.brokers j b' hb'
+  · rw [ite_eq_right hj] at hb'; exact hinv.brokers j b' hb'
 
 /-- Every transaction keeps the invariant. -/
 lemma LendingLedger.ScaleInv.step {l l' : LendingLedger} (hinv : l.ScaleInv) {tx : LendingTx}

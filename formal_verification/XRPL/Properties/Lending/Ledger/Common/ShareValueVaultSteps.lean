@@ -1,12 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.AssetFlowSteps
 import XRPL.Properties.Vault.Proofs.PricedWorth
 import XRPL.Properties.Vault.Proofs.PerShareFloor
 
 /-! # Vault transactions that keep shareValue on a lending vault
 
-A lending vault has assets lent out and can carry an unrealized loss, so the vault-only proofs do not cover it.
-While its balances are whole base units below `10^16` of them, a VaultWithdraw or VaultClawback that does not waive
-the loss pays at most the worth of the shares it removes, when that worth is a whole number of base units. -/
+While its balances are whole base units below `10^16`, a VaultWithdraw or VaultClawback that does not waive the loss
+pays at most the worth of the shares it removes, when that worth is whole base units. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -186,7 +186,7 @@ private lemma Vault.priced_le_worth_of_grid (hLU : ∃ n : ℕ, n ≤ 10 ^ 16 �
   have hI : v.idealAssetsWithdraw false shares.toRat =
       v.withdrawNav * shares.toRat / (v.toExact.sharesTotal : ℚ) := by
     unfold RawVault.idealAssetsWithdraw
-    rw [if_neg Bool.false_ne_true]
+    rw [ite_eq_right Bool.false_ne_true]
   have hIat : v.idealAssetsWithdrawAt nav.toRat shares.toRat =
       v.withdrawNav * shares.toRat / (v.toExact.sharesTotal : ℚ) := by
     unfold RawVault.idealAssetsWithdrawAt
@@ -298,7 +298,6 @@ lemma Vault.deposit_keeps_shareValue (hat : v.assetsTotal = .ok v.assetsAvailabl
     (amount : STAmount) (t : UInt32) (hpos : 0 < amount.toRat) (hc : amount.Canonical)
     (hty : amount.mNumericType = v.numericType) (r : VaultWithAmounts)
     (hok : (v.deposit amount false t hpos).run = .ok (.ok r))
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1)
     (hworth : ∃ k : ℤ, v.idealChargeDeposit r.shares.toRat = k * 10 ^ v.baseExponent) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
   have hmax := hasset.maxValue_le
@@ -321,6 +320,6 @@ lemma Vault.deposit_keeps_shareValue (hat : v.assetsTotal = .ok v.assetsAvailabl
       push_cast; linarith
     exact_mod_cast le_of_mul_le_mul_right this hp
   have hz : v.OpenZone := ⟨hAD, hLU0, hYU, ⟨kA, hk9, hkA⟩, hst⟩
-  exact hz.deposit_keeps_perShare amount t hpos hc hty r hok hSsz hworth
+  exact hz.deposit_keeps_perShare amount t hpos hc hty r hok hworth
 
 end XRPL.Model.Lending

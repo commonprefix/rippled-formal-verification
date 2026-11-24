@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.LoanBroker.Common.WitnessSupport
 import XRPL.Properties.Lending.Ledger.Common.CoverWitness
 import XRPL.Properties.Lending.Ledger.Common.ScaleInv
@@ -8,7 +9,7 @@ import XRPL.Properties.Lending.Ledger.Common.VaultSteps
 Runs on a reachable broker of a vault with base exponent `-6`, and on the broker of the ledger run of
 `CoverWitness.lean`, whose cover a LoanPay fee takes to `2000001` at the scale `10^-10`. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

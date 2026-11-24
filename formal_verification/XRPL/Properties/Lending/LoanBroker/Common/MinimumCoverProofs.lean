@@ -70,7 +70,7 @@ cover, when the larger minimum cover is nonzero. -/
 private lemma minimumBrokerCover_le_of_prod_le (nt : NumericType) (d d' : Number)
     (rate rate' : TenthBips32) (e : Int) (m m' : Number)
     (hd : d.isNormalized) (hd' : d'.isNormalized) (h0 : 0 ≤ d.toRat) (h0' : 0 ≤ d'.toRat)
-    (hprod : d.toRat * rate.toNumber.toRat ≤ d'.toRat * rate'.toNumber.toRat)
+    (hprod : d.toRat * (rate.toNumber .upward).toRat ≤ d'.toRat * (rate'.toNumber .upward).toRat)
     (he : -96 ≤ e) (he' : e ≤ 80)
     (hm : minimumBrokerCover nt d rate e = .ok m)
     (hm' : minimumBrokerCover nt d' rate' e = .ok m')
@@ -100,8 +100,8 @@ private lemma minimumBrokerCover_le_of_prod_le (nt : NumericType) (d d' : Number
             (hq : STAmount.ofNumber (.integral mv mo ms msh) x .upward = .ok q) :
             q.integral = true :=
           (STAmount.ofNumber_integral_canonical _ _ _ q hnt hq).1.is_integral
-        rw [if_pos (hint ret raw hret)] at hk
-        rw [if_pos (hint ret' raw' hret')] at hk'
+        rw [ite_eq_left (hint ret raw hret)] at hk
+        rw [ite_eq_left (hint ret' raw' hret')] at hk'
         have hceil (x : Number) (q : STAmount) (n : Number) (hxn : x.isNormalized)
             (hx0 : 0 ≤ x.toRat)
             (hq : STAmount.ofNumber (.integral mv mo ms msh) x .upward = .ok q)
@@ -152,8 +152,8 @@ private lemma minimumBrokerCover_le_of_prod_le (nt : NumericType) (d d' : Number
           unfold STAmount.integral
           rw [STAmount.ofNumber_mNumericType _ _ _ _ hq]
           rfl
-        rw [if_neg (by rw [hfr ret raw hret]; decide)] at hk
-        rw [if_neg (by rw [hfr ret' raw' hret']; decide)] at hk'
+        rw [ite_eq_right (by rw [hfr ret raw hret]; decide)] at hk
+        rw [ite_eq_right (by rw [hfr ret' raw' hret']; decide)] at hk'
         obtain ⟨hfra, hcza⟩ := STAmount.ofNumber_fractional_fczr raw .upward ret hret
         obtain ⟨hfrb, hczb⟩ := STAmount.ofNumber_fractional_fczr raw' .upward ret' hret'
         cases hr : ret.roundToExponent e .upward with
@@ -252,8 +252,8 @@ private lemma minimumBrokerCover_below_min (nt : NumericType) (debtTotal : Numbe
     | ok ret =>
       dsimp only
       by_cases hint : ret.integral = true
-      · rw [if_pos hint, if_pos hint]
-      rw [if_neg hint, if_neg hint]
+      · rw [ite_eq_left hint, ite_eq_left hint]
+      rw [ite_eq_right hint, ite_eq_right hint]
       -- the converted amount is canonical or zero, so both scales leave it alone
       have hfc := ofNumber_upward_fczr nt raw ret hret hint
       have hpass (s : Int) (hs : s ≤ -96) : ret.roundToExponent s .upward = .ok ret := by
@@ -275,7 +275,7 @@ private lemma minimumBrokerCover_nonneg (nt : NumericType) (debtTotal : Number) 
     · rw [hz, Number.toRat_zero]
     have h := minimumBrokerCover_le_of_prod_le nt Number.zero debtTotal rate rate e' Number.zero
       m' Number.zero_isNormalized hd (by rw [Number.toRat_zero]) h0
-      (by rw [Number.toRat_zero, zero_mul]; exact mul_nonneg h0 (TenthBips32.toNumber_nonneg rate))
+      (by rw [Number.toRat_zero, zero_mul]; exact mul_nonneg h0 (TenthBips32.toNumber_nonneg rate .upward))
       hlo hhi (minimumBrokerCover_zero_debt nt rate e') hm' hz
     rwa [Number.toRat_zero] at h
   by_cases hlo : -96 ≤ e

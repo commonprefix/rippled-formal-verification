@@ -4,9 +4,8 @@ import XRPL.Properties.Lending.Loan.LoanValid
 
 /-! # Reachability induction proofs
 
-General lemmas for proofs over reachable lending ledgers: joining traces, turning a `run` into a
-reachability proof, induction over the transactions, and what each kind of transaction can
-change. -/
+General lemmas over reachable lending ledgers: joining traces, turning a `run` into a reachability proof, induction
+over the transactions, and what each kind of transaction can change. -/
 
 namespace XRPL.Model.Lending
 
@@ -118,8 +117,8 @@ lemma LendingLedger.apply_checked {l l' : LendingLedger} {tx : LendingTx} (h : (
   generalize tx.preflight l = p at h ⊢
   dsimp only at h
   cases hp : p.isTesSuccess
-  · rw [hp, if_pos (by decide), TerExcept.throw_run] at h; cases h
-  · rw [hp, if_neg (by decide)] at h; exact ⟨rfl, h⟩
+  · rw [hp, ite_eq_left (by decide), TerExcept.throw_run] at h; cases h
+  · rw [hp, ite_eq_right (by decide)] at h; exact ⟨rfl, h⟩
 
 /-- A successful loan transaction wrote its loan effect. -/
 lemma LendingLedger.apply_loan {l l' : LendingLedger} {tx : LendingTx} (hl : tx.isLoan = true)

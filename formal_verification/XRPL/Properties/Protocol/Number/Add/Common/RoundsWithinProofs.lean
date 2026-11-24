@@ -84,7 +84,6 @@ theorem Number.operator_add_rounds_same_sign_downward_proof (x y result : Number
     · -- In-range: doRoundUp truncates.
       have h_tr_val := doRoundUp_value_downward_truncate g false zm ze' h_no_sru h_zm_le_rep
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      try simp only at h_tr_val
       refine ⟨?_, ?_⟩
       · -- Direction
         rw [h_approx, h_result_signed, h_xy_signed, h_tr_val]
@@ -181,12 +180,11 @@ theorem Number.operator_add_rounds_same_sign_downward_proof (x y result : Number
     · -- ===== in range: zm ≤ maxRep =====
       by_cases h_sru : g.shouldRoundUp_downward
       · -- round-up fires: f > 0 and the output magnitude exceeds the truth's.
-        have hf_pos : 0 < f := represents_pos_of_shouldRoundUp_downward g f hf_rep h_sru
+        have hf_pos : 0 < f := represents_t_pos_of_shouldRoundUp_downward hf_rep h_sru
         by_cases h_cusp : zm = maxRep
         · -- Cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
           have h_cusp_val := doRoundUp_value_downward_roundUp_cusp g false zm ze' h_cusp h_sru
             .overflow res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_cusp_val
           have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
             rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
           have h_result_val : result.toRat = -((maxRepCuspTarget : ℚ) * 10 ^ ze') := by
@@ -214,7 +212,6 @@ theorem Number.operator_add_rounds_same_sign_downward_proof (x y result : Number
           have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
           have h_nc_val := doRoundUp_value_downward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
             .overflow res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_nc_val
           have h_result_val : result.toRat = -(((zm.toNat : ℚ) + 1) * 10 ^ ze') := by
             rw [h_result_signed, h_nc_val]
           refine ⟨?_, ?_⟩
@@ -247,10 +244,9 @@ theorem Number.operator_add_rounds_same_sign_downward_proof (x y result : Number
         obtain ⟨h_dig0, h_xbit0⟩ :=
           content_empty_of_not_shouldRoundUp_downward g h_g_sbit_true h_sru
         have hf_zero : f = 0 :=
-          represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
+          represents_t_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
         have h_tr_val := doRoundUp_value_downward_truncate g false zm ze' h_sru h_zm_le_rep
           .overflow res_pos h_rup_pos hres_pos_mant_ne
-        try simp only at h_tr_val
         have h_result_val : result.toRat = -((zm.toNat : ℚ) * 10 ^ ze') := by
           rw [h_result_signed, h_tr_val]
         have h_truth_eq_result : x.toRat + y.toRat = result.toRat := by
@@ -284,13 +280,13 @@ theorem Number.operator_add_rounds_same_sign_downward_proof (x y result : Number
             rcases hdead with hb1 | hb2
             · obtain ⟨h_dig0, h_xbit0⟩ :=
                 roundUp_bool_downward_false_content g zm h_g_sbit_true hb1
-              exact represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
+              exact represents_t_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
             · have h_push_sbit : (g.push (maxRepUp % 10)).sbit_ = g.sbit_ := rfl
               obtain ⟨h_dig0', h_xbit0'⟩ :=
                 roundUp_bool_downward_false_content (g.push (maxRepUp % 10)) (maxRepUp / 10)
                   (h_push_sbit.trans h_g_sbit_true) hb2
               obtain ⟨h_dig0, h_xbit0⟩ := push_content_empty g (maxRepUp % 10) h_dig0' h_xbit0'
-              exact represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
+              exact represents_t_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
           have h_truth_eq_result : x.toRat + y.toRat = result.toRat := by
             rw [h_result_val, h_truth_signed, hf_zero, hzm_q_eq]; ring
           refine ⟨le_of_eq h_truth_eq_result.symm, ?_⟩
@@ -414,12 +410,11 @@ theorem Number.operator_add_rounds_same_sign_upward_proof (x y result : Number)
     · -- ===== in range: zm ≤ maxRep =====
       by_cases h_sru : g.shouldRoundUp_upward
       · -- round-up fires: f > 0 and the output magnitude exceeds the truth's.
-        have hf_pos : 0 < f := represents_pos_of_shouldRoundUp_upward g f hf_rep h_sru
+        have hf_pos : 0 < f := represents_t_pos_of_shouldRoundUp_upward hf_rep h_sru
         by_cases h_cusp : zm = maxRep
         · -- Cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
           have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
             .overflow res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_cusp_val
           have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
             rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
           have h_result_val : result.toRat = (maxRepCuspTarget : ℚ) * 10 ^ ze' := by
@@ -447,7 +442,6 @@ theorem Number.operator_add_rounds_same_sign_upward_proof (x y result : Number)
           have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
           have h_nc_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
             .overflow res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_nc_val
           have h_result_val : result.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := by
             rw [h_result_signed, h_nc_val]
           refine ⟨?_, ?_⟩
@@ -479,10 +473,9 @@ theorem Number.operator_add_rounds_same_sign_upward_proof (x y result : Number)
         obtain ⟨h_dig0, h_xbit0⟩ :=
           content_empty_of_not_shouldRoundUp_upward g h_g_sbit_false h_sru
         have hf_zero : f = 0 :=
-          represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
+          represents_t_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
         have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep
           .overflow res_pos h_rup_pos hres_pos_mant_ne
-        try simp only at h_tr_val
         have h_result_val : result.toRat = (zm.toNat : ℚ) * 10 ^ ze' := by
           rw [h_result_signed, h_tr_val]
         have h_truth_eq_result : x.toRat + y.toRat = result.toRat := by
@@ -517,13 +510,13 @@ theorem Number.operator_add_rounds_same_sign_upward_proof (x y result : Number)
             rcases hdead with hb1 | hb2
             · obtain ⟨h_dig0, h_xbit0⟩ :=
                 roundUp_bool_upward_false_content g zm h_g_sbit_false hb1
-              exact represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
+              exact represents_t_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
             · have h_push_sbit : (g.push (maxRepUp % 10)).sbit_ = g.sbit_ := rfl
               obtain ⟨h_dig0', h_xbit0'⟩ :=
                 roundUp_bool_upward_false_content (g.push (maxRepUp % 10)) (maxRepUp / 10)
                   (h_push_sbit.trans h_g_sbit_false) hb2
               obtain ⟨h_dig0, h_xbit0⟩ := push_content_empty g (maxRepUp % 10) h_dig0' h_xbit0'
-              exact represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
+              exact represents_t_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
           have h_truth_eq_result : x.toRat + y.toRat = result.toRat := by
             rw [h_result_val, h_xy_signed, hf_zero, hzm_q_eq]; ring
           refine ⟨le_of_eq h_truth_eq_result, ?_⟩
@@ -610,7 +603,6 @@ theorem Number.operator_add_rounds_same_sign_upward_proof (x y result : Number)
     · -- In-range: doRoundUp truncates, so -(zm·10^ze') sits at or above the truth.
       have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_no_sru h_zm_le_rep
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      try simp only at h_tr_val
       have h_result_val : result.toRat = -((zm.toNat : ℚ) * 10 ^ ze') := by
         rw [h_result_signed, h_tr_val]
       refine ⟨?_, ?_⟩

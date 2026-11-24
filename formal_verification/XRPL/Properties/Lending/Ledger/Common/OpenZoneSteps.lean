@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.BaseGrid
 import XRPL.Properties.Lending.Ledger.Common.LoansInv
 import XRPL.Properties.Lending.Ledger.Common.ReachableFromIn
@@ -232,7 +233,7 @@ private lemma Loan.manageDefault_total_le' (loan : Loan) (v : Vault) (r : LoanWi
   have hp0 : 0 ≤ loan.principalOutstanding.toRat := loan.exact.principalOutstanding_nonneg
   obtain ⟨hs, -⟩ := Vault.adjustBalances_ok_inv v _ raw hadj
   have hlaw : raw.to_lawful = .ok r.pool' := by
-    rw [← hraw]; unfold RawVault.to_lawful; exact dif_pos ⟨r.pool'.wf, r.pool'.valid⟩
+    rw [← hraw]; unfold RawVault.to_lawful; exact dite_eq_left ⟨r.pool'.wf, r.pool'.valid⟩
   obtain ⟨hdx, hle⟩ := Vault.deployed_take v _ raw hv hS hpg hp0 hp63 hs.deployed hlaw
   have hAA0 : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
   obtain ⟨aa, haa, hr⟩ := hs.cash
@@ -288,7 +289,7 @@ lemma Vault.exceedsOpenLimit_false_total (v : Vault) (x atot : Number) (hx : x.i
   obtain ⟨m, hm, hmv⟩ := Number.exists_normalized_int_mul_pow (9 * 10 ^ 15 + 1) v.baseExponent
     (by constructor <;> norm_num) (by unfold minExponent maxExponent; constructor <;> omega)
   obtain ⟨n₁, hlo₁, hs₁v⟩ := Number.operator_add_rounded_towards_zero _ _ _ hatn v.wf.yieldUnrealized_norm hs₁
-  rw [if_pos (by linarith)] at hlo₁
+  rw [ite_eq_left (by linarith)] at hlo₁
   have hs₁n := Number.operator_add_isNormalized_any _ _ _ _ hatn v.wf.yieldUnrealized_norm hs₁
   have hs₁ge : m.toRat ≤ s₁.toRat + x.toRat := by
     by_cases hle : m.toRat ≤ atot.toRat + v.yieldUnrealized.toRat
@@ -315,7 +316,7 @@ lemma Vault.exceedsOpenLimit_false_total (v : Vault) (x atot : Number) (hx : x.i
         nlinarith
       linarith
   obtain ⟨n, hlo, hcapv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hs₁n hx hcap
-  rw [if_pos (by linarith [show (0 : ℚ) ≤ m.toRat by rw [hmv]; positivity])] at hlo
+  rw [ite_eq_left (by linarith [show (0 : ℚ) ≤ m.toRat by rw [hmv]; positivity])] at hlo
   have hmn := Number.lower_tight _ n hlo m hm hs₁ge
   have hlt : limit.toRat < capacity.toRat := by
     rw [hcapv, hlimv]
@@ -479,7 +480,7 @@ lemma LendingTx.preflight_vaultDeposit' (l : LendingLedger) (h : Nat) (amount : 
   simp only [LendingTx.preflight] at hpre
   split at hpre
   · rename_i hc
-    simp only [Bool.and_eq_true, isCanonicalAmount, isPositiveAmount, hnt, if_true, beq_iff_eq,
+    simp only [Bool.and_eq_true, isCanonicalAmount, isPositiveAmount, hnt, ite_true, beq_iff_eq,
       decide_eq_true_eq] at hc
     obtain ⟨⟨hty, hoff, hm⟩, -⟩ := hc
     have hint : amount.integral = true := by unfold STAmount.integral; rw [hty]; exact hnt

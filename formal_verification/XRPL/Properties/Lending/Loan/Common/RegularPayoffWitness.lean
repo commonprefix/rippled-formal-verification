@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 A loan of 1.5 paid off on the coarsened vault of `CoarsenedVault.lean` credits the vault 1. A LoanServiceFee of
 `10^30` makes the 19-digit sums drop the loan's value and fee, so the payoff charges and pays the broker less. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

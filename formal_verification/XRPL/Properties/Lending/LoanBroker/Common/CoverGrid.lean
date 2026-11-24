@@ -149,7 +149,7 @@ private lemma cover_credit_le (c n t L c' : Number) (s : Int) (hc : Number.OnGri
     exact_mod_cast this
   obtain ⟨m, hm, hmv⟩ := Number.exists_normalized_int_mul_pow (9 * 10 ^ 15 + 1) s (by constructor <;> norm_num) hs
   obtain ⟨l, hlo, htv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hc.1 hn.1 htz
-  rw [if_pos (by linarith)] at hlo
+  rw [ite_eq_left (by linarith)] at hlo
   have hmt : m.toRat ≤ c.toRat + n.toRat := by
     rw [hmv, hkc, hkn]
     have : ((9 * 10 ^ 15 + 1 : ℤ) : ℚ) ≤ ((kc + kn : ℤ) : ℚ) := by exact_mod_cast hk

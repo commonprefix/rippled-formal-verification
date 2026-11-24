@@ -43,7 +43,7 @@ theorem Number.operator_mul_rounded_upward_proof (x y result : Number)
     have hx_zero : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxz
     rw [Number.operator_mul_eq_spec] at hok
     unfold Number.operator_mulSpec at hok
-    rw [if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
+    rw [ite_eq_left (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
       (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     apply hresult
@@ -58,8 +58,8 @@ theorem Number.operator_mul_rounded_upward_proof (x y result : Number)
     have hy_zero : y = Number.zero := Number.eq_zero_of_mantissa_zero y hy hyz
     rw [Number.operator_mul_eq_spec] at hok
     unfold Number.operator_mulSpec at hok
-    rw [if_neg hx_guard,
-        if_pos (show y.operator_eq Number.zero = true from by rw [hy_zero]; decide)] at hok
+    rw [ite_eq_right hx_guard,
+        ite_eq_left (show y.operator_eq Number.zero = true from by rw [hy_zero]; decide)] at hok
     have h_result : result = y :=
       (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     apply hresult

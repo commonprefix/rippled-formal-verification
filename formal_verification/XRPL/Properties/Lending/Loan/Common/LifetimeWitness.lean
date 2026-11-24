@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.NegativeInterestWitness
 import XRPL.Properties.Lending.Loan.Common.LifetimeLedger
 import XRPL.Properties.Lending.Loan.Common.RegularPayoffLedger
@@ -5,12 +6,9 @@ import XRPL.Properties.Lending.Loan.Common.RegularPayoffWitness
 
 /-! # Ledger runs where interestDue rises and regular payoffs pay less
 
-The loan of `NegativeInterestWitness.lean`, at a tiny rate, after its first two instalments: a late payment or an
-overpayment with its own interest raises interestDue, and in the redemption phase the late payment raises
-YieldUnrealized. The payoffs of `RegularPayoffWitness.lean` replayed as ledger transactions: on a coarsened vault the
-vault gets less, and a LoanServiceFee of `10^30` drops the loan's value from the 19-digit sums. -/
+A late payment or an overpayment raises interestDue (FV_M4_30), and regular payoffs pay the vault or broker less. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

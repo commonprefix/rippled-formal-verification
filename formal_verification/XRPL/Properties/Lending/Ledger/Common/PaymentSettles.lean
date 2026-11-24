@@ -1,11 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.PayReplay
 import XRPL.Properties.Lending.Ledger.Common.IsolationDefs
 
 /-! # A payment whose instalments pass settles
 
-On a reachable ledger whose vault is not coarsened, the settlement of a payment succeeds once its instalments
-passed, no part of it is negative, it credits the vault or pays the loan off, and the cover, the credit and the fee
-fit the asset. -/
+On a reachable ledger whose vault is not coarsened a payment settles once its instalments passed, no part is negative,
+it credits the vault or pays the loan off, and the cover, the credit and the fee fit the asset. -/
 
 namespace XRPL.Model.Lending
 

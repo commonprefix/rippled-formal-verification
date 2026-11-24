@@ -12,7 +12,7 @@ lemma divQuotient128_upward_witness :
 
 local syntax "dsd_step" : tactic
 local macro_rules | `(tactic| dsd_step) => `(tactic|
-  (conv_lhs => rw [doNormalize_scaleDown128Spec]; rw [dif_pos (by decide), if_neg (by decide)]; rfl))
+  (conv_lhs => rw [doNormalize_scaleDown128Spec]; rw [dite_eq_left (by decide), ite_eq_right (by decide)]; rfl))
 
 /-- `doNormalize_scaleDown128Spec` trace: three drops of `0` (the sticky bit alone
 carries the residual). -/
@@ -22,7 +22,7 @@ lemma doNormalize_scaleDown128_upward_witness :
       = .ok (9223372036854775820, -19,
              { digits_ := 0, xbit_ := true, sbit_ := false }) := by
   dsd_step; dsd_step; dsd_step
-  conv_lhs => rw [doNormalize_scaleDown128Spec]; rw [dif_neg (by decide)]
+  conv_lhs => rw [doNormalize_scaleDown128Spec]; rw [dite_eq_right (by decide)]
   rfl
 
 /-- `doNormalize128` trace on the staged quotient. -/
@@ -33,11 +33,11 @@ lemma doNormalize128_upward_witness :
   rw [doNormalize128_eq_spec]
   unfold doNormalize128Spec
   rw [show ((9223372036854775820000 : UInt128) == 0) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [show doNormalize128_scaleUpSpec largeRange.min (9223372036854775820000 : UInt128) (-22)
         = ((9223372036854775820000 : UInt128), (-22 : Int)) from by
-      rw [doNormalize128_scaleUpSpec.eq_def]; rw [if_neg (by decide)]]
-  simp only [if_true]
+      rw [doNormalize128_scaleUpSpec.eq_def]; rw [ite_eq_right (by decide)]]
+  simp only [ite_true]
   rw [show (Guard.new.set_sticky : Guard)
         = { digits_ := 0, xbit_ := true, sbit_ := false } from rfl]
   rw [doNormalize_scaleDown128_upward_witness]
@@ -45,13 +45,13 @@ lemma doNormalize128_upward_witness :
   rw [show (decide ((-19 : Int) < minExponent)
         || decide ((9223372036854775820 : UInt128) < toUInt128 largeRange.min)) = false from by
       decide]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [show doNormalize_capAtMaxRep (toUInt64 (9223372036854775820 : UInt128)) (-19)
         { digits_ := 0, xbit_ := true, sbit_ := false }
         = .ok ((922337203685477582 : UInt64), (-18 : Int),
                { digits_ := 0, xbit_ := true, sbit_ := false }) from by
       unfold doNormalize_capAtMaxRep
-      rw [if_pos (by decide)]
+      rw [ite_eq_left (by decide)]
       rfl]
   simp only []
   rw [show ({ digits_ := 0, xbit_ := true, sbit_ := false } : Guard).doRoundUp
@@ -69,7 +69,7 @@ lemma Number.operator_div_upward_witness :
     Number.operator_div ⟨false, 1000735865998747695, 0⟩ ⟨false, 1085000000000004899, 0⟩
         .upward = .ok ⟨false, 9223372036854775830, -19⟩ := by
   unfold Number.operator_div
-  rw [if_neg (by decide), if_neg (by decide)]
+  rw [ite_eq_right (by decide), ite_eq_right (by decide)]
   change (divQuotient128 (1000735865998747695 : UInt64) (1085000000000004899 : UInt64) 0 0 >>= fun x =>
         match x with
         | (zm128, ze, dropped) =>

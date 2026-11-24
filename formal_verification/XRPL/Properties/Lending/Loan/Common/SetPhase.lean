@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.SetDefs
 import XRPL.Properties.Lending.Common.PoolBalances
 
@@ -27,7 +28,7 @@ private lemma canFundLoan_fitsVault (v : Vault) (schedule : LoanSchedule) (t : U
     rw [hp, hs] at h
     simp only [Option.map_some, Option.getD_some, bind, Except.bind, pure, Except.pure] at h
     by_contra hlate
-    rw [if_pos (by simp; omega)] at h
+    rw [ite_eq_left (by simp; omega)] at h
     cases h
 
 /-- A passing LoanSet check passed the vault check. -/

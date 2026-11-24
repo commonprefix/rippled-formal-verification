@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayDefs
 import XRPL.Properties.Vault.Proofs.Support.DepositExchange
 
@@ -35,8 +36,8 @@ private lemma Vault.assetsAvailable_le_assetsTotal (v : Vault) (assetsTotal : Nu
     have h' := h
     replace h' := Number.operator_add_ok_spec h'
     unfold Number.operator_addSpec at h'
-    rw [Number.operator_eq_zero_false_of_mantissa_ne _ hd, if_neg Bool.false_ne_true,
-      Number.eq_zero_of_mantissa_zero _ hAA ha, if_pos (by decide)] at h'
+    rw [Number.operator_eq_zero_false_of_mantissa_ne _ hd, ite_eq_right Bool.false_ne_true,
+      Number.eq_zero_of_mantissa_zero _ hAA ha, ite_eq_left (by decide)] at h'
     obtain rfl := Except.ok.inj h'
     exact hAD0
   -- both nonzero and nonnegative: a same-sign sum, which never rounds below the cash
@@ -326,7 +327,7 @@ lemma Loan.payment_precision_loss_proof
     (loan.pay v paymentType amount now).run = .ok (.error .tecPRECISION_LOSS) := by
   rw [Loan.pay_settle loan v paymentType amount now payment hpay,
     hsums.settled raw v' broker' loan' assetsTotal' hadj hv' hbroker hloan hat,
-    (Number.operator_ne_false_iff_eq' _ _).mpr hsame, if_pos (by simpa using hlast)]
+    (Number.operator_ne_false_iff_eq' _ _).mpr hsame, ite_eq_left (by simpa using hlast)]
 
 /-- Proof body of the success line of `Loan.settlePayment_exits`. -/
 lemma Loan.payment_success_proof
@@ -342,7 +343,7 @@ lemma Loan.payment_success_proof
     (loan.pay v paymentType amount now).run =
       .ok (.ok { loan' := loan', pool' := v', amountToPool := toPool, amountToBroker := toBroker }) := by
   rw [Loan.pay_settle loan v paymentType amount now payment hpay,
-    hsums.settled raw v' broker' loan' assetsTotal' hadj hv' hbroker hloan hat, if_neg]
+    hsums.settled raw v' broker' loan' assetsTotal' hadj hv' hbroker hloan hat, ite_eq_right]
   rcases hcredit with h | h
   · have hne : v'.assetsAvailable.operator_ne payment.pool.assetsAvailable = true := by
       cases hc : v'.assetsAvailable.operator_ne payment.pool.assetsAvailable

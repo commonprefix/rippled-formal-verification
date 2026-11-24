@@ -1,12 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.VaultGrid
 import XRPL.Properties.Vault.Proofs.DepositLimit
 import XRPL.Properties.Lending.Ledger.Common.BrokerProofs
 
 /-! # Only a payment raises the vault scale
 
-On an IOU vault the scale is above the base scale exactly when AssetsAvailable + AssetsDeployed reaches `10^16` base
-units, and an XRP or MPT vault never leaves its base scale. On the base grid of an IOU vault every update below
-`10^16` base units is exact, and only a payment can cross it. -/
+An IOU vault leaves its base scale exactly when AssetsAvailable + AssetsDeployed reaches `10^16` base units, and only
+a payment can cross that line. An XRP or MPT vault never leaves its base scale. -/
 
 namespace XRPL.Model.Lending
 
@@ -358,7 +358,7 @@ private lemma Loan.manageDefault_total_le (loan : Loan) (v : Vault) (r : LoanWit
   have hp0 : 0 ≤ loan.principalOutstanding.toRat := loan.exact.principalOutstanding_nonneg
   obtain ⟨hs, -⟩ := Vault.adjustBalances_ok_inv v _ raw hadj
   have hlaw : raw.to_lawful = .ok r.pool' := by
-    rw [← hraw]; unfold RawVault.to_lawful; exact dif_pos ⟨r.pool'.wf, r.pool'.valid⟩
+    rw [← hraw]; unfold RawVault.to_lawful; exact dite_eq_left ⟨r.pool'.wf, r.pool'.valid⟩
   obtain ⟨hdx, hle⟩ := Vault.deployed_take v _ raw hv hS hpg hp0 hp63 hs.deployed hlaw
   have hAA0 : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
   obtain ⟨aa, haa, hr⟩ := hs.cash

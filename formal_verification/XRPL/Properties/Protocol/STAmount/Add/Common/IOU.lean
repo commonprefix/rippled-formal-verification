@@ -16,10 +16,10 @@ lemma IOUAmount.toRat_eq (a : IOUAmount) :
   have hsm : (if a.mantissa_ < 0 then (-1 : ℤ) else 1) * (a.mantissa_.toInt.natAbs : ℤ)
       = a.mantissa_.toInt := by
     by_cases h : a.mantissa_ < 0
-    · rw [if_pos h]
+    · rw [ite_eq_left h]
       have hlt : a.mantissa_.toInt < 0 := by simpa using Int64.lt_iff_toInt_lt.mp h
       rw [Int.ofNat_natAbs_of_nonpos (le_of_lt hlt)]; ring
-    · rw [if_neg h]
+    · rw [ite_eq_right h]
       have hge : 0 ≤ a.mantissa_.toInt := by
         rcases lt_or_ge a.mantissa_.toInt 0 with hh | hh
         · exact absurd (Int64.lt_iff_toInt_lt.mpr (by simpa using hh)) h
@@ -27,10 +27,10 @@ lemma IOUAmount.toRat_eq (a : IOUAmount) :
       rw [Int.natAbs_of_nonneg hge]; ring
   unfold IOUAmount.toRat
   by_cases hexp : a.exponent_ ≥ 0
-  · rw [if_pos hexp, hsm, Rat.mkRat_one]
+  · rw [ite_eq_left hexp, hsm, Rat.mkRat_one]
     have h_to : a.exponent_ = (a.exponent_.toNat : ℤ) := (Int.toNat_of_nonneg hexp).symm
     rw [h_to, zpow_natCast]; push_cast; rw [Int.toNat_natCast]
-  · rw [if_neg hexp, hsm, Rat.mkRat_eq_div]
+  · rw [ite_eq_right hexp, hsm, Rat.mkRat_eq_div]
     push_cast
     have h_neg : a.exponent_ = -((-a.exponent_).toNat : ℤ) := by
       rw [Int.toNat_of_nonneg (by omega : (0 : ℤ) ≤ -a.exponent_)]; ring
@@ -60,12 +60,12 @@ lemma IOUAmount.ofNumber_within_ulp (sum : Number) (mode : rounding_mode) (resul
     rw [hnorm] at hok
     simp only at hok
     by_cases hhi : e > cMaxOffset
-    · rw [if_pos hhi] at hok; simp at hok
-    rw [if_neg hhi] at hok
+    · rw [ite_eq_left hhi] at hok; simp at hok
+    rw [ite_eq_right hhi] at hok
     by_cases hlo : e < cMinOffset
-    · rw [if_pos hlo] at hok
+    · rw [ite_eq_left hlo] at hok
       rw [← Except.ok.inj hok] at hne; exact absurd rfl hne
-    rw [if_neg hlo] at hok
+    rw [ite_eq_right hlo] at hok
     have hres : result = ⟨m, e⟩ := (Except.ok.inj hok).symm
     have hbound := normalizeToRange_16_within_ulp sum mode m e h_lo h_hi he_lo he_hi hnorm
     rw [IOUAmount.toRat_eq result, hres]
@@ -86,12 +86,12 @@ lemma IOUAmount.ofNumber_within_half_ulp (sum : Number) (result : IOUAmount)
     rw [hnorm] at hok
     simp only at hok
     by_cases hhi : e > cMaxOffset
-    · rw [if_pos hhi] at hok; simp at hok
-    rw [if_neg hhi] at hok
+    · rw [ite_eq_left hhi] at hok; simp at hok
+    rw [ite_eq_right hhi] at hok
     by_cases hlo : e < cMinOffset
-    · rw [if_pos hlo] at hok
+    · rw [ite_eq_left hlo] at hok
       rw [← Except.ok.inj hok] at hne; exact absurd rfl hne
-    rw [if_neg hlo] at hok
+    rw [ite_eq_right hlo] at hok
     have hres : result = ⟨m, e⟩ := (Except.ok.inj hok).symm
     have hbound := normalizeToRange_16_within_half_ulp sum m e h_lo h_hi he_lo he_hi hnorm
     rw [IOUAmount.toRat_eq result, hres]
@@ -112,12 +112,12 @@ lemma IOUAmount.ofNumber_exp_ge (sum : Number) (mode : rounding_mode) (result : 
     rw [hnorm] at hok
     simp only at hok
     by_cases hhi : e > cMaxOffset
-    · rw [if_pos hhi] at hok; simp at hok
-    rw [if_neg hhi] at hok
+    · rw [ite_eq_left hhi] at hok; simp at hok
+    rw [ite_eq_right hhi] at hok
     by_cases hlo : e < cMinOffset
-    · rw [if_pos hlo] at hok
+    · rw [ite_eq_left hlo] at hok
       rw [← Except.ok.inj hok] at hne; exact absurd rfl hne
-    rw [if_neg hlo] at hok
+    rw [ite_eq_right hlo] at hok
     have hres : result = ⟨m, e⟩ := (Except.ok.inj hok).symm
     have herange := normalizeToRange_16_exp_range sum mode m e h_lo h_hi he_lo he_hi hnorm
     rw [hres]; exact herange.1
@@ -132,15 +132,15 @@ lemma IOUAmount.ofNumber_mantissa_ne_zero (sum : Number) (mode : rounding_mode) 
   have hbeq : (sum.mantissa_ == 0) = true := by simp [hsm]
   have hdn : doNormalize sum.negative_ sum.mantissa_ sum.exponent_ cMinValue cMaxValue mode
       = .ok Number.zero := by
-    unfold doNormalize; rw [if_pos hbeq]
+    unfold doNormalize; rw [ite_eq_left hbeq]
   have hnz : sum.normalizeToRange cMinValue cMaxValue mode
       = .ok ((0 : Int64), (-2147483648 : Int)) := by
     unfold Number.normalizeToRange; rw [hdn]; rfl
   unfold IOUAmount.ofNumber IOUAmount.fromNumber at hofn
   rw [hnz] at hofn
   simp only at hofn
-  rw [if_neg (by decide : ¬ ((-2147483648 : Int) > cMaxOffset)),
-      if_pos (by decide : (-2147483648 : Int) < cMinOffset)] at hofn
+  rw [ite_eq_right (by decide : ¬ ((-2147483648 : Int) > cMaxOffset)),
+      ite_eq_left (by decide : (-2147483648 : Int) < cMinOffset)] at hofn
   rw [← Except.ok.inj hofn]; rfl
 
 /-- A nonzero `IOUAmount.ofNumber` result is a canonical 16-digit IOU amount: mantissa magnitude in
@@ -158,12 +158,12 @@ lemma IOUAmount.ofNumber_InRange16 (sum : Number) (mode : rounding_mode) (result
     rw [hnorm] at hofn
     simp only at hofn
     by_cases hhi : e > cMaxOffset
-    · rw [if_pos hhi] at hofn; simp at hofn
-    rw [if_neg hhi] at hofn
+    · rw [ite_eq_left hhi] at hofn; simp at hofn
+    rw [ite_eq_right hhi] at hofn
     by_cases hlo : e < cMinOffset
-    · rw [if_pos hlo] at hofn
+    · rw [ite_eq_left hlo] at hofn
       rw [← Except.ok.inj hofn] at hresult; exact absurd rfl hresult
-    rw [if_neg hlo] at hofn
+    rw [ite_eq_right hlo] at hofn
     have hres : result = ⟨m, e⟩ := (Except.ok.inj hofn).symm
     have hmant := normalizeToRange_16_mantissa_range sum mode m e h_lo h_hi he_lo he_hi hnorm
     rw [hres]
@@ -253,7 +253,7 @@ lemma IOUAmount.operator_add_truth_ne_of_result (x y result : IOUAmount) (mode :
   obtain ⟨yn, hyn_eq, hyn_val, hyn_norm, hyn_ne⟩ := IOUAmount.toNumber_canonical y mode hy.mant_lo hy.mant_hi
     (by have := hy.exp_lo; unfold minExponent; omega) (by have := hy.exp_hi; unfold maxExponent; omega)
   unfold IOUAmount.operator_add at hok
-  rw [if_neg (by simpa using hym), if_neg (by simpa using hxm), hxn_eq, hyn_eq] at hok
+  rw [ite_eq_right (by simpa using hym), ite_eq_right (by simpa using hxm), hxn_eq, hyn_eq] at hok
   simp only at hok
   cases hs : Number.operator_add xn yn mode with
   | error e => rw [hs] at hok; simp at hok
@@ -267,7 +267,7 @@ lemma IOUAmount.operator_add_truth_ne_of_result (x y result : IOUAmount) (mode :
       have hx0 : ¬ xn.operator_eq Number.zero = true :=
         fun h => hxn_ne (Number.mantissa_eq_zero_of_operator_eq_zero h)
       unfold Number.operator_add at hs
-      rw [if_neg hy0, if_neg hx0, if_pos hcancel] at hs
+      rw [ite_eq_right hy0, ite_eq_right hx0, ite_eq_left hcancel] at hs
       have hsum : sum = Number.zero := (Except.ok.inj hs).symm
       have hzero : IOUAmount.ofNumber Number.zero mode = .ok IOUAmount.zero := by cases mode <;> rfl
       rw [hsum, hzero] at hok
@@ -451,7 +451,7 @@ lemma IOUAmount.operator_add_to_nearest_decompose (x y result : IOUAmount)
   obtain ⟨yn, hyn_eq, hyn_val, hyn_norm, hyn_ne⟩ :=
     IOUAmount.toNumber_canonical y .to_nearest hy_lo hy_hi hye_lo (by omega)
   unfold IOUAmount.operator_add at hok
-  rw [if_neg (by simpa using hym), if_neg (by simpa using hxm), hxn_eq, hyn_eq] at hok
+  rw [ite_eq_right (by simpa using hym), ite_eq_right (by simpa using hxm), hxn_eq, hyn_eq] at hok
   simp only at hok
   cases hadd : Number.operator_add xn yn .to_nearest with
   | error e => rw [hadd] at hok; simp at hok
@@ -538,9 +538,10 @@ lemma STAmount.ofIOU_mantissa_ne_zero (a : IOUAmount) (mode : rounding_mode) (re
   apply hres
   have hmag : (0 : Int64).magnitude = 0 := by decide
   have hcompute : STAmount.ofIOUAmount a mode = .ok ⟨.fractional, 0, -100, false⟩ := by
-    unfold STAmount.ofIOUAmount STAmount.canonicalize STAmount.iou
+    rw [STAmount.ofIOUAmount_of_ne mode (by rw [hm]; decide)]
+    unfold STAmount.canonicalize STAmount.iou STAmount.signedDropsChecked UInt64.toInt64Checked
     simp [hm, STAmount.unchecked, STAmount.integral, NumericType.isIntegral,
-      IOUAmount.ofMantissaExp, IOUAmount.normalize, hmag, IOUAmount.signum, IOUAmount.zero]
+      IOUAmount.ofMantissaExp, IOUAmount.normalize, hmag, IOUAmount.signum, IOUAmount.zero, ok_bind]
   rw [hpack] at hcompute
   rw [Except.ok.inj hcompute]
 
@@ -564,7 +565,7 @@ lemma STAmount.ofIOU_canonical_toRat (a : IOUAmount) (mode : rounding_mode)
   have hsign : (if decide (a.mantissa_ < 0) then (-1 : ℚ) else 1)
       * (a.mantissa_.toInt.natAbs : ℚ) = (a.mantissa_.toInt : ℚ) := by
     by_cases hlt : a.mantissa_ < 0
-    · rw [if_pos (by simpa using hlt)]
+    · rw [ite_eq_left (by simpa using hlt)]
       have hlt' : a.mantissa_.toInt < 0 := by
         have h := Int64.lt_iff_toInt_lt.mp hlt
         rwa [show (0 : Int64).toInt = 0 from by decide] at h
@@ -573,7 +574,7 @@ lemma STAmount.ofIOU_canonical_toRat (a : IOUAmount) (mode : rounding_mode)
           rw [Nat.cast_natAbs]; push_cast; rfl
         rw [hc, abs_of_neg (by exact_mod_cast hlt')]
       rw [this]; ring
-    · rw [if_neg (by simpa using hlt)]
+    · rw [ite_eq_right (by simpa using hlt)]
       have hge : 0 ≤ a.mantissa_.toInt := by
         rcases lt_or_ge a.mantissa_.toInt 0 with hh | hh
         · exact absurd (Int64.lt_iff_toInt_lt.mpr
@@ -603,14 +604,14 @@ lemma STAmount.operator_add_iou_truth_ne_of_result (v1 v2 result : STAmount) (mo
     rcases hb : STAmount.areComparable v1 v2 with _ | _
     · rw [STAmount.operator_add, hb] at hok; simp at hok
     · rfl
-  rw [STAmount.operator_add, if_neg (by rw [hcmp]; decide)] at hok
+  rw [STAmount.operator_add, ite_eq_right (by rw [hcmp]; decide)] at hok
   have hv2ne : v2.mValue ≠ 0 := by
     intro h; have := hc2.mant_lo; rw [h] at this; simp at this
   have hv1ne : v1.mValue ≠ 0 := by
     intro h; have := hc1.mant_lo; rw [h] at this; simp at this
   have hint1 : ¬ v1.integral = true := by
     unfold STAmount.integral; rw [hc1.is_fractional]; decide
-  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), if_neg hint1,
+  rw [ite_eq_right (by simpa using hv2ne), ite_eq_right (by simpa using hv1ne), ite_eq_right hint1,
     STAmount.iou_canonical_id v1 mode hc1, STAmount.iou_canonical_id v2 mode hc2] at hok
   simp only at hok
   set i1 : IOUAmount := ⟨v1.signedDrops.toInt64, v1.mOffset⟩ with hi1
@@ -648,7 +649,7 @@ theorem STAmount.operator_add_iou_rel_error (v1 v2 result : STAmount)
     rcases hb : STAmount.areComparable v1 v2 with _ | _
     · rw [STAmount.operator_add, hb] at hok; simp at hok
     · rfl
-  rw [STAmount.operator_add, if_neg (by rw [hcmp]; decide)] at hok
+  rw [STAmount.operator_add, ite_eq_right (by rw [hcmp]; decide)] at hok
   -- both operands nonzero (`mant_lo : 10^15 ≤ mValue.toNat`)
   have hv2ne : v2.mValue ≠ 0 := by
     intro h; have := hc2.mant_lo; rw [h] at this; simp at this
@@ -656,7 +657,7 @@ theorem STAmount.operator_add_iou_rel_error (v1 v2 result : STAmount)
     intro h; have := hc1.mant_lo; rw [h] at this; simp at this
   have hint1 : ¬ v1.integral = true := by
     unfold STAmount.integral; rw [hc1.is_fractional]; decide
-  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), if_neg hint1] at hok
+  rw [ite_eq_right (by simpa using hv2ne), ite_eq_right (by simpa using hv1ne), ite_eq_right hint1] at hok
   rw [STAmount.iou_canonical_id v1 .to_nearest hc1,
       STAmount.iou_canonical_id v2 .to_nearest hc2] at hok
   simp only at hok

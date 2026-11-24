@@ -74,8 +74,8 @@ lemma LendingLedger.ReservedInv.commitLoan {l : LendingLedger} (hinv : l.Reserve
   · rw [hv, hs.numericType]
     rw [LendingLedger.loan?_commitLoan] at he
     by_cases hj : j = (if u.loanIndex < l.loans.length then u.loanIndex else l.loans.length)
-    · rw [if_pos hj] at he; exact hexact e he hp
-    · rw [if_neg hj] at he; exact hinv.exact j e he hp
+    · rw [ite_eq_left hj] at he; exact hexact e he hp
+    · rw [ite_eq_right hj] at he; exact hinv.exact j e he hp
   · rw [hv]
     have := hinv.sum
     linarith
@@ -193,12 +193,12 @@ lemma LendingLedger.ReservedInv.loan_step {l : LendingLedger} (hinv : l.Reserved
         have hp' := STAmount.roundToNumericType_of_isRounded_false _ _ _ loan.wf.principalOutstanding_norm hrep hround
         have hle : principal'.toRat ≤ l.vault.assetsReserved.toRat := by
           have := (l.commitLoan u).principalSum_nonneg (·.isPending)
-          simp only [LoanEntry.principalIf, hep, if_true, add_zero] at hc
+          simp only [LoanEntry.principalIf, hep, ite_true, add_zero] at hc
           rw [hp', hePO, hinv.sum]; linarith
         have hval := Number.operator_add_neg_toRat_of_grid _ _ _ _ l.vault.wf.assetsReserved_norm
           (STAmount.roundToNumericType_isNormalized _ _ _ _ _ hround) hinv.grid
           (by rw [hp', hePO]; exact hinv.scale.principal_grid he) hle hlt hsb hAR
-        simp only [LoanEntry.principalIf, hep, if_true, add_zero]
+        simp only [LoanEntry.principalIf, hep, ite_true, add_zero]
         rw [hval, hp', hePO]; ring
     · rw [hv]
       have := (Loan.delete_debt loan l.vault r hr).2

@@ -4,9 +4,8 @@ import XRPL.Properties.Vault.Proofs.WithdrawRangeWitness
 
 /-! # `Vault.withdraw` exits
 
-One line per exit of `Vault.withdraw_exits`, in the order the withdrawal runs its checks. A rejection
-carries only its code: the vault is not touched. The later exits assume the earlier checks passed, read off
-the code (`Vault.WithdrawPriced` for the entry checks, `Vault.WithdrawNonFinal` before the fee). -/
+One line per exit of `Vault.withdraw_exits`, in check order. A rejection carries only its code, and the later exits
+assume the earlier checks passed (`Vault.WithdrawPriced`, then `Vault.WithdrawNonFinal` before the fee). -/
 
 namespace XRPL.Model.SingleAssetVault
 

@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FactorComputes
 import XRPL.Properties.Lending.Loan.Common.NextPayment
 import XRPL.Properties.Lending.Loan.Common.PayoffComponents
@@ -9,9 +10,8 @@ import XRPL.Properties.Vault.Proofs.Support.NoOverflow
 
 /-! # The values of a new loan compute
 
-A LoanSet computes the periodic rate, the PeriodicPayment, the total value and the fee of its loan before any
-check on them. Each step returns a value: the `Number` steps stay far inside the `Number` range, and the amounts
-of the asset stay inside the asset's range while PeriodicPayment × PaymentTotal does. -/
+The periodic rate, PeriodicPayment, total value and fee of a new loan compute. The `Number` steps stay far inside the
+`Number` range, and the amounts stay within the asset's range while PeriodicPayment × PaymentTotal does. -/
 
 namespace XRPL.Model.Lending
 
@@ -28,7 +28,7 @@ local notation "ε" => Number.nearestError
 between `10^-82` and `10^15`. -/
 private lemma computePaymentFactor_range (rate : Number) (k : UInt32) (hrate : rate.isNormalized)
     (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hk0 : k ≠ 0) (hkr : (k.toNat : ℚ) * rate.toRat ≤ 137) :
-    ∃ f, computePaymentFactor rate (Number.ofInt64 k.toInt64) k = .ok f ∧ f.isNormalized ∧
+    ∃ f, computePaymentFactor rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok f ∧ f.isNormalized ∧
       1 / 10 ^ 82 ≤ f.toRat ∧ f.toRat ≤ 10 ^ 15 := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
@@ -44,7 +44,7 @@ private lemma computePaymentFactor_range (rate : Number) (k : UInt32) (hrate : r
   have hpm0 : 0 < pm.toRat := lt_of_lt_of_le (by positivity) hpmlo
 
   -- `1 + pm`
-  obtain ⟨rr, hrr⟩ := Number.operator_add_ok_of_abs (Number.ofInt64 1) pm .to_nearest hone hpmN
+  obtain ⟨rr, hrr⟩ := Number.operator_add_ok_of_abs (Number.ofInt64 1 .to_nearest) pm .to_nearest hone hpmN
     (by rw [Number.ofInt64_one_toRat]; norm_num)
     (by rw [abs_of_nonneg hpm0.le]; linarith [show (10 : ℚ) ^ 70 < 10 ^ 200 by norm_num])
   have hrrN := Number.operator_add_isNormalized_to_nearest_sz _ _ rr hone hpmN hrr
@@ -119,9 +119,9 @@ private lemma computePaymentFactor_range (rate : Number) (k : UInt32) (hrate : r
 
   refine ⟨f, ?_, hfN, hflo, hfhi⟩
   unfold computePaymentFactor
-  rw [hk', if_neg (by decide)]
+  rw [hk', ite_eq_right (by decide)]
   dsimp only
-  rw [pure_bind, hz, if_neg (by decide), hpm, ok_bind, hrr, ok_bind, hnum, ok_bind, hf]
+  rw [pure_bind, hz, ite_eq_right (by decide), hpm, ok_bind, hrr, ok_bind, hnum, ok_bind, hf]
 
 /-- `k` payment intervals fit the 32-bit clock, so `k` times the periodic rate is at most `137`. -/
 private lemma count_mul_rate_le (rate : Number) (ir : TenthBips32) (interval k : UInt32)
@@ -169,11 +169,11 @@ lemma loanPeriodicPayment_range (principal rate : Number) (ir : TenthBips32) (in
     rw [abs_of_nonneg hpos.le]; linarith [show (10 : ℚ) ^ 100 < 10 ^ 200 by norm_num]
   unfold loanPeriodicPayment
   rw [hpz, hn']
-  simp only [Bool.or_self, Bool.false_eq_true, if_false]
+  simp only [Bool.or_self, Bool.false_eq_true, ite_false]
   by_cases hz : rate.operator_eq Number.zero = true
 
   · -- no interest: the principal over the count
-    rw [if_pos hz]
+    rw [ite_eq_left hz]
     obtain ⟨pp, hpp⟩ := Number.operator_div_ok_of_abs principal _ .to_nearest hp hN hpabs
       (by
         rw [hNv, abs_of_nonneg (by positivity)]
@@ -188,7 +188,7 @@ lemma loanPeriodicPayment_range (principal rate : Number) (ir : TenthBips32) (in
       _ ≤ principal.toRat * 10 ^ 16 := by rw [div_one]; nlinarith
 
   · -- interest: the principal times the payment factor
-    rw [if_neg hz]
+    rw [ite_eq_right hz]
     have hr00 : rate.toRat ≠ 0 := fun h0 =>
       hz ((Number.operator_eq_iff rate Number.zero hrN Number.zero_isNormalized).mpr (by
         rw [h0, Number.toRat_zero]))
@@ -555,7 +555,8 @@ lemma computeLoanProperties_computes (principal : Number) (ir : TenthBips32) (in
   have hpp36 : pp.toRat < 10 ^ 36 := by nlinarith
 
   -- the raw total value
-  obtain ⟨amount, hamount⟩ := Number.operator_mul_ok_of_abs pp (Number.ofInt64 n.toInt64) (valueMode rate) hppN hN
+  obtain ⟨amount, hamount⟩ :=
+    Number.operator_mul_ok_of_abs pp (Number.ofInt64 n.toInt64 .to_nearest) (valueMode rate) hppN hN
     (by rw [abs_of_nonneg hpp0]; linarith [show (10 : ℚ) ^ 36 < 10 ^ 200 by norm_num])
     (by rw [hNv, abs_of_nonneg (by positivity)]; linarith [show (2 : ℚ) ^ 32 < 10 ^ 200 by norm_num])
   have hamountN := Number.operator_mul_isNormalized _ _ amount _ hppN hN hamount
@@ -653,6 +654,7 @@ lemma computeLoanProperties_computes (principal : Number) (ir : TenthBips32) (in
     unfold computeLoanPropertiesFromPeriodicRate
     rw [hpp, ok_bind]
     dsimp only
+    rw [Number.ofInt64_mode _ (UInt32.toInt64_ne_minValue n)]
     rw [hamount, ok_bind, hst', ok_bind, htvo, ok_bind, hrp, ok_bind, hti, ok_bind, hmfo, ok_bind, htpo, ok_bind]
     rw [hsub, ok_bind]
     rw [htpo', ok_bind, hfirst, ok_bind]

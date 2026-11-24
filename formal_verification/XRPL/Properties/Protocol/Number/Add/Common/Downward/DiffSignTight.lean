@@ -62,12 +62,12 @@ theorem Number.operator_add_rounding_bound_diff_sign_downward_dir (x y result : 
       result hok128 hresult
   have h := hdir rfl
   cases hzn : zn
-  · rw [hzn, if_neg Bool.false_ne_true] at h
+  · rw [hzn, ite_eq_right Bool.false_ne_true] at h
     have h_nn : 0 ≤ x.toRat + y.toRat := hsign.2 hzn
     rw [abs_of_nonneg h_nn] at htruth
     rw [← htruth] at h
     exact h
-  · rw [hzn, if_pos rfl] at h
+  · rw [hzn, ite_eq_left rfl] at h
     have h_np : x.toRat + y.toRat ≤ 0 := hsign.1 hzn
     rw [abs_of_nonpos h_np] at htruth
     linarith

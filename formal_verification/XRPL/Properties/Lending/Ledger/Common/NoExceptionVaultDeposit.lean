@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionVaultDepositPricing
 import XRPL.Properties.Lending.Ledger.Common.CoverGridInv
 import XRPL.Properties.Lending.Ledger.Common.IntegralPrecision
@@ -9,10 +10,8 @@ import XRPL.Properties.Vault.Proofs.DepositAccuracy
 
 /-! # VaultDeposit, VaultSet, VaultDelete and a ledger close never end in an exception
 
-On a reachable ledger each of these transactions returns a result code. A model `Error` is a C++ exception that
-leaves the transaction as `tefEXCEPTION`. A VaultDeposit needs AssetsTotal plus the amount within the largest amount
-of the asset: past it the Open limit check builds an amount the asset cannot hold and throws (FV_M4_52 for XRP).
-The other three need nothing. -/
+A VaultDeposit needs AssetsTotal plus the amount within the asset's largest amount, else the Open limit check throws
+(FV_M4_52, FV_M4_60). The other three need nothing. -/
 
 namespace XRPL.Model.SingleAssetVault.VaultDepositNoException
 
@@ -28,7 +27,7 @@ lemma add_towards_zero_bounds (x y n : Number) (hx : x.isNormalized) (hy : y.isN
     (hok : Number.operator_add x y .towards_zero = .ok n) (h0 : 0 ≤ x.toRat + y.toRat) :
     0 ≤ n.toRat ∧ n.toRat ≤ x.toRat + y.toRat := by
   obtain ⟨m, hm, hv⟩ := Number.operator_add_rounded_towards_zero x y n hx hy hok
-  rw [if_pos h0] at hm
+  rw [ite_eq_left h0] at hm
   rw [hv]
   refine ⟨?_, Number.lower_le _ m hm⟩
   have := Number.lower_tight _ m hm Number.zero Number.zero_isNormalized (by rw [Number.toRat_zero]; exact h0)
@@ -164,7 +163,7 @@ lemma adjustAssetsAndShares_ne_error (v : Vault) (hasset : Vault.HoldsAsset v) (
     obtain ⟨haa'd, -⟩ := STAmount.whole_of_stored _ hi _ haa'N haa'0 haa'st
     have hma : v.numericType.maxAmount = (v.numericType.maxValue.toNat : ℚ) := by
       unfold NumericType.maxAmount
-      rw [if_pos hi]
+      rw [ite_eq_left hi]
     have hm63 : (v.numericType.maxValue.toNat : ℚ) ≤ 9223372036854775807 := by
       have hN : v.numericType.maxValue.toNat ≤ 9223372036854775807 := by
         have := hmaxrep hi
@@ -308,17 +307,17 @@ lemma deposit_error (v : Vault) (hasset : Vault.HoldsAsset v) (amount : STAmount
   · -- the new total
     exact absurd ‹RawVault.assetsTotal _ = Except.error e›
       (adjusted_assetsTotal_ne_error v hasset _ _ _ ‹_›)
+  · -- the share total as an amount
+    exact absurd ‹STAmount.ofNumber _ _ _ = Except.error e› (ne_error_of_ok (Vault.sharesTotal_amount_ok v))
   · -- the lawfulness check: the share check before it keeps SharesTotal within the MPT maximum
     exfalso
     have hrounded : (v.roundedDepositAmount amount).run = .ok (.ok _) := ‹v.roundedDepositAmount amount = _›
     have hcomp : (computeDeposit v _ isDonation).run = .ok (.ok _) := ‹computeDeposit v _ isDonation = _›
     have hadj : (v.adjustAssetsAndShares _ _).run = .ok (.ok _) := ‹v.adjustAssetsAndShares _ _ = _›
-    have hm : ((maxRep.toNat : ℕ) : ℚ) = 2 ^ 63 - 1 := by
-      rw [show maxRep.toNat = 2 ^ 63 - 1 from rfl]; norm_num
     obtain ⟨hwf, hval⟩ := Vault.deposit_success_lawful v amount isDonation t hc hty _ _ _
       ⟨‹_›, ‹_›, ‹_›, ‹_›⟩ hrounded hcomp hadj (by
-        rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, ← hm]
-        exact not_lt.mp ‹_›)
+        rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
+        exact Vault.shareSupply_le v _ _ (computeDeposit_shares_offset v _ isDonation _ hcomp) ‹_› ‹_›)
     obtain ⟨v', hv', -⟩ := RawVault.to_lawful_ok_of hwf hval
     have hbad := hv'.symm.trans ‹RawVault.to_lawful _ = Except.error e›
     cases hbad
@@ -342,35 +341,9 @@ namespace XRPL.Model.Lending.VaultDepositNoException
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault RawVault VaultWithAmounts)
 
-open private LendingLedger.SharesSum.step from XRPL.Properties.Lending.Ledger.Common.ShareSum
-
-/-- A deposit that succeeds keeps SharesTotal plus the minted shares within the share MPT maximum: the deposit
-checks it before it writes the vault. -/
-lemma mintFits (l : LendingLedger) : l.MintFits := by
-  intro amount isDonation hpos r hok
-  simp only [Vault.deposit] at hok
-  unfold_ter at hok
-  walk_ok
-  have hm : ((maxRep.toNat : ℕ) : ℚ) = 2 ^ 63 - 1 := by
-    rw [show maxRep.toNat = 2 ^ 63 - 1 from rfl]; norm_num
-  rw [← hm]
-  exact not_lt.mp ‹_›
-
 /-- On a reachable ledger the holders' shares add up to SharesTotal and each holder owns a whole number of
 shares. -/
-lemma reachable_sharesSum {l : LendingLedger} (hr : l.Reachable) : l.SharesSum := by
-  have h := LendingLedger.Reachable.invariant (Inv := fun l => l.Reachable ∧ l.SharesSum)
-    (fun g hg => by
-      refine ⟨⟨g, [], hg, .refl, fun _ hm => absurd hm List.not_mem_nil⟩, ?_, ?_⟩
-      · obtain ⟨scale, m, s, eer, ocb, nt, -, hcreate⟩ := hg.created
-        have hraw := XRPL.Model.SingleAssetVault.Vault.create_ok_toRawVault hcreate
-        rw [hg.no_holders, show g.vault.sharesTotal = g.vault.toRawVault.sharesTotal from rfl, hraw]
-        exact Number.toRat_zero.symm
-      · intro x hx
-        rw [hg.no_holders] at hx
-        cases hx)
-    (fun l l' tx hi ha => ⟨hi.1.apply ha, LendingLedger.SharesSum.step hi.1 hi.2 (fun _ => mintFits l) ha⟩) hr
-  exact h.2
+lemma reachable_sharesSum {l : LendingLedger} (hr : l.Reachable) : l.SharesSum := hr.sharesSum
 
 /-- On a reachable ledger a holder owns between zero and `2^63 - 1` shares. -/
 lemma reachable_sharesOf_bounds {l : LendingLedger} (hr : l.Reachable) (h : Nat) :

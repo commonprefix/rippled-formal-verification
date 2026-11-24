@@ -16,7 +16,7 @@ lemma LoanBroker.roundedCoverAmount_precision_loss_proof (lb : LoanBroker) (pool
     (hr : sumRoundAndSubtract lb.coverAvailable aN (AssetPool.baseExponent pool) lb.numericType .downward = .ok r)
     (hz : r.signum ≤ 0) :
     (lb.roundedCoverAmount pool amount).run = .ok (.error .tecPRECISION_LOSS) := by
-  rw [LoanBroker.roundedCoverAmount_run lb pool amount aN r hnum hr, if_pos hz]
+  rw [LoanBroker.roundedCoverAmount_run lb pool amount aN r hnum hr, ite_eq_left hz]
 
 /-- Proof body of the rounded exit of `LoanBroker.roundedCoverAmount_exits`. -/
 lemma LoanBroker.roundedCoverAmount_rounded_proof (lb : LoanBroker) (pool : α) (amount r : STAmount)
@@ -24,7 +24,7 @@ lemma LoanBroker.roundedCoverAmount_rounded_proof (lb : LoanBroker) (pool : α) 
     (hr : sumRoundAndSubtract lb.coverAvailable aN (AssetPool.baseExponent pool) lb.numericType .downward = .ok r)
     (hpos : 0 < r.signum) :
     (lb.roundedCoverAmount pool amount).run = .ok (.ok r) := by
-  rw [LoanBroker.roundedCoverAmount_run lb pool amount aN r hnum hr, if_neg (not_le.mpr hpos)]
+  rw [LoanBroker.roundedCoverAmount_run lb pool amount aN r hnum hr, ite_eq_right (not_le.mpr hpos)]
 
 /-- Once the rounding succeeds, the deposit check is the Open-limit check of the rounded amount. -/
 private lemma LoanBroker.canCoverDeposit_rounded (lb : LoanBroker) (pool : α) (amount r : STAmount)

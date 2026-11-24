@@ -1,12 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequenceTwin
 import XRPL.Properties.Lending.Loan.Common.PayLedger
 
 /-! # One loan's transactions alone
 
-Loan `i` in a sequence of transactions from a reachable ledger, and the same loan in the subsequence of its own
-transactions, renumbered to `i'`: on both it is not created yet, deleted, or stored as twins, the same loan but for
-the copy of its broker. So its fields end the same in both. Once it is active, every later transaction on it that
-succeeds in the sequence succeeds in the subsequence as well, when such a transaction replays on a twin. -/
+A loan ends with the same fields in a sequence and in the subsequence of its own transactions. Once it is active,
+every later transaction on it that succeeds in the sequence succeeds in the subsequence too. -/
 
 namespace XRPL.Model.Lending
 

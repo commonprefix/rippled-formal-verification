@@ -7,11 +7,8 @@ import XRPL.Properties.Vault.Proofs.ShareWorth
 
 /-! # Internal errors of a deposit, a withdrawal and a clawback
 
-A deposit returns `tecINTERNAL` only when the priced shares are worth more than the rounded amount. They exceed the
-ideal share count by a relative `sharesOverε` at most, so the worth exceeds the amount by a relative `2.2·10⁻¹⁸` at
-most, which a to-nearest price drops for any IOU amount and any integral amount up to `2.28·10^17` units. A withdrawal
-has no `tecINTERNAL` exit. A clawback returns it only when the shares the cash names are priced above the cash, and on
-a reachable vault those shares are at most the share total, so their price is at most the cash. -/
+A deposit returns `tecINTERNAL` only for an integral amount above `2.28·10^17` units (FV_M2_22). A withdrawal never
+returns it, and a clawback never does on a reachable vault. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -83,7 +80,7 @@ private lemma Vault.deposit_charge_le_rounded (v : Vault) (ra shares c : STAmoun
         (by rw [hrt]; exact NumericType.eq_fractional_of_not_integral (by simpa using hint)) hs hsz hp
       have hA0 : v.toExact.assetsTotal = 0 := (Vault.assetsTotal_eq_zero_iff v navN hat).mp hmz
       unfold RawVault.idealChargeDeposit at hcv
-      rw [if_pos hA0, hshv] at hcv
+      rw [ite_eq_left hA0, hshv] at hcv
       rw [hcv, div_le_iff₀ (by positivity), ← zpow_natCast]
       exact hfl
   -- a nonempty vault: the shares exceed the ideal by at most `sharesOverε`, so their worth the amount as well
@@ -100,7 +97,7 @@ private lemma Vault.deposit_charge_le_rounded (v : Vault) (ra shares c : STAmoun
   have hIcle : v.idealChargeDepositAt navN.toRat shares.toRat ≤ ra.toRat * (1 + sharesOverε) := by
     unfold RawVault.idealChargeDepositAt
     unfold RawVault.idealSharesDepositAt at hsle
-    rw [if_neg (ne_of_gt hnavpos)] at hsle ⊢
+    rw [ite_eq_right (ne_of_gt hnavpos)] at hsle ⊢
     rw [div_le_iff₀ hSpos]
     calc navN.toRat * shares.toRat
         ≤ navN.toRat * (v.toExact.sharesTotal * ra.toRat / navN.toRat * (1 + sharesOverε)) :=

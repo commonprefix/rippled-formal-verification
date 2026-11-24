@@ -9,12 +9,12 @@ import XRPL.Properties.Vault.Common.GuardProofs
 import XRPL.Properties.Vault.Common.ReachableDefs
 import XRPL.Properties.Vault.Common.WithdrawDefs
 import XRPL.Properties.Protocol.Number.AtExponent
+import XRPL.Properties.Vault.Proofs.Support.ShareSupply
 
 /-! # The Open zone
 
-A vault without loans keeps its cash a whole number of base units within the Open-zone limit
-(`9 * 10^(15 + base)`), stored exactly. Every cash update then lands exactly, and the share total is
-updated exactly on any vault. -/
+A vault without loans keeps its cash a whole number of base units within `9 * 10^(15 + base)`, stored exactly.
+Every cash update on it is exact, and the share total is updated exactly on any vault. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -183,7 +183,7 @@ lemma Vault.checkOpenLimit_bound (v : Vault) (charge : STAmount) (hc : charge.Ca
     have hpos : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
     -- the first sum keeps at least the total, and is a normalized `Number`
     obtain ⟨n₁, hlo₁, hs₁v⟩ := Number.operator_add_rounded_towards_zero _ _ _ hnavn v.wf.yieldUnrealized_norm hs₁
-    rw [if_pos (by linarith)] at hlo₁
+    rw [ite_eq_left (by linarith)] at hlo₁
     have hs₁ge : navN.toRat ≤ s₁.toRat := by
       rw [hs₁v]; exact Number.lower_tight _ n₁ hlo₁ navN hnavn (by linarith)
     have hs₁n : s₁.isNormalized := by
@@ -205,7 +205,7 @@ lemma Vault.checkOpenLimit_bound (v : Vault) (charge : STAmount) (hc : charge.Ca
     have htruth : 0 ≤ s₁.toRat + amountNum.toRat := by
       rw [hnv]; exact add_nonneg (le_trans hnav0 hs₁ge) hc0
     obtain ⟨n, hlo, hcapv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hs₁n hnn hcapok
-    rw [if_pos htruth] at hlo
+    rw [ite_eq_left htruth] at hlo
     have hmle : m.toRat ≤ s₁.toRat + amountNum.toRat := by
       rw [hmv, hnv]; push_cast; rw [h9] at hge; linarith
     have hmn := Number.lower_tight _ n hlo m hm hmle
@@ -294,13 +294,12 @@ lemma Vault.deposit_ok_reduces (v : Vault) (amount : STAmount) (isDonation : Boo
   · exact ⟨_, _, _, ‹_›, ‹_›, hin, ‹_›, (RawVault.to_lawful_ok ‹_›).1, rfl, rfl⟩
   · exact absurd (by decide) hne
 
-/-- A deposit adds exactly the issued shares to the share total, when the sum stays within the MPT
-maximum. -/
+/-- A deposit adds exactly the issued shares to the share total. -/
 lemma Vault.deposit_exact_sharesTotal (v : Vault) (amount : STAmount) (isDonation : Bool) (t : UInt32)
     (hpos : 0 < amount.toRat) (hc : amount.Canonical) (hty : amount.mNumericType = v.numericType)
-    (r : VaultWithAmounts) (hok : (v.deposit amount isDonation t hpos).run = .ok (.ok r))
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1) :
+    (r : VaultWithAmounts) (hok : (v.deposit amount isDonation t hpos).run = .ok (.ok r)) :
     (r.vault'.toExact.sharesTotal : ℚ) = v.toExact.sharesTotal + r.shares.toRat := by
+  have hSsz := Vault.deposit_ok_shareSupply_exact v amount isDonation t hpos r hok
   obtain ⟨ra, amounts, raw, hra, hcomp, -, hadj, hraw, -, hrsh⟩ :=
     Vault.deposit_ok_reduces v amount isDonation t hpos r hok
   obtain ⟨_, -, -, hraz⟩ := roundedDepositAmount_rounded v amount ra hra
@@ -499,6 +498,18 @@ lemma Vault.clawback_ok_reduces (v : Vault) (assets holderShares : STAmount) (wa
   unfold_ter at hok
   walk_ok
   exact ⟨_, _, ‹_›, ‹_›, (RawVault.to_lawful_ok ‹_›).1, rfl, rfl⟩
+
+/-- A successful clawback destroys shares, and at most the holder's: the clawback checks both. -/
+lemma Vault.clawback_ok_holder (v : Vault) (assets holderShares : STAmount) (waive : Bool)
+    (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts)
+    (hok : (v.clawback assets holderShares waive hnn).run = .ok (.ok r)) :
+    r.shares.isZero = false ∧ holderShares.operator_lt r.shares = .ok false := by
+  simp only [Vault.clawback] at hok
+  unfold_ter at hok
+  walk_ok
+  have hz : ¬ STAmount.isZero _ = true := ‹¬ STAmount.isZero _ = true›
+  obtain ⟨b, hlt, hb⟩ : ∃ b, STAmount.operator_lt holderShares _ = .ok b ∧ ¬ b = true := ⟨_, ‹_›, ‹_›⟩
+  exact ⟨Bool.eq_false_iff.mpr hz, by rw [hlt, Bool.eq_false_iff.mpr hb]⟩
 
 /-- A successful clawback leaves the exact share total less the destroyed shares. -/
 lemma Vault.clawback_exact_sharesTotal (v : Vault) (assets holderShares : STAmount) (waive : Bool)

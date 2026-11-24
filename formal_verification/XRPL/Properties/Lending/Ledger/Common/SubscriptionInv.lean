@@ -100,11 +100,11 @@ lemma LendingLedger.SubscriptionInv.step {l l' : LendingLedger} {s : VaultSchedu
       hidle.lossUnrealized⟩
     rw [LendingLedger.broker?_commitBroker] at hb'
     by_cases hj : j = (if u.index < l.brokers.length then u.index else l.brokers.length)
-    · rw [if_pos hj] at hb'
+    · rw [ite_eq_left hj] at hb'
       rcases LendingLedger.applyBroker_debt l tx u hu b' hb' with h0 | ⟨b, hb, hd⟩
       · exact h0
       · rw [hd]; exact hidle.no_debt _ b hb
-    · rw [if_neg hj] at hb'
+    · rw [ite_eq_right hj] at hb'
       exact hidle.no_debt j b' hb'
   by_cases hl : tx.isLoan = true
   · obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_loan hl h

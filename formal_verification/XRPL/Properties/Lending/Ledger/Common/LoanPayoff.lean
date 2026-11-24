@@ -1,11 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.PaymentShareValue
 import XRPL.Properties.Lending.Loan.Common.RegularPayoffSplit
 
 /-! # A loan's payments until it is paid off
 
-Along a run that pays the loan at `i` and never defaults it, every other transaction keeps its PrincipalOutstanding,
-and a payment that keeps AssetsAvailable plus what it pays below `10^16` base units sends the vault (amountToPool) at
-least the principal it pays. So once the payments pay the loan off they have sent at least the principal it had. -/
+Along a run that pays loan `i` and never defaults it, a payment that keeps AssetsAvailable plus what it pays below
+`10^16` base units sends the vault at least the principal it pays, so a paid-off loan has sent its principal. -/
 
 namespace XRPL.Model.Lending
 
@@ -94,7 +94,7 @@ private lemma LendingLedger.slot_other {l l' : LendingLedger} {tx : LendingTx} {
       refine ⟨hlen, fun e' he' => ⟨e', ?_, rfl⟩⟩
       rw [LendingLedger.loan?_commitLoan] at he'
       simp only [LoanEffect.ofCreate, lt_irrefl, ↓reduceIte] at he'
-      rwa [if_neg (by omega)] at he'
+      rwa [ite_eq_right (by omega)] at he'
     | loanAccept j =>
       obtain ⟨e, broker, loan, r, he, -, hw, -, hacc, rfl⟩ := LendingLedger.applyLoan_accept_inv l u j hu
       refine ⟨hlen, fun e' he' => ?_⟩
@@ -132,7 +132,7 @@ private lemma LendingLedger.slot_other {l l' : LendingLedger} {tx : LendingTx} {
       obtain ⟨e, broker, loan, r, he, -, -, -, -, rfl⟩ := LendingLedger.applyLoan_pay_inv l u j pt amount hu
       have hij : i ≠ j := fun hij => hnp pt amount (by rw [hij])
       refine ⟨hlen, fun e' he' => ?_⟩
-      rw [LendingLedger.loan?_commit_ofLoan l he, if_neg hij] at he'
+      rw [LendingLedger.loan?_commit_ofLoan l he, ite_eq_right hij] at he'
       exact ⟨e', he', rfl⟩
     | _ => simp [LendingTx.isLoan] at hl
   · -- close and vaultDelete keep the loans
@@ -169,7 +169,7 @@ private lemma LendingLedger.slot_pay {l l' : LendingLedger} (hr : l.Reachable) {
   have hpo : r.loan'.principalOutstanding = p.loan.principalOutstanding :=
     (congrArg RawLoan.principalOutstanding (RawLoan.to_lawful_ok hloan).1 :)
   refine ⟨lt_of_lt_of_le (LendingLedger.loan?_lt he) (storeSlot_length _ _ _), fun e' he' => ?_⟩
-  rw [LendingLedger.loan?_commit_ofLoan l he, if_pos rfl] at he'
+  rw [LendingLedger.loan?_commit_ofLoan l he, ite_eq_left rfl] at he'
   obtain rfl := Option.some.inj he'
   refine ⟨e, he, ?_⟩
   show e.loan.principalOutstanding.toRat - r.loan'.principalOutstanding.toRat ≤ r.amountToPool.toRat

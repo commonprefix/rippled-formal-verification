@@ -3,10 +3,8 @@ import XRPL.Properties.Vault.Proofs.DepositExits
 
 /-! # Depositing and redeeming at the same close time
 
-A deposit runs only outside the investment and redemption phases, so redeeming the issued shares at
-the same close time pays no early-exit fee. On a reachable vault the charge and the payout are both
-whole steps of the base grid, each within a step of the issued shares' worth. So they are less than two
-steps apart, which makes them at most one step apart. -/
+Redeeming the issued shares at the deposit's close time pays no early-exit fee. On a reachable vault the charge
+and the payout are whole base units less than two units apart, so at most one unit apart. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -509,21 +507,20 @@ private lemma Vault.roundtrip_payout_le_charge (v : Vault) (amountDeposit : STAm
     (hcanon : amountDeposit.Canonical) (hty : amountDeposit.mNumericType = v.numericType)
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
     (r₁ : VaultWithAmounts) (hok₁ : (v.deposit amountDeposit false t hpos).run = .ok (.ok r₁))
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r₁.shares.toRat ≤ 2 ^ 63 - 1)
     (hpos₂ : 0 < (WithdrawAmount.vaultShares r₁.shares).amount.toRat) (r₂ : VaultWithAmounts)
     (hok₂ : (r₁.vault'.withdraw (.vaultShares r₁.shares) waive t hpos₂).run = .ok (.ok r₂))
     (hSpos : 0 < (v.toExact.sharesTotal : ℚ)) :
     r₂.assets.toRat ≤ r₁.assets.toRat := by
   have hz := Vault.Reachable.openZone_proof v t0 hr hmax
   have hr' : Vault.Reachable r₁.vault' t :=
-    Vault.Reachable.deposit v t0 t amountDeposit false r₁ hr ht hcanon hty hpos hok₁ hSsz
+    Vault.Reachable.deposit v t0 t amountDeposit false r₁ hr ht hcanon hty hpos hok₁
   have hnt := Vault.deposit_numericType v amountDeposit false t hpos r₁ hok₁
   have hbe := Vault.deposit_baseExponent v amountDeposit false t hpos r₁ hok₁
   have hmax' : r₁.vault'.numericType.isIntegral = true → r₁.vault'.numericType.maxValue.toNat ≤ maxRep.toNat :=
     hnt ▸ hmax
   have hz' := Vault.Reachable.openZone_proof r₁.vault' t hr' hmax'
   obtain ⟨hAA', -⟩ := Vault.deposit_openZone v amountDeposit false t hpos hcanon hty hz r₁ hok₁
-  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit false t hpos hcanon hty r₁ hok₁ hSsz
+  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit false t hpos hcanon hty r₁ hok₁
   obtain ⟨-, priced₁, navN, -, -, -, -, -, hshc, hshnt, hshpos, hsad, -, -, hcl, -⟩ :=
     DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r₁ hok₁
   have hshc' : r₁.shares.Canonical := hshc.canonical (by rw [hshnt]; decide)
@@ -553,7 +550,7 @@ private lemma Vault.roundtrip_payout_le_charge (v : Vault) (amountDeposit : STAm
     have hAT : v.toExact.assetsTotal ≠ 0 := by
       show v.assetsAvailable.toRat + v.assetsDeployed.toRat ≠ 0
       rw [hz.assetsDeployed, Number.toRat_zero, add_zero]; exact ne_of_gt hApos
-    rw [if_neg hAT, hz.depositNav_eq]
+    rw [ite_eq_right hAT, hz.depositNav_eq]
   have hI0 : 0 ≤ v.assetsAvailable.toRat * r₁.shares.toRat / (v.toExact.sharesTotal : ℚ) :=
     div_nonneg (mul_nonneg hA0 hshpos.le) hSpos.le
   by_contra hgt
@@ -626,21 +623,20 @@ lemma Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAmou
     (hcanon : amountDeposit.Canonical) (hty : amountDeposit.mNumericType = v.numericType)
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
     (r₁ : VaultWithAmounts) (hok₁ : (v.deposit amountDeposit false t hpos).run = .ok (.ok r₁))
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r₁.shares.toRat ≤ 2 ^ 63 - 1)
     (hpos₂ : 0 < (WithdrawAmount.vaultShares r₁.shares).amount.toRat) (r₂ : VaultWithAmounts)
     (hok₂ : (r₁.vault'.withdraw (.vaultShares r₁.shares) waive t hpos₂).run = .ok (.ok r₂)) :
     r₂.assets.toRat ≤ r₁.assets.toRat ∧
       r₁.assets.toRat - r₂.assets.toRat ≤ (10 : ℚ) ^ v.baseExponent := by
   have hz := Vault.Reachable.openZone_proof v t0 hr hmax
   have hr' : Vault.Reachable r₁.vault' t :=
-    Vault.Reachable.deposit v t0 t amountDeposit false r₁ hr ht hcanon hty hpos hok₁ hSsz
+    Vault.Reachable.deposit v t0 t amountDeposit false r₁ hr ht hcanon hty hpos hok₁
   have hnt := Vault.deposit_numericType v amountDeposit false t hpos r₁ hok₁
   have hbe := Vault.deposit_baseExponent v amountDeposit false t hpos r₁ hok₁
   have hmax' : r₁.vault'.numericType.isIntegral = true → r₁.vault'.numericType.maxValue.toNat ≤ maxRep.toNat :=
     hnt ▸ hmax
   have hz' := Vault.Reachable.openZone_proof r₁.vault' t hr' hmax'
   obtain ⟨hAA', -⟩ := Vault.deposit_openZone v amountDeposit false t hpos hcanon hty hz r₁ hok₁
-  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit false t hpos hcanon hty r₁ hok₁ hSsz
+  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit false t hpos hcanon hty r₁ hok₁
   obtain ⟨-, priced₁, navN, -, -, -, -, -, hshc, hshnt, hshpos, hsad, -, -, hcl, -⟩ :=
     DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r₁ hok₁
   have hshc' : r₁.shares.Canonical := hshc.canonical (by rw [hshnt]; decide)
@@ -690,7 +686,7 @@ lemma Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAmou
     have hAT : v.toExact.assetsTotal ≠ 0 := by
       show v.assetsAvailable.toRat + v.assetsDeployed.toRat ≠ 0
       rw [hz.assetsDeployed, Number.toRat_zero, add_zero]; exact ne_of_gt hApos
-    rw [if_neg hAT, hz.depositNav_eq]
+    rw [ite_eq_right hAT, hz.depositNav_eq]
   rw [hIc] at hc1 hc2
   -- the payout against the redeemed shares' worth after the deposit
   obtain ⟨priced, hpr, hU⟩ := Vault.withdraw_payout_le_priced r₁.vault' _ waive t hpos₂ hwc hwt hmax' r₂ hok₂ hlt'
@@ -765,7 +761,7 @@ lemma Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAmou
     · rw [h]
       have := mul_nonneg hI0 hε
       linarith
-  have hgain := Vault.roundtrip_payout_le_charge v amountDeposit waive t t0 hpos hr ht hcanon hty hmax r₁ hok₁ hSsz
+  have hgain := Vault.roundtrip_payout_le_charge v amountDeposit waive t t0 hpos hr ht hcanon hty hmax r₁ hok₁
     hpos₂ r₂ hok₂ hSpos
   obtain ⟨-, hL⟩ := roundtrip_steps _ _ _ _ _ hu hI0 hc0 hcle hlam0 hlam1
     (by have := mul_nonneg hI0 (show (0 : ℚ) ≤ sharesε by unfold sharesε; norm_num); linarith) hc2' hπup hlow

@@ -11,8 +11,7 @@ namespace XRPL.Model.Protocol
 /-! # Value preservation and rounding for `doNormalize128`
 
 `doNormalize128` is the last step of division and of opposite-sign addition. Each stage keeps the exact value
-`(M + δ)·10^e`. The proofs track two dropped fractions: `φ`, the exact one, and `f̃`, the one the guard holds
-(`represents g f̃`). Each digit push maps both through `(· + d)/10`, so the gap between them (the slip) never grows. -/
+`(M + δ)·10^e`, and the gap between the fraction the guard holds and the exact dropped fraction never grows. -/
 
 /-- `doNormalize128_scaleUpSpec` keeps the value `m · 10^e`, keeps the mantissa in `[1, 10^23)` and never raises the
 exponent. It either returns its input unchanged or a mantissa below `10^19`. -/
@@ -29,7 +28,7 @@ lemma doNormalize128_scaleUp_facts (minMantissa : UInt64) (m : UInt128) (e : Int
     rw [show doNormalize128_scaleUpSpec minMantissa m e
         = doNormalize128_scaleUpSpec minMantissa (m * 10) (e - 1) from by
       rw [doNormalize128_scaleUpSpec.eq_def]
-      simp only [if_pos (And.intro h1 h2)]]
+      simp only [ite_eq_left (And.intro h1 h2)]]
     have h_lt_min : m.toNat < 1000000000000000000 := by
       have := BitVec.lt_def.mp h1
       rwa [toNat_toUInt128, hmin] at this
@@ -57,7 +56,7 @@ lemma doNormalize128_scaleUp_facts (minMantissa : UInt64) (m : UInt128) (e : Int
   | case2 m e hcond =>
     rw [show doNormalize128_scaleUpSpec minMantissa m e = (m, e) from by
       rw [doNormalize128_scaleUpSpec.eq_def]
-      simp only [if_neg hcond]]
+      simp only [ite_eq_right hcond]]
     exact ⟨rfl, hm_pos, hm_lt, le_refl _, Or.inl ⟨rfl, rfl⟩⟩
 
 set_option maxHeartbeats 1600000 in
@@ -91,7 +90,7 @@ theorem doNormalize_scaleDown128_repr
     -- error branch: m > maxMantissa and e ≥ maxExponent, which contradicts hok.
     rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .error .normalize1 from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_pos hgt, if_pos hge]] at hok
+      rw [dite_eq_left hgt, ite_eq_left hge]] at hok
     exact absurd hok (by intro h; cases h)
   | case2 m e g hgt hnge ih =>
     -- step: m > maxMantissa, ¬ e ≥ maxExponent, so push m % 10 and recurse on m / 10.
@@ -99,7 +98,7 @@ theorem doNormalize_scaleDown128_repr
         = doNormalize_scaleDown128Spec maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
         from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_pos hgt, if_neg hnge]] at hok
+      rw [dite_eq_left hgt, ite_eq_right hnge]] at hok
     have h10 : ((10 : UInt128)).toNat = 10 := by decide
     have h_div : (m / 10 : UInt128).toNat = m.toNat / 10 := by
       rw [BitVec.toNat_udiv, h10]
@@ -181,7 +180,7 @@ theorem doNormalize_scaleDown128_repr
     -- exit: m ≤ maxMantissa.
     rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .ok (m, e, g) from by
       rw [doNormalize_scaleDown128Spec.eq_def]
-      rw [dif_neg hgt]] at hok
+      rw [dite_eq_right hgt]] at hok
     obtain rfl := (Except.ok.inj hok).symm
     have h_le : m.toNat ≤ maxMantissa.toNat := by
       by_contra h
@@ -218,11 +217,11 @@ theorem doNormalize_capAtMaxRep_repr
       (φ < 1 → φ₂ < 1) := by
   unfold doNormalize_capAtMaxRep at hok
   by_cases h_gt : m > maxRepUp
-  · rw [if_pos h_gt] at hok
+  · rw [ite_eq_left h_gt] at hok
     by_cases h_ge : e ≥ maxExponent
-    · rw [if_pos h_ge] at hok
+    · rw [ite_eq_left h_ge] at hok
       exact absurd hok (by intro h; cases h)
-    · rw [if_neg h_ge] at hok
+    · rw [ite_eq_right h_ge] at hok
       unfold divu10 at hok
       simp only [] at hok
       obtain rfl := (Except.ok.inj hok).symm
@@ -283,7 +282,7 @@ theorem doNormalize_capAtMaxRep_repr
         rw [div_lt_one (by norm_num : (0 : ℚ) < 10)]
         have : ((m % 10).toNat : ℚ) ≤ 9 := by exact_mod_cast Nat.lt_succ_iff.mp h_d_lt
         linarith
-  · rw [if_neg h_gt] at hok
+  · rw [ite_eq_right h_gt] at hok
     obtain rfl := (Except.ok.inj hok).symm
     have h_le_nat : m.toNat ≤ maxRepUp.toNat := by
       by_contra h
@@ -308,12 +307,12 @@ lemma represents_sticky_initial128 (zn : Bool) :
   have hdig : ((if zn then Guard.new.set_negative else Guard.new).set_sticky).digits_
       = Guard.new.digits_ := by
     by_cases h : zn
-    · rw [if_pos h]; rfl
-    · rw [if_neg h]; rfl
+    · rw [ite_eq_left h]; rfl
+    · rw [ite_eq_right h]; rfl
   have hxbit : ((if zn then Guard.new.set_negative else Guard.new).set_sticky).xbit_ = true := by
     by_cases h : zn
-    · rw [if_pos h]; rfl
-    · rw [if_neg h]; rfl
+    · rw [ite_eq_left h]; rfl
+    · rw [ite_eq_right h]; rfl
   refine ⟨(1 : ℚ) / 10 ^ 17, by positivity, by norm_num, ?_, ?_, ?_⟩
   · rw [hdig, hdv0]
     norm_num

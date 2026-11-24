@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.BrokerAccounting
 import XRPL.Properties.Lending.Ledger.Common.VaultAccounting
 
@@ -201,9 +202,9 @@ lemma LendingLedger.redemption_monotone_proof (l l' : LendingLedger) (tx : Lendi
     exact_mod_cast (show (b'.loanCount.toNat : ℚ) ≤ b.loanCount.toNat by linarith)
   · obtain ⟨h1, h2, h3⟩ := l.deployed_outflows_nonneg l' tx hr h
     linarith
-  · -- no deposit issues shares, so SharesTotal stays within the share MPT maximum
+  · -- no deposit issues shares
     have hcreated := l.redemption_sharesCreated tx hred
-    have hST := LendingLedger.sharesTotal_step hr h (by rw [hcreated, add_zero]; exact l.vault.sharesTotal_le_maxRep)
+    have hST := LendingLedger.sharesTotal_step hr h
     have hrem := l.sharesRemoved_nonneg l' tx hr h
     linarith
   · obtain ⟨h1, h2⟩ := l.redemption_yield_outflows_nonneg l' tx hr hred h hlate

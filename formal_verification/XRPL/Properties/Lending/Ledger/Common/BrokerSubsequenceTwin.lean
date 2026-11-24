@@ -1,12 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.BrokerSubsequenceDefs
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequenceTwin
 import XRPL.Properties.Lending.Ledger.Common.DefaultOrder
 
 /-! # One broker in a sequence and in its subsequence
 
-What a transaction on another broker or its loans keeps: broker `k` and its loans. A transaction on broker `k` or on
-one of its loans, run on two copies of the broker that differ only in CoverAvailable, leaves two such copies. The
-covers stay equal while they were equal and, for a default, neither vault is coarsened. -/
+A transaction on another broker keeps broker `k` and its loans. One on broker `k` or its loans, run on two copies that
+differ only in CoverAvailable, leaves two such copies, with equal covers unless a default runs on a coarsened vault. -/
 
 namespace XRPL.Model.Lending
 
@@ -95,7 +95,7 @@ private lemma LendingLedger.apply_keeps_broker {l l₂ : LendingLedger} {tx : Le
     have hne : u.index ≠ k := fun h0 => hk (by rw [hidx, h0])
     have hle := LendingLedger.applyBroker_slot hu
     refine ⟨?_, fun hlk => ?_⟩
-    · rw [LendingLedger.broker?_commitBroker, if_neg]
+    · rw [LendingLedger.broker?_commitBroker, ite_eq_right]
       split <;> omega
     · show (storeSlot l.brokers u.index u.broker).length ≤ k
       unfold storeSlot
@@ -108,7 +108,7 @@ private lemma LendingLedger.apply_keeps_broker {l l₂ : LendingLedger} {tx : Le
     obtain ⟨-, hbk, b0, hb0, -⟩ := LendingLedger.applyLoan_effect hu
     rw [LendingLedger.txBroker?_of_isLoan l hl, hbk] at hk
     have hne : k ≠ u.brokerIndex := fun h0 => hk (by rw [h0])
-    refine ⟨by rw [LendingLedger.broker?_commitLoan l u b0 hb0, if_neg hne], fun hlk => ?_⟩
+    refine ⟨by rw [LendingLedger.broker?_commitLoan l u b0 hb0, ite_eq_right hne], fun hlk => ?_⟩
     simpa [LendingLedger.commitLoan] using hlk
   have hbr := LendingLedger.apply_brokers hb hl h
   refine ⟨by unfold LendingLedger.broker?; rw [hbr], fun hlk => by rw [hbr]; exact hlk⟩
@@ -124,10 +124,10 @@ private lemma LendingLedger.apply_keeps_loans {l l₂ : LendingLedger} {tx : Len
     rw [LendingLedger.txBroker?_of_isLoan l hl, hbk] at hk
     rw [LendingLedger.loan?_commitLoan] at he
     by_cases hi : i = (if u.loanIndex < l.loans.length then u.loanIndex else l.loans.length)
-    · rw [if_pos hi] at he
+    · rw [ite_eq_left hi] at he
       have := LendingLedger.applyLoan_entry hu e he
       exact absurd (by rw [← this, hek]) hk
-    · rw [if_neg hi] at he
+    · rw [ite_eq_right hi] at he
       exact he
   have hloans : l₂.loans = l.loans := by
     by_cases hv : tx.isVault = true
@@ -291,8 +291,8 @@ private lemma LendingLedger.loanTx_broker_twin {l L l₂ L₂ : LendingLedger} (
     obtain rfl := Option.some.inj he0
     obtain rfl := Option.some.inj he0'
     refine ⟨b, b', ?_, ?_, hbraw, fun hc _ _ => hc⟩
-    · rw [hbr, if_pos rfl, Loan.accept_broker loan _ r hacc, hat.broker_eq he hb]
-    · rw [hbr', if_pos rfl, Loan.accept_broker loan' _ r' hacc', hat'.broker_eq he' hb']
+    · rw [hbr, ite_eq_left rfl, Loan.accept_broker loan _ r hacc, hat.broker_eq he hb]
+    · rw [hbr', ite_eq_left rfl, Loan.accept_broker loan' _ r' hacc', hat'.broker_eq he' hb']
   · obtain ⟨e0, loan, r, he0, hat, -, hd, rfl, -, -, -, hbr⟩ := LendingLedger.loanDelete_ok hok
     obtain ⟨e0', loan', r', he0', hat', -, hd', rfl, -, -, -, hbr'⟩ := LendingLedger.loanDelete_ok hok'
     rw [he] at he0
@@ -319,7 +319,7 @@ private lemma LendingLedger.loanTx_broker_twin {l L l₂ L₂ : LendingLedger} (
         rw [hdp hp] at h2
         exact (Except.ok.inj h2).symm
     rw [hdd] at hrd'
-    refine ⟨r.broker', r'.broker', by rw [hbr, if_pos rfl], by rw [hbr', if_pos rfl], ?_, fun hc _ _ => ?_⟩
+    refine ⟨r.broker', r'.broker', by rw [hbr, ite_eq_left rfl], by rw [hbr', ite_eq_left rfl], ?_, fun hc _ _ => ?_⟩
     · exact RawLoanBroker.update_twin hbraw rfl hrd hrd'
     · rw [show r'.broker'.coverAvailable = r'.broker'.toRawLoanBroker.coverAvailable from rfl,
         show r.broker'.coverAvailable = r.broker'.toRawLoanBroker.coverAvailable from rfl, hrd, hrd']
@@ -334,8 +334,8 @@ private lemma LendingLedger.loanTx_broker_twin {l L l₂ L₂ : LendingLedger} (
       obtain rfl := Option.some.inj he0
       obtain rfl := Option.some.inj he0'
       refine ⟨b, b', ?_, ?_, hbraw, fun hc _ _ => hc⟩
-      · rw [hbr, if_pos rfl, (Loan.manageImpair_debt loan _ _ r hm).1, hat.broker_eq he hb]
-      · rw [hbr', if_pos rfl, (Loan.manageImpair_debt loan' _ _ r' hm').1, hat'.broker_eq he' hb']
+      · rw [hbr, ite_eq_left rfl, (Loan.manageImpair_debt loan _ _ r hm).1, hat.broker_eq he hb]
+      · rw [hbr', ite_eq_left rfl, (Loan.manageImpair_debt loan' _ _ r' hm').1, hat'.broker_eq he' hb']
     | unimpair =>
       obtain ⟨e0, loan, r, he0, hat, -, hm, rfl, -, -, -, hbr⟩ := LendingLedger.loanUnimpair_ok hok
       obtain ⟨e0', loan', r', he0', hat', -, hm', rfl, -, -, -, hbr'⟩ := LendingLedger.loanUnimpair_ok hok'
@@ -344,8 +344,8 @@ private lemma LendingLedger.loanTx_broker_twin {l L l₂ L₂ : LendingLedger} (
       obtain rfl := Option.some.inj he0
       obtain rfl := Option.some.inj he0'
       refine ⟨b, b', ?_, ?_, hbraw, fun hc _ _ => hc⟩
-      · rw [hbr, if_pos rfl, (Loan.manageUnimpair_debt loan _ r hm).1, hat.broker_eq he hb]
-      · rw [hbr', if_pos rfl, (Loan.manageUnimpair_debt loan' _ r' hm').1, hat'.broker_eq he' hb']
+      · rw [hbr, ite_eq_left rfl, (Loan.manageUnimpair_debt loan _ r hm).1, hat.broker_eq he hb]
+      · rw [hbr', ite_eq_left rfl, (Loan.manageUnimpair_debt loan' _ r' hm').1, hat'.broker_eq he' hb']
     | default =>
       obtain ⟨e0, loan, r, he0, hat, -, hm, rfl, -, -, -, hbr⟩ := LendingLedger.loanDefault_ok hok
       obtain ⟨e0', loan', r', he0', hat', -, hm', rfl, -, -, -, hbr'⟩ := LendingLedger.loanDefault_ok hok'
@@ -364,7 +364,7 @@ private lemma LendingLedger.loanTx_broker_twin {l L l₂ L₂ : LendingLedger} (
       have hdeq : r'.loan'.broker.debtTotal = r.loan'.broker.debtTotal := (Except.ok.inj hdt').symm
       rw [hlb] at hrec
       rw [hlb', hdeq] at hrec'
-      refine ⟨r.loan'.broker, r'.loan'.broker, by rw [hbr, if_pos rfl], by rw [hbr', if_pos rfl],
+      refine ⟨r.loan'.broker, r'.loan'.broker, by rw [hbr, ite_eq_left rfl], by rw [hbr', ite_eq_left rfl],
         RawLoanBroker.update_twin hbraw (congrArg RawLoanBroker.loanCount hbraw :) hrec hrec', fun hc hn hn' => ?_⟩
       have hbe : L.vault.baseExponent = l.vault.baseExponent := by
         unfold XRPL.Model.SingleAssetVault.Vault.baseExponent; rw [hnt, hscale]
@@ -392,7 +392,7 @@ private lemma LendingLedger.loanTx_broker_twin {l L l₂ L₂ : LendingLedger} (
     rw [hnow] at hpay'
     obtain ⟨h1, h2⟩ := Loan.pay_broker_twin (htwin loan loan' hat hat') (by rw [hlb, hlb']; exact hbraw) _ _ hbe
       _ _ _ hpay hpay'
-    exact ⟨r.loan'.broker, r'.loan'.broker, by rw [hbr, if_pos rfl], by rw [hbr', if_pos rfl], h1,
+    exact ⟨r.loan'.broker, r'.loan'.broker, by rw [hbr, ite_eq_left rfl], by rw [hbr', ite_eq_left rfl], h1,
       fun hc _ _ => h2 (by rw [hlb, hlb', hbb hc])⟩
 
 /-- The same LoanSet on broker `k` of `l` and broker `k'` of `L`, two copies that differ at most in CoverAvailable,
@@ -432,7 +432,7 @@ private lemma LendingLedger.loanSet_broker_twin {l L l₂ L₂ : LendingLedger} 
   rw [hdebt, hd] at hd'
   obtain rfl := Except.ok.inj hd'
   refine ⟨⟨{ brokerIndex := k0, loan := r.loan' }, { brokerIndex := k', loan := r'.loan' }, ?_, ?_, rfl, rfl,
-    ht.raw⟩, r.loan'.broker, r'.loan'.broker, by rw [hbr, if_pos rfl], by rw [hbr', if_pos rfl],
+    ht.raw⟩, r.loan'.broker, r'.loan'.broker, by rw [hbr, ite_eq_left rfl], by rw [hbr', ite_eq_left rfl],
     RawLoanBroker.update_twin hbraw (by rw [hlc]) hrb hrb', ?_, ?_⟩
   · rw [LendingLedger.loan?_commitLoan]; simp [LoanEffect.ofCreate]
   · rw [LendingLedger.loan?_commitLoan]; simp [LoanEffect.ofCreate]

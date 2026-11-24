@@ -13,9 +13,8 @@ import XRPL.Properties.Vault.Proofs.Support.NumberFacts
 
 /-! # The total a balance update stores
 
-C++ `syncAssetsTotal` stores AssetsAvailable + AssetsDeployed as an amount of the asset after every balance update,
-and the update fails when that amount cannot be built. `TotalStores` says it can. It holds while the sum is within the
-largest amount of the asset, and a smaller sum of balances stores when a larger one does. -/
+C++ `syncAssetsTotal` stores AssetsAvailable + AssetsDeployed as an amount of the asset after every balance update.
+`TotalStores` says that amount can be built, which holds while the sum is within the largest amount of the asset. -/
 
 namespace XRPL.Model.Protocol
 
@@ -25,13 +24,13 @@ lemma Number.add_nonneg_zero_sum (x y r : Number) (mode : rounding_mode) (hx : x
     x.toRat + y.toRat = 0 := by
   by_cases hy_guard : y.operator_eq Number.zero = true
   · have hrx : r = x := by
-      unfold Number.operator_add at hok; rw [if_pos hy_guard] at hok; exact (Except.ok.inj hok).symm
+      unfold Number.operator_add at hok; rw [ite_eq_left hy_guard] at hok; exact (Except.ok.inj hok).symm
     rw [Number.toRat_eq_zero_of_mantissa_zero y (Number.mantissa_eq_zero_of_operator_eq_zero hy_guard), ← hrx,
       Number.toRat_eq_zero_of_mantissa_zero r hr0]
     ring
   by_cases hx_guard : x.operator_eq Number.zero = true
   · have hry : r = y := by
-      unfold Number.operator_add at hok; rw [if_neg hy_guard, if_pos hx_guard] at hok
+      unfold Number.operator_add at hok; rw [ite_eq_right hy_guard, ite_eq_left hx_guard] at hok
       exact (Except.ok.inj hok).symm
     rw [Number.toRat_eq_zero_of_mantissa_zero x (Number.mantissa_eq_zero_of_operator_eq_zero hx_guard), ← hry,
       Number.toRat_eq_zero_of_mantissa_zero r hr0]
@@ -95,11 +94,11 @@ private lemma roundsInRange_downward (nt : NumericType)
   · rw [STAmount.roundsInRange_native_iff]
     have := hint rfl
     simp only [RoundsWithinUnits, mul_one]
-    exact ⟨by linarith, by simpa using this⟩
+    exact ⟨by linarith, by simpa using! this⟩
   · rw [STAmount.roundsInRange_int64_iff]
     have := hint rfl
     simp only [RoundsWithinUnits, mul_one]
-    exact ⟨by linarith, by simpa using this⟩
+    exact ⟨by linarith, by simpa using! this⟩
 
 /-- The downward range of an asset, read back: a value in it is below the asset's largest amount plus one, or
 below `10^96` for an IOU. -/
@@ -111,10 +110,10 @@ private lemma lt_of_roundsInRange_downward (nt : NumericType)
   · exact ⟨fun hi => absurd hi (by decide), fun _ => h.2⟩
   · rw [STAmount.roundsInRange_native_iff] at h
     simp only [RoundsWithinUnits, mul_one] at h
-    exact ⟨fun _ => by simpa using h.2, fun hi => absurd hi (by decide)⟩
+    exact ⟨fun _ => by simpa using! h.2, fun hi => absurd hi (by decide)⟩
   · rw [STAmount.roundsInRange_int64_iff] at h
     simp only [RoundsWithinUnits, mul_one] at h
-    exact ⟨fun _ => by simpa using h.2, fun hi => absurd hi (by decide)⟩
+    exact ⟨fun _ => by simpa using! h.2, fun hi => absurd hi (by decide)⟩
 
 /-- The largest XRP or MPT amount is below `10^96`. -/
 private lemma maxValue_lt (nt : NumericType)

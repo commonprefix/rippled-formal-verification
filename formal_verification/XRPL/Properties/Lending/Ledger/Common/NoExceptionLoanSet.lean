@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.DebtInv
 import XRPL.Properties.Lending.Ledger.Common.XrpTotal
 import XRPL.Properties.Lending.Ledger.Common.ManageReachable
@@ -7,10 +8,8 @@ import XRPL.Properties.Lending.Ledger.Common.YieldSum
 
 /-! # LoanSet never ends in an exception
 
-On a reachable ledger a LoanSet returns a result code. It computes the vault scale, the values of the loan and
-every check on them. The model fails only where C++ throws, and each of those steps returns a value while
-PeriodicPayment × PaymentTotal is within the maximum of XRP or an MPT. The vault scale reads the total the vault
-stored. On an MPT a sum of `2^63` or `2^63 + 1` is stored rounded down, so there the sum itself is assumed. -/
+On a reachable ledger a LoanSet returns a result code while PeriodicPayment × PaymentTotal fits XRP or an MPT.
+An MPT vault total of `2^63` or `2^63 + 1` is stored rounded down, so there the sum itself is assumed. -/
 
 namespace XRPL.Model.Lending
 
@@ -36,8 +35,8 @@ private lemma Vault.exponent_computes (v : Vault) (nt : NumericType)
   rw [Vault.pool_assetsTotal, hat', ok_bind]
   unfold numberExponent
   by_cases hz : atot.operator_eq Number.zero = true
-  · rw [if_pos hz]; exact ⟨_, rfl⟩
-  · rw [if_neg hz, hst, ok_bind]
+  · rw [ite_eq_left hz]; exact ⟨_, rfl⟩
+  · rw [ite_eq_right hz, hst, ok_bind]
     exact ⟨_, rfl⟩
 
 /-- The LoanSet checks return a result code once the vault scale computes. -/

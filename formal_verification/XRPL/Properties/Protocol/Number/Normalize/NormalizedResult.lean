@@ -5,11 +5,8 @@ import XRPL.Properties.Protocol.Number.Div.Common.Decompose
 
 /-! # Every successful `normalize` result is normalized
 
-`Number.normalize_result_isNormalized` covers a nonzero input with a nonzero result. A
-zero input, or an underflow, returns the literal `Number.zero`. So every
-successful `normalize`, and so every successful `from_rep`, gives a normalized
-`Number`. The same holds for `operator_mul` and `operator_div` of normalized
-operands. -/
+A zero input or an underflow returns `Number.zero`, so every successful `normalize` and `from_rep` gives a normalized
+`Number`. The same holds for `operator_mul` and `operator_div` of normalized operands. -/
 
 namespace XRPL.Model.Protocol
 
@@ -21,8 +18,8 @@ lemma doNormalize_zero_shape (neg : Bool) (m : UInt64) (e : Int) (minM maxM : UI
   replace hok := doNormalize_ok_spec hok
   unfold doNormalizeSpec at hok
   by_cases hm : (m == 0) = true
-  · rw [if_pos hm] at hok; exact (Except.ok.inj hok).symm
-  rw [if_neg hm] at hok
+  · rw [ite_eq_left hm] at hok; exact (Except.ok.inj hok).symm
+  rw [ite_eq_right hm] at hok
   simp only [] at hok
   rcases hsu : doNormalize_scaleUpSpec minM m e with ⟨m₁, e₁⟩
   rw [hsu] at hok
@@ -35,8 +32,8 @@ lemma doNormalize_zero_shape (neg : Bool) (m : UInt64) (e : Int) (minM maxM : UI
     rw [hsd] at hok
     simp only [] at hok
     by_cases hund : (e₂ < minExponent || m₂ < minM) = true
-    · rw [if_pos hund] at hok; exact (Except.ok.inj hok).symm
-    · rw [if_neg hund] at hok
+    · rw [ite_eq_left hund] at hok; exact (Except.ok.inj hok).symm
+    · rw [ite_eq_right hund] at hok
       cases hcap : doNormalize_capAtMaxRep m₂ e₂ g₂ with
       | error err => rw [hcap] at hok; simp at hok
       | ok cp =>
@@ -64,7 +61,7 @@ lemma Number.normalize_isNormalized (n result : Number) (mode : rounding_mode)
       unfold Number.normalize at hok
       replace hok := doNormalize_ok_spec hok
       unfold doNormalizeSpec at hok
-      rw [if_pos (by simp [hn])] at hok
+      rw [ite_eq_left (by simp [hn])] at hok
       exact hr (by rw [← Except.ok.inj hok]; rfl)
     · exact Number.normalize_result_isNormalized n result mode hn hok hr
 
@@ -76,9 +73,10 @@ lemma Number.from_rep_isNormalized (m : Int64) (e : Int) (mode : rounding_mode)
   Number.normalize_isNormalized _ result mode hok
 
 /-- A count converted to a `Number` is normalized. -/
-lemma Number.ofInt64_isNormalized (m : Int64) : (Number.ofInt64 m).isNormalized := by
+lemma Number.ofInt64_isNormalized (m : Int64) (mode : rounding_mode := .to_nearest) :
+    (Number.ofInt64 m mode).isNormalized := by
   unfold Number.ofInt64
-  cases h : Number.from_rep m 0 largeRange.min largeRange.max .to_nearest with
+  cases h : Number.from_rep m 0 largeRange.min largeRange.max mode with
   | error e => exact Number.zero_isNormalized
   | ok r => exact Number.from_rep_isNormalized m 0 _ r h
 

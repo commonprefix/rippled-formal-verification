@@ -1,11 +1,11 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Vault.Proofs.DepositCharge
 import XRPL.Properties.Vault.Proofs.PricedWorth
 
 /-! # A deposit charge against the issued shares' worth
 
-The charge is the issued shares' worth priced to nearest, then floored onto the base grid for an IOU. When that
-worth is a whole number of base units the to-nearest price lands on it, so the charge is at least the worth, and an
-IOU charge exactly the worth. -/
+When the issued shares' worth is a whole number of base units, the charge is at least the worth, and an IOU charge
+is exactly the worth. -/
 
 namespace XRPL.Model.SingleAssetVault
 

@@ -20,21 +20,22 @@ open XRPL.Model.Protocol
 lemma tenthBipsOfValue_normalized {value r : Number} {bips : TenthBips32} {mode : rounding_mode}
     (hv : value.isNormalized) (h : tenthBipsOfValue value bips mode = .ok r) : r.isNormalized := by
   have heq : tenthBipsOfValue value bips mode =
-      (value.operator_mul bips.toNumber mode) >>= (fun p => p.operator_div kTenthBipsPerUnity.toNumber mode) := rfl
+      (value.operator_mul (bips.toNumber mode) mode) >>=
+        (fun p => p.operator_div (kTenthBipsPerUnity.toNumber mode) mode) := rfl
   rw [heq] at h
   obtain ⟨p, hp, h⟩ := bind_ok_peel _ _ _ h
   exact Number.operator_div_isNormalized p _ r mode
-    (Number.operator_mul_isNormalized _ _ p mode hv (Number.ofInt64_isNormalized _) hp)
-    (Number.ofInt64_isNormalized _) h
+    (Number.operator_mul_isNormalized _ _ p mode hv (Number.ofInt64_isNormalized _ _) hp)
+    (Number.ofInt64_isNormalized _ _) h
 
 /-- The periodic rate is normalized. -/
 lemma loanPeriodicRate_isNormalized (rate : TenthBips32) (interval : UInt32) (r : Number)
     (h : loanPeriodicRate rate interval = .ok r) : r.isNormalized := by
   have heq : loanPeriodicRate rate interval =
-      (tenthBipsOfValue (Number.ofInt64 interval.toInt64) rate .to_nearest) >>=
+      (tenthBipsOfValue (Number.ofInt64 interval.toInt64 .to_nearest) rate .to_nearest) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
-  cases ht : tenthBipsOfValue (Number.ofInt64 interval.toInt64) rate .to_nearest with
+  cases ht : tenthBipsOfValue (Number.ofInt64 interval.toInt64 .to_nearest) rate .to_nearest with
   | error e => rw [ht] at h; exact absurd h nofun
   | ok t =>
     rw [ht, ok_bind] at h
@@ -42,8 +43,8 @@ lemma loanPeriodicRate_isNormalized (rate : TenthBips32) (interval : UInt32) (r 
       (tenthBipsOfValue_normalized (Number.ofInt64_isNormalized _) ht) (Number.ofInt64_isNormalized _) h
 
 /-- A power of a normalized base is normalized. -/
-lemma Number.power_isNormalized (base : Number) (hb : base.isNormalized) :
-    ∀ (k : Nat) (r : Number), base.power k = .ok r → r.isNormalized := by
+lemma Number.power_isNormalized {mode : rounding_mode} (base : Number) (hb : base.isNormalized) :
+    ∀ (k : Nat) (r : Number), base.power k mode = .ok r → r.isNormalized := by
   intro k
   induction k using Nat.strong_induction_on with
   | _ k ih =>
@@ -51,19 +52,19 @@ lemma Number.power_isNormalized (base : Number) (hb : base.isNormalized) :
     match k, ih with
     | 0, _ =>
       rw [Number.power] at h
-      cases h; exact Number.ofInt64_isNormalized 1
+      cases h; exact Number.ofInt64_isNormalized 1 mode
     | 1, _ =>
       rw [Number.power] at h
       cases h; exact hb
     | j + 2, ih =>
       rw [Number.power] at h
-      cases hh : base.power ((j + 2) / 2) with
+      cases hh : base.power ((j + 2) / 2) mode with
       | error e => rw [hh] at h; exact absurd h (by simp [bind, Except.bind])
       | ok half =>
         rw [hh] at h
         have hhalf := ih ((j + 2) / 2) (by omega) half hh
         simp only [bind, Except.bind] at h
-        cases hs : half.operator_mul half .to_nearest with
+        cases hs : half.operator_mul half mode with
         | error e => rw [hs] at h; exact absurd h (by simp)
         | ok sq =>
           rw [hs] at h
@@ -183,9 +184,9 @@ the payment factor otherwise. -/
 lemma loanPeriodicPayment_cases (principal rate : Number) (pr : UInt32) (pp : Number)
     (h : loanPeriodicPayment principal rate pr = .ok pp) (hpp : pp ≠ Number.zero) :
     (rate.operator_eq Number.zero = true ∧
-      principal.operator_div (Number.ofInt64 pr.toInt64) .to_nearest = .ok pp) ∨
+      principal.operator_div (Number.ofInt64 pr.toInt64 .to_nearest) .to_nearest = .ok pp) ∨
     (rate.operator_eq Number.zero = false ∧ ∃ f,
-      computePaymentFactor rate (Number.ofInt64 pr.toInt64) pr = .ok f ∧
+      computePaymentFactor rate (Number.ofInt64 pr.toInt64 .to_nearest) pr = .ok f ∧
       principal.operator_mul f .to_nearest = .ok pp) := by
   unfold loanPeriodicPayment at h
   dsimp only at h

@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Ledger.Common.ReachableFromIn
 A deposit fills the Open zone, late interest coarsens the vault, and deleting a pending loan of 0.6 credits 1. The
 sum ends 0.4 above the Open limit plus the interest collected beyond the schedule. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

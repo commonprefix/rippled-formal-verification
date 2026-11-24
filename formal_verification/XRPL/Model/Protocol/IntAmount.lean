@@ -18,4 +18,7 @@ def IntAmount.ofNumber (n : Number) (mode : rounding_mode) : Except Error IntAmo
 def IntAmount.toNumber (x : IntAmount) (mode : rounding_mode) : Except Error Number :=
   Number.from_rep x.value 0 largeRange.min largeRange.max mode
 
+def isMPTOverflow (sendAmount outstandingAmount : UInt64) : Bool :=
+  sendAmount > maxRep || outstandingAmount > maxRep - sendAmount
+
 end XRPL.Model.Protocol

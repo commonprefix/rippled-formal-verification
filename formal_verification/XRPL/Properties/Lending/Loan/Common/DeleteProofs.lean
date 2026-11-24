@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.DeleteExits
 import XRPL.Properties.Lending.Loan.Common.AcceptProofs
 
@@ -92,9 +93,9 @@ lemma Loan.deletePending_principal_of_exact (r : LoanBrokerWithPool Vault)
   have hdtv : loan.broker.debtTotal.toRat - r.broker'.debtTotal.toRat = loan.principalOutstanding.toRat := by
     rw [hdt']
     by_cases hc : loan.broker.loanCount - 1 = 0
-    · rw [if_pos (by rw [hc]; rfl), Number.toRat_zero, sub_zero]
+    · rw [ite_eq_left (by rw [hc]; rfl), Number.toRat_zero, sub_zero]
       exact hlast ((loanCount_sub_one_eq_zero _).mp hc)
-    · rw [if_neg (by simpa using hc)]
+    · rw [ite_eq_right (by simpa using hc)]
       have h := Number.operator_add_exact_of_fits loan.broker.wf.debtTotal_norm hneg hdebt
         (by rw [Number.toRat_neg, ← sub_eq_add_neg]; exact STAmount.Representable.number hdt)
       rw [h, Number.toRat_neg]; ring
@@ -173,7 +174,7 @@ lemma Loan.createPending_deletePending_restores_proof (r : LoanWithDisbursement 
   have hrP := hsP.reserved
   obtain ⟨aa', h1D, h2D⟩ := hsD.cash
   have hrD := hsD.reserved
-  simp only [Loan.createChange, Loan.deleteChange, if_true] at h1P hrP h1D hrD
+  simp only [Loan.createChange, Loan.deleteChange, ite_true] at h1P hrP h1D hrD
   rw [show r.pool'.assetsAvailable = aaP from (congrArg RawVault.assetsAvailable hpf :)] at h1D
   rw [show r.pool'.assetsReserved = arP from (congrArg RawVault.assetsReserved hpf :)] at hrD
   rw [show r.pool'.numericType = v.numericType from (congrArg RawVault.numericType hpf :)] at h2D
@@ -228,10 +229,10 @@ lemma Loan.createPending_deletePending_restores_proof (r : LoanWithDisbursement 
   · rw [show r'.pool'.assetsReserved = arD from (congrArg RawVault.assetsReserved hdf :), harD]
   · rw [hdebt', hlc, hdt'']
     by_cases h0 : broker.loanCount = 0
-    · rw [if_pos (by rw [h0]; rfl)]
+    · rw [ite_eq_left (by rw [h0]; rfl)]
       have h : broker.debtTotal.toRat = 0 := broker.exact.empty_broker (by
         show broker.loanCount.toNat = 0; rw [h0]; rfl)
       exact ((Number.toRat_eq_zero_iff_eq_zero broker.wf.debtTotal_norm).mp h).symm
-    · rw [if_neg (by simpa using h0)]
+    · rw [ite_eq_right (by simpa using h0)]
 
 end XRPL.Model.Lending

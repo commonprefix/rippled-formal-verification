@@ -28,8 +28,8 @@ theorem Number.operator_add_no_inbetween_below_downward (x y result : Number)
     exact no_inbetween_below_downward_frame result (x.toRat + y.toRat) zm ze' f g res_pos
       .overflow hzm_ge hzm_le hf_nn hf_lt habs_xy_eq h_rup_pos
       h_result_abs hres_pos_mant_ne
-      (fun h => represents_pos_of_shouldRoundUp_downward g f hf_rep h)
-      (fun hd hxb => represents_eq_zero_of_digits_zero_xbit_false hd hxb hf_rep)
+      (fun h => represents_t_pos_of_shouldRoundUp_downward hf_rep h)
+      (fun hd hxb => represents_t_eq_zero_of_digits_zero_xbit_false hd hxb hf_rep)
       hzm_succ
       (fun h_pos => Number.toRat_nonneg_of_nonnegative result
         (h_sign.trans (add_same_sign_xn_false_of_truth_pos x y h_sign_eq h_pos)))
@@ -83,7 +83,7 @@ theorem Number.operator_add_rounded_downward_proof (x y result : Number)
     have h_result : result = x := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_pos hy_guard] at hok
+      rw [ite_eq_left hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     have hx_mant : x.mantissa_ ≠ 0 := fun h => hresult (by rw [h_result]; exact h)
     have hx_ne : x.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero x hx_mant
@@ -99,7 +99,7 @@ theorem Number.operator_add_rounded_downward_proof (x y result : Number)
     have h_result : result = y := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_pos hx_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_left hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have hy_mant : y.mantissa_ ≠ 0 := fun h => hresult (by rw [h_result]; exact h)
     have hy_ne : y.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero y hy_mant
@@ -112,7 +112,7 @@ theorem Number.operator_add_rounded_downward_proof (x y result : Number)
     have h_result : result = Number.zero := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_right hx_guard, ite_eq_left heq_guard] at hok
       exact (Except.ok.inj
         (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
     apply hresult
@@ -150,12 +150,13 @@ theorem Number.operator_add_rounded_downward_proof (x y result : Number)
       hx_mant_ne hy_mant_ne heq_guard hok hresult)
   have h_truth_top : result.exponent_ ≥ maxExponent →
       |x.toRat + y.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := by
-    intro _
+    intro h_exp
     by_cases h_sign_eq : x.negative_ = y.negative_
-    · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_top, _⟩ :=
-        Number.operator_add_algorithmic_facts_same_sign_downward x y result hx hy
-          hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
-      exact h_top
+    · obtain ⟨M, ze0, δ, sticky, -, -, -, -, hM18, -, -, -, -, -, hok128⟩ :=
+        Number.operator_add_algorithmic_facts_same_sign_represents x y result .downward hx hy hx_mant_ne
+          hy_mant_ne h_sign_eq heq_guard hok
+      exact truth_top_of_result_cap result _ h_result_norm hresult h_bound
+        (doNormalize128_no_overflow_mantissa _ M ze0 sticky .downward (by omega) result hok128 hresult h_exp) h_exp
     · exact add_diff_sign_truth_top x y hx hy h_sign_eq
   exact closest_lower_of_no_inbetween result (x.toRat + y.toRat) h_result_norm hresult
     h_truth_ne h_bound h_truth_top h_dir

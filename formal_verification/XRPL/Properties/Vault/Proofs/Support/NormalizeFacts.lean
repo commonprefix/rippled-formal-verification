@@ -22,7 +22,7 @@ lemma IOUAmount.normalize_mantissa_nonpos (m : Int64) (e : Int) (mode : rounding
   · rw [hi0]; decide
   unfold IOUAmount.normalize at hok
   by_cases hma : m = 0
-  · rw [if_pos (show ((⟨m, e⟩ : IOUAmount).mantissa_ == 0) = true from beq_iff_eq.mpr hma)] at hok
+  · rw [ite_eq_left (show ((⟨m, e⟩ : IOUAmount).mantissa_ == 0) = true from beq_iff_eq.mpr hma)] at hok
     rw [← Except.ok.inj hok] at hi0; exact absurd rfl hi0
   · have hm_toInt : m.toInt ≠ 0 := fun h => hma (Int64.toInt_inj.mp (by rw [h]; decide))
     have hmlt : decide (m < 0) = true := by
@@ -30,7 +30,7 @@ lemma IOUAmount.normalize_mantissa_nonpos (m : Int64) (e : Int) (mode : rounding
       have h0 : (0 : Int64).toInt = 0 := by decide
       omega
     rw [show ((⟨m, e⟩ : IOUAmount).mantissa_ == 0) = false from beq_eq_false_iff_ne.mpr hma] at hok
-    simp only [Bool.false_eq_true, if_false] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
     cases hfr : Number.from_rep m e largeRange.min largeRange.max mode with
     | error err => rw [hfr] at hok; exact absurd hok (by simp)
     | ok v =>
@@ -69,12 +69,12 @@ lemma IOUAmount.normalize_mantissa_nonpos (m : Int64) (e : Int) (mode : rounding
         rw [hfn] at hofn
         simp only [] at hofn
         by_cases hhi : r.exponent_ > cMaxOffset
-        · rw [if_pos hhi] at hofn; exact absurd hofn (by simp)
-        rw [if_neg hhi] at hofn
+        · rw [ite_eq_left hhi] at hofn; exact absurd hofn (by simp)
+        rw [ite_eq_right hhi] at hofn
         by_cases hlo : r.exponent_ < cMinOffset
-        · rw [if_pos hlo] at hofn
+        · rw [ite_eq_left hlo] at hofn
           rw [← Except.ok.inj hofn] at hi0; exact absurd rfl hi0
-        rw [if_neg hlo] at hofn
+        rw [ite_eq_right hlo] at hofn
         have hir : i = r := (Except.ok.inj hofn).symm
         unfold IOUAmount.fromNumber at hfn
         cases hnorm : v.normalizeToRange cMinValue cMaxValue mode with
@@ -99,9 +99,9 @@ lemma IOUAmount.normalize_exp_range (a : IOUAmount) (mode : rounding_mode) (i : 
       ((-96 : ℤ) ≤ i.exponent_ ∧ i.exponent_ ≤ 80) := by
   unfold IOUAmount.normalize at hok
   by_cases hz : (a.mantissa_ == 0) = true
-  · rw [if_pos hz] at hok
+  · rw [ite_eq_left hz] at hok
     rw [← Except.ok.inj hok]; exact Or.inl ⟨rfl, rfl⟩
-  · rw [if_neg hz] at hok
+  · rw [ite_eq_right hz] at hok
     cases hfr : Number.from_rep a.mantissa_ a.exponent_ largeRange.min largeRange.max mode with
     | error e => rw [hfr] at hok; exact absurd hok (by simp)
     | ok v =>
@@ -113,12 +113,12 @@ lemma IOUAmount.normalize_exp_range (a : IOUAmount) (mode : rounding_mode) (i : 
         rw [hfn] at hok
         simp only [] at hok
         by_cases hhi : r.exponent_ > cMaxOffset
-        · rw [if_pos hhi] at hok; exact absurd hok (by simp)
-        · rw [if_neg hhi] at hok
+        · rw [ite_eq_left hhi] at hok; exact absurd hok (by simp)
+        · rw [ite_eq_right hhi] at hok
           by_cases hlo : r.exponent_ < cMinOffset
-          · rw [if_pos hlo] at hok
+          · rw [ite_eq_left hlo] at hok
             rw [← Except.ok.inj hok]; exact Or.inl ⟨rfl, rfl⟩
-          · rw [if_neg hlo] at hok
+          · rw [ite_eq_right hlo] at hok
             rw [← Except.ok.inj hok]
             refine Or.inr ⟨?_, ?_⟩
             · have : cMinOffset = (-96 : ℤ) := rfl
@@ -132,8 +132,8 @@ lemma IOUAmount.normalize_zero_exp (a : IOUAmount) (mode : rounding_mode) (i : I
     (hok : IOUAmount.normalize a mode = .ok i) (hz : i.mantissa_ = 0) : i.exponent_ = -100 := by
   unfold IOUAmount.normalize at hok
   by_cases hma : (a.mantissa_ == 0) = true
-  · rw [if_pos hma] at hok; rw [← Except.ok.inj hok]; rfl
-  · rw [if_neg hma] at hok
+  · rw [ite_eq_left hma] at hok; rw [← Except.ok.inj hok]; rfl
+  · rw [ite_eq_right hma] at hok
     have hane : a.mantissa_ ≠ 0 := by simpa using hma
     cases hfr : Number.from_rep a.mantissa_ a.exponent_ largeRange.min largeRange.max mode with
     | error e => rw [hfr] at hok; exact absurd hok (by simp)
@@ -146,11 +146,11 @@ lemma IOUAmount.normalize_zero_exp (a : IOUAmount) (mode : rounding_mode) (i : I
         rw [hfn] at hok
         simp only [] at hok
         by_cases hhi : r.exponent_ > cMaxOffset
-        · rw [if_pos hhi] at hok; exact absurd hok (by simp)
-        rw [if_neg hhi] at hok
+        · rw [ite_eq_left hhi] at hok; exact absurd hok (by simp)
+        rw [ite_eq_right hhi] at hok
         by_cases hlo : r.exponent_ < cMinOffset
-        · rw [if_pos hlo] at hok; rw [← Except.ok.inj hok]; rfl
-        rw [if_neg hlo] at hok
+        · rw [ite_eq_left hlo] at hok; rw [← Except.ok.inj hok]; rfl
+        rw [ite_eq_right hlo] at hok
         -- the general exit: a nonzero source packs to a nonzero 16-digit mantissa
         exfalso
         have hir : i = r := (Except.ok.inj hok).symm
@@ -186,7 +186,7 @@ lemma IOUAmount.normalize_zero_exp (a : IOUAmount) (mode : rounding_mode) (i : I
               unfold Number.normalizeToRange
               rw [show doNormalize v.negative_ v.mantissa_ v.exponent_ cMinValue cMaxValue mode
                     = .ok Number.zero from by
-                  unfold doNormalize; rw [if_pos (by simpa using hv0)]]
+                  unfold doNormalize; rw [ite_eq_left (by simpa using hv0)]]
               ntr_tail
             have hpair := Except.ok.inj (hnr.symm.trans hnr')
             have hee : ee = Number.zero.exponent_ := congrArg Prod.snd hpair

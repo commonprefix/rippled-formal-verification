@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PaidAmounts
 
 /-! # The interest a regular payment pays
@@ -133,7 +134,7 @@ private lemma Loan.interest_diff_range (l l' : Loan) (k k' : ℤ) (hnt : l'.brok
   have hB : (l.toExact.numericType.mantissaBound : ℤ) ≤ 2 ^ 63 := by
     exact_mod_cast NumericType.mantissaBound_le l.toExact.numericType
   cases hi : l.broker.numericType.isIntegral
-  · have hfr : l.toExact.numericType = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using hi)
+  · have hfr : l.toExact.numericType = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using! hi)
     rw [hfr] at hk hk'
     simp only [NumericType.mantissaBound] at hk hk'
     push_cast at hk hk'

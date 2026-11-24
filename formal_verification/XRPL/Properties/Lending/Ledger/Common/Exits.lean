@@ -19,7 +19,7 @@ lemma LendingLedger.apply_of_preflight {l : LendingLedger} {tx : LendingTx} (h :
     l.apply tx = l.applyChecked tx := by
   unfold LendingLedger.apply
   dsimp only
-  rw [h, if_neg (by rw [show TER.tesSUCCESS.isTesSuccess = true from rfl]; decide)]
+  rw [h, ite_eq_right (by rw [show TER.tesSUCCESS.isTesSuccess = true from rfl]; decide)]
 
 /-- A stored broker makes the broker list hold a broker. -/
 private lemma LendingLedger.brokers_any_of_broker? {l : LendingLedger} {j : Nat} {b : LoanBroker}
@@ -71,13 +71,13 @@ lemma LendingTx.preflight_vaultDeposit_asset (l : LendingLedger) (h : Nat) (amou
     cases hnt : l.vault.numericType.isIntegral
     · have hfr : l.vault.numericType = .fractional := NumericType.eq_fractional_of_not_integral hnt
       simp only [Bool.and_eq_true, isCanonicalAmount, isPositiveAmount, hfr, NumericType.isIntegral,
-        Bool.false_eq_true, if_false, beq_iff_eq, Bool.or_eq_true, decide_eq_true_eq, Bool.not_eq_true',
+        Bool.false_eq_true, ite_false, beq_iff_eq, Bool.or_eq_true, decide_eq_true_eq, Bool.not_eq_true',
         bne_iff_ne, ne_eq] at hc
       obtain ⟨⟨hty, hm⟩, -, hnz⟩ := hc
       rcases hm with hm | ⟨⟨⟨hlo, hhi⟩, helo⟩, hehi⟩
       · exact absurd hm hnz
       · exact ⟨by rw [hty, hfr], fun _ => ⟨hty, hlo, hhi, helo, hehi⟩⟩
-    · simp only [Bool.and_eq_true, isCanonicalAmount, isPositiveAmount, hnt, if_true, beq_iff_eq,
+    · simp only [Bool.and_eq_true, isCanonicalAmount, isPositiveAmount, hnt, ite_true, beq_iff_eq,
         decide_eq_true_eq] at hc
       obtain ⟨⟨hty, -, -⟩, -⟩ := hc
       refine ⟨hty, fun hfr => absurd hfr ?_⟩

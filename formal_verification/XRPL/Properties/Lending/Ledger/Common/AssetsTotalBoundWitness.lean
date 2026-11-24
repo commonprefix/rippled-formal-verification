@@ -6,7 +6,7 @@ import XRPL.Properties.Lending.Ledger.Common.AssetFlowDefs
 A late payment that moves AssetsTotal to a coarser scale credits it 1.99 ULP less than its flows. A pending delete
 on a coarsened vault followed by a withdrawal ends four ULP above them. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 

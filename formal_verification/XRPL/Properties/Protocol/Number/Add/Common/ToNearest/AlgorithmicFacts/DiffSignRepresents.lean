@@ -28,7 +28,7 @@ lemma Number.operator_add_post_subtract_value
     (zm_pre : UInt128) (E : Int) (g_aln : Guard) (f_aln : ℚ)
     (hrep : represents g_aln f_aln)
     (hzm_pos : 1 ≤ zm_pre.toNat)
-    (hzm_lt : zm_pre.toNat < 10 ^ 20)
+    (hzm_lt : zm_pre.toNat < 10 ^ 22)
     (hxbit_big : g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat)
     (truth : ℚ)
     (htruth : |truth| = ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E) :
@@ -72,7 +72,7 @@ lemma Number.operator_add_post_subtract_value
       have h : R.1.toNat = 0 := by omega
       rw [h] at hL_pos
       norm_num at hL_pos
-    rw [if_pos hemp]
+    rw [ite_eq_left hemp]
     refine ⟨0, le_refl _, by norm_num, fun _ => rfl, fun h => ?_, hR1_pos, hupper, fun h => ?_, ?_⟩
     · rw [hemp] at h; exact Bool.noConfusion h
     · rw [hemp] at h; exact Bool.noConfusion h
@@ -168,7 +168,7 @@ lemma Number.operator_add_post_subtract_value
           linarith
         exact ⟨f', represents_nonneg hrep', represents_lt_one hrep', hf'_pos, hval⟩
     obtain ⟨f', hf'_nn, hf'_lt, hf'_pos, hval⟩ := hresidue
-    rw [if_neg hemp]
+    rw [ite_eq_right hemp]
     refine ⟨1 - f', by linarith, by linarith, fun h => absurd h hemp, fun _ => by linarith, ?_, ?_,
       fun _ => ?_, ?_⟩
     · rw [hM_toNat]; omega
@@ -186,7 +186,7 @@ theorem Number.operator_add_post_subtract
     (mode : rounding_mode)
     (hrep : represents g_aln f_aln)
     (hzm_pos : 1 ≤ zm_pre.toNat)
-    (hzm_lt : zm_pre.toNat < 10 ^ 20)
+    (hzm_lt : zm_pre.toNat < 10 ^ 22)
     (hxbit_big : g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat)
     (truth : ℚ)
     (htruth : |truth| = ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E)
@@ -240,8 +240,6 @@ lemma diff_sign_sum_sign_of_dominant {x y : Number}
     rw [abs_of_nonpos hx_np, abs_of_nonneg hy_nn] at h_dom
     linarith
 
-set_option maxHeartbeats 8000000 in
--- The five-way case split on exponents and mantissas needs a raised heartbeat budget.
 /-- Opposite-sign addition up to the subtraction of the aligned mantissas. The rest is `recover`, the borrow and
 `doNormalize128` on the difference `zm_pre`, and `|x + y| = (zm_pre - f)·10^E` for the guard fraction `f`. -/
 lemma Number.operator_addSpec_diff_sign_subtract
@@ -252,7 +250,7 @@ lemma Number.operator_addSpec_diff_sign_subtract
     (h_not_zero : ¬ x.operator_eq y.operator_neg) :
     ∃ (zn : Bool) (zm_pre : UInt128) (E : Int) (g_aln : Guard) (f_aln : ℚ),
       represents g_aln f_aln ∧
-      1 ≤ zm_pre.toNat ∧ zm_pre.toNat < 10 ^ 20 ∧
+      1 ≤ zm_pre.toNat ∧ zm_pre.toNat < 10 ^ 22 ∧
       (g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat) ∧
       |x.toRat + y.toRat| = ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E ∧
       E ≤ maxExponent ∧
@@ -264,376 +262,124 @@ lemma Number.operator_addSpec_diff_sign_subtract
         (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.1
         largeRange.min largeRange.max mode
         (!(recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty) := by
-  generalize hok : x.operator_addSpec y mode = r
-  have hx_bounds := hx.mantissaBounds hx_mant_ne
-  have hy_bounds := hy.mantissaBounds hy_mant_ne
-  have hx_min : (10 : ℕ) ^ 18 ≤ x.mantissa_.toNat := (mantissaBounds_nat_of hx_bounds).1
-  have hy_min : (10 : ℕ) ^ 18 ≤ y.mantissa_.toNat := (mantissaBounds_nat_of hy_bounds).1
-  have hx_mant_bound : x.mantissa_.toNat < 10 ^ 19 := (mantissaBounds_nat_of hx_bounds).2
-  have hy_mant_bound : y.mantissa_.toNat < 10 ^ 19 := (mantissaBounds_nat_of hy_bounds).2
-  have hx_ne_zero : ¬ x.operator_eq Number.zero := by
-    intro h
-    have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
-    have hh : x.mantissa_.toNat = 0 := by rw [hmeq]; rfl
-    have : (10 : ℕ) ^ 18 ≤ 0 := hh ▸ hx_min
-    norm_num at this
-  have hy_ne_zero : ¬ y.operator_eq Number.zero := by
-    intro h
-    have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
-    have hh : y.mantissa_.toNat = 0 := by rw [hmeq]; rfl
-    have : (10 : ℕ) ^ 18 ≤ 0 := hh ▸ hy_min
-    norm_num at this
-  have h_xneqyn : (x.negative_ == y.negative_) = false := by
-    rw [beq_eq_false_iff_ne]; exact h_diff_sign
-  have hxe_max : x.exponent_ ≤ maxExponent := by
-    rcases hx with hz | ⟨_, _, _, _, hemax⟩
-    · exfalso; apply hx_mant_ne; rw [hz]; rfl
-    · exact hemax
-  have hye_max : y.exponent_ ≤ maxExponent := by
-    rcases hy with hz | ⟨_, _, _, _, hemax⟩
-    · exfalso; apply hy_mant_ne; rw [hz]; rfl
-    · exact hemax
-  have h_abs_add := abs_add_eq_of_diff_sign h_diff_sign
-  unfold Number.operator_addSpec at hok
-  simp only [hy_ne_zero, hx_ne_zero, h_not_zero, Bool.false_eq_true, if_false] at hok
-  rw [h_xneqyn] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
-  by_cases h_xe_lt_ye : x.exponent_ < y.exponent_
-  · -- Case 1: xe < ye, align x to ye. Aligned operand = x (smaller magnitude).
-    rw [if_pos h_xe_lt_ye] at hok
-    simp only at hok
-    set g₀ : Guard := if x.negative_ then Guard.new.set_negative else Guard.new with hg₀_def
-    have hg₀_rep : represents g₀ 0 := g0_represents_zero x.negative_
-    set aln_result : UInt64 × Int × Guard :=
-      Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_ with haln_def
-    set xm_a : UInt64 := aln_result.1 with hxm_a_def
-    set g_aln : Guard := aln_result.2.2 with hg_aln_def
-    have he_common_eq : aln_result.2.1 = y.exponent_ := by
-      rw [haln_def]
-      have := alignDown_e_eq x.mantissa_ x.exponent_ g₀ y.exponent_
-      rw [this]
-      exact max_eq_right (le_of_lt h_xe_lt_ye)
-    rw [he_common_eq] at hok
-    set K : ℕ := (Max.max x.exponent_ y.exponent_ - x.exponent_).toNat with hK_def
-    have hmax_eq : Max.max x.exponent_ y.exponent_ = y.exponent_ :=
-      max_eq_right (le_of_lt h_xe_lt_ye)
-    -- Aligned mantissa is strictly smaller than the other operand: xm_a < 10^18 ≤ y.mantissa_.
-    have hK_pos : 1 ≤ K := by
-      rw [hK_def, hmax_eq]
-      have : x.exponent_ < y.exponent_ := h_xe_lt_ye
-      omega
-    have hxm_a_eq : xm_a.toNat = x.mantissa_.toNat / 10 ^ K := by
-      rw [hxm_a_def, haln_def, alignDown_mantissa_eq, ← hK_def]
-    have hxm_a_small : xm_a.toNat < 10 ^ 18 := by
-      rw [hxm_a_eq]
-      have hpow_ge : (10 : ℕ) ^ 1 ≤ 10 ^ K := Nat.pow_le_pow_right (by norm_num) hK_pos
-      have hstep : x.mantissa_.toNat / 10 ^ K ≤ x.mantissa_.toNat / 10 ^ 1 :=
-        Nat.div_le_div_left hpow_ge (by positivity)
-      have : x.mantissa_.toNat / 10 ^ 1 < 10 ^ 18 := by
-        have h1019 : (10 : ℕ) ^ 19 = 10 ^ 18 * 10 := by norm_num
-        rw [h1019] at hx_mant_bound; omega
-      omega
-    have hxm_a_lt_ym : xm_a.toNat < y.mantissa_.toNat := by omega
-    set f_aln : ℚ := (0 + ((x.mantissa_.toNat % 10 ^ K : ℕ) : ℚ)) / 10 ^ K with hf_aln_def
-    have hf_aln_rep : represents g_aln f_aln := by
-      have h := alignDown_represents x.mantissa_ x.exponent_ g₀ y.exponent_ 0 hg₀_rep
-      have hK_eq : (Max.max x.exponent_ y.exponent_ - x.exponent_).toNat = K := by rw [hK_def]
-      rw [hK_eq] at h
-      exact h
-    have hf_aln_nn : 0 ≤ f_aln := represents_nonneg hf_aln_rep
-    have hf_aln_lt : f_aln < 1 := represents_lt_one hf_aln_rep
-    have h_x_abs_pre : |x.toRat| = ((xm_a.toNat : ℚ) + f_aln) * 10 ^ y.exponent_ := by
-      have h_lemma := alignDown_abs_value x g₀ y.exponent_ (le_of_lt h_xe_lt_ye) 0
-      simp only at h_lemma
-      have hK_eq : (y.exponent_ - x.exponent_).toNat = K := by
-        rw [hK_def, hmax_eq]
-      rw [hK_eq] at h_lemma
-      have : |x.toRat| + 0 * 10 ^ x.exponent_ = ((xm_a.toNat : ℚ) + f_aln) * 10 ^ y.exponent_ := by
-        rw [hf_aln_def]; rw [hxm_a_def, haln_def] at *
-        convert h_lemma using 2
-      linarith
-    have h_y_abs : |y.toRat| = (y.mantissa_.toNat : ℚ) * 10 ^ y.exponent_ := abs_toRat_eq y
-    -- Only the "− f" sub-case (`xm_a < y.mantissa_`) is reachable, so the model takes its `ym - xm` branch.
-    set zm_pre : UInt128 := toUInt128 y.mantissa_ - toUInt128 xm_a with hzm_pre_def
-    have h_ym_ge_xm : toUInt128 xm_a ≤ toUInt128 y.mantissa_ := by
-      rw [BitVec.le_def, toNat_toUInt128, toNat_toUInt128]
-      exact Nat.le_of_lt hxm_a_lt_ym
-    have hzm_pre_toNat : zm_pre.toNat = y.mantissa_.toNat - xm_a.toNat := by
-      rw [hzm_pre_def, BitVec.toNat_sub_of_le h_ym_ge_xm, toNat_toUInt128, toNat_toUInt128]
-    have hzm_pre_pos : 1 ≤ zm_pre.toNat := by rw [hzm_pre_toNat]; omega
-    have h_truth_eq_minus : |x.toRat + y.toRat| =
-        ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ y.exponent_ := by
-      rw [h_abs_add, h_x_abs_pre, h_y_abs]
-      have h_diff_neg : ((xm_a.toNat : ℚ) + f_aln) - (y.mantissa_.toNat : ℚ) ≤ 0 := by
-        have hge : (1 : ℚ) ≤ (y.mantissa_.toNat : ℚ) - (xm_a.toNat : ℚ) := by
-          have h1 : ((1 : ℕ) : ℚ) ≤ ((y.mantissa_.toNat - xm_a.toNat : ℕ) : ℚ) := by
-            exact_mod_cast (by omega : 1 ≤ y.mantissa_.toNat - xm_a.toNat)
-          rw [Nat.cast_sub (Nat.le_of_lt hxm_a_lt_ym)] at h1
-          push_cast at h1; linarith
-        linarith
-      rw [show ((xm_a.toNat : ℚ) + f_aln) * 10 ^ y.exponent_
-               - (y.mantissa_.toNat : ℚ) * 10 ^ y.exponent_
-             = (((xm_a.toNat : ℚ) + f_aln) - (y.mantissa_.toNat : ℚ)) * 10 ^ y.exponent_
-           from by ring]
-      have h_pow_pos : (0 : ℚ) < 10 ^ y.exponent_ := by positivity
-      have h_prod_np : (((xm_a.toNat : ℚ) + f_aln) - (y.mantissa_.toNat : ℚ)) * 10 ^ y.exponent_ ≤ 0 :=
-        mul_nonpos_of_nonpos_of_nonneg h_diff_neg (le_of_lt h_pow_pos)
-      rw [abs_of_nonpos h_prod_np]
-      rw [hzm_pre_toNat]
-      have hsub_q : ((y.mantissa_.toNat - xm_a.toNat : ℕ) : ℚ)
-          = (y.mantissa_.toNat : ℚ) - (xm_a.toNat : ℚ) := by
-        rw [Nat.cast_sub (Nat.le_of_lt hxm_a_lt_ym)]
-      rw [hsub_q]; ring
-    have hzm_pre_lt : zm_pre.toNat < 10 ^ 20 := by rw [hzm_pre_toNat]; omega
-    have hxbit_big : g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat := by
-      intro hxbit
-      have hxbit' : (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀
-          y.exponent_).2.2.xbit_ = true := by
-        rw [← haln_def, ← hg_aln_def]; exact hxbit
-      have h99 := alignDown_mantissa_le_99_of_xbit x.mantissa_ x.exponent_ g₀ y.exponent_
-        hg₀_rep hx_mant_bound hxbit'
-      rw [← haln_def, ← hxm_a_def] at h99
-      rw [hzm_pre_toNat]
-      omega
-    have h_not_xm_a_gt : ¬ xm_a > y.mantissa_ := by
-      intro h
-      have hh : y.mantissa_.toNat < xm_a.toNat := UInt64.lt_iff_toNat_lt.mp h
-      omega
-    have h_dom : |x.toRat| < |y.toRat| := by
-      rw [h_x_abs_pre, h_y_abs]
-      have h_pow_pos : (0 : ℚ) < 10 ^ y.exponent_ := by positivity
-      have hle : ((xm_a.toNat : ℚ) + 1) ≤ (y.mantissa_.toNat : ℚ) := by
-        have : (xm_a.toNat + 1 : ℕ) ≤ y.mantissa_.toNat := by omega
-        exact_mod_cast this
-      have hf1 : f_aln < 1 := hf_aln_lt
-      have h_lt : (xm_a.toNat : ℚ) + f_aln < (y.mantissa_.toNat : ℚ) :=
-        lt_of_lt_of_le (by linarith only [hf1]) hle
-      exact mul_lt_mul_of_pos_right h_lt h_pow_pos
-    have h_sign := diff_sign_sum_sign_of_dominant h_diff_sign h_dom
-    simp only [if_neg h_not_xm_a_gt] at hok
-    exact ⟨y.negative_, zm_pre, y.exponent_, g_aln, f_aln, hf_aln_rep, hzm_pre_pos, hzm_pre_lt,
-      hxbit_big, h_truth_eq_minus, hye_max, h_sign, hok.symm⟩
-  · push Not at h_xe_lt_ye
-    by_cases h_xe_gt_ye : x.exponent_ > y.exponent_
-    · -- Case 2: xe > ye, align y to xe. Aligned operand = y (smaller magnitude).
-      rw [if_neg (not_lt.mpr h_xe_lt_ye), if_pos h_xe_gt_ye] at hok
-      simp only at hok
-      set g₀ : Guard := if y.negative_ then Guard.new.set_negative else Guard.new with hg₀_def
-      have hg₀_rep : represents g₀ 0 := g0_represents_zero y.negative_
-      set aln_result : UInt64 × Int × Guard :=
-        Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_ with haln_def
-      set ym_a : UInt64 := aln_result.1 with hym_a_def
-      set g_aln : Guard := aln_result.2.2 with hg_aln_def
-      set K : ℕ := (Max.max y.exponent_ x.exponent_ - y.exponent_).toNat with hK_def
-      have hmax_eq : Max.max y.exponent_ x.exponent_ = x.exponent_ :=
-        max_eq_right (le_of_lt h_xe_gt_ye)
-      have hK_pos : 1 ≤ K := by
-        rw [hK_def, hmax_eq]; omega
-      have hym_a_eq : ym_a.toNat = y.mantissa_.toNat / 10 ^ K := by
-        rw [hym_a_def, haln_def, alignDown_mantissa_eq, ← hK_def]
-      have hym_a_small : ym_a.toNat < 10 ^ 18 := by
-        rw [hym_a_eq]
-        have hpow_ge : (10 : ℕ) ^ 1 ≤ 10 ^ K := Nat.pow_le_pow_right (by norm_num) hK_pos
-        have hstep : y.mantissa_.toNat / 10 ^ K ≤ y.mantissa_.toNat / 10 ^ 1 :=
-          Nat.div_le_div_left hpow_ge (by positivity)
-        have : y.mantissa_.toNat / 10 ^ 1 < 10 ^ 18 := by
-          have h1019 : (10 : ℕ) ^ 19 = 10 ^ 18 * 10 := by norm_num
-          rw [h1019] at hy_mant_bound; omega
-        omega
-      have hym_a_lt_xm : ym_a.toNat < x.mantissa_.toNat := by omega
-      set f_aln : ℚ := (0 + ((y.mantissa_.toNat % 10 ^ K : ℕ) : ℚ)) / 10 ^ K with hf_aln_def
-      have hf_aln_rep : represents g_aln f_aln := by
-        have h := alignDown_represents y.mantissa_ y.exponent_ g₀ x.exponent_ 0 hg₀_rep
-        have hK_eq : (Max.max y.exponent_ x.exponent_ - y.exponent_).toNat = K := by rw [hK_def]
-        rw [hK_eq] at h
-        exact h
-      have hf_aln_nn : 0 ≤ f_aln := represents_nonneg hf_aln_rep
-      have hf_aln_lt : f_aln < 1 := represents_lt_one hf_aln_rep
-      have h_y_abs_pre : |y.toRat| = ((ym_a.toNat : ℚ) + f_aln) * 10 ^ x.exponent_ := by
-        have h_lemma := alignDown_abs_value y g₀ x.exponent_ (le_of_lt h_xe_gt_ye) 0
-        simp only at h_lemma
-        have hK_eq : (x.exponent_ - y.exponent_).toNat = K := by
-          rw [hK_def, hmax_eq]
-        rw [hK_eq] at h_lemma
-        have : |y.toRat| + 0 * 10 ^ y.exponent_ = ((ym_a.toNat : ℚ) + f_aln) * 10 ^ x.exponent_ := by
-          rw [hf_aln_def]; rw [hym_a_def, haln_def] at *
-          convert h_lemma using 2
-        linarith
-      have h_x_abs : |x.toRat| = (x.mantissa_.toNat : ℚ) * 10 ^ x.exponent_ := abs_toRat_eq x
-      -- Only the "− f" sub-case (xm > ym_a) is reachable.
-      have h_xm_gt_uint : x.mantissa_ > ym_a := UInt64.lt_iff_toNat_lt.mpr hym_a_lt_xm
-      set zm_pre : UInt128 := toUInt128 x.mantissa_ - toUInt128 ym_a with hzm_pre_def
-      have h_ym_le_xm : toUInt128 ym_a ≤ toUInt128 x.mantissa_ := by
-        rw [BitVec.le_def, toNat_toUInt128, toNat_toUInt128]
-        exact Nat.le_of_lt hym_a_lt_xm
-      have hzm_pre_toNat : zm_pre.toNat = x.mantissa_.toNat - ym_a.toNat := by
-        rw [hzm_pre_def, BitVec.toNat_sub_of_le h_ym_le_xm, toNat_toUInt128, toNat_toUInt128]
-      have hzm_pre_pos : 1 ≤ zm_pre.toNat := by rw [hzm_pre_toNat]; omega
-      have h_truth_eq_minus : |x.toRat + y.toRat| =
-          ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ x.exponent_ := by
-        rw [h_abs_add, h_x_abs, h_y_abs_pre]
-        have h_diff_pos : (x.mantissa_.toNat : ℚ) - ((ym_a.toNat : ℚ) + f_aln) ≥ 0 := by
-          have hge : (1 : ℚ) ≤ (x.mantissa_.toNat : ℚ) - (ym_a.toNat : ℚ) := by
-            have h1 : ((1 : ℕ) : ℚ) ≤ ((x.mantissa_.toNat - ym_a.toNat : ℕ) : ℚ) := by
-              exact_mod_cast (by omega : 1 ≤ x.mantissa_.toNat - ym_a.toNat)
-            rw [Nat.cast_sub (Nat.le_of_lt hym_a_lt_xm)] at h1
-            push_cast at h1; linarith
-          linarith
-        rw [show (x.mantissa_.toNat : ℚ) * 10 ^ x.exponent_
-                 - ((ym_a.toNat : ℚ) + f_aln) * 10 ^ x.exponent_
-               = ((x.mantissa_.toNat : ℚ) - ((ym_a.toNat : ℚ) + f_aln)) * 10 ^ x.exponent_
-             from by ring]
-        have h_pow_pos : (0 : ℚ) < 10 ^ x.exponent_ := by positivity
-        have h_prod_nn : (0 : ℚ)
-            ≤ ((x.mantissa_.toNat : ℚ) - ((ym_a.toNat : ℚ) + f_aln)) * 10 ^ x.exponent_ :=
-          mul_nonneg h_diff_pos (le_of_lt h_pow_pos)
-        rw [abs_of_nonneg h_prod_nn]
-        rw [hzm_pre_toNat]
-        have hsub_q : ((x.mantissa_.toNat - ym_a.toNat : ℕ) : ℚ)
-            = (x.mantissa_.toNat : ℚ) - (ym_a.toNat : ℚ) := by
-          rw [Nat.cast_sub (Nat.le_of_lt hym_a_lt_xm)]
-        rw [hsub_q]; ring
-      have hzm_pre_lt : zm_pre.toNat < 10 ^ 20 := by rw [hzm_pre_toNat]; omega
-      have hxbit_big : g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat := by
-        intro hxbit
-        have hxbit' : (Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀
-            x.exponent_).2.2.xbit_ = true := by
-          rw [← haln_def, ← hg_aln_def]; exact hxbit
-        have h99 := alignDown_mantissa_le_99_of_xbit y.mantissa_ y.exponent_ g₀ x.exponent_
-          hg₀_rep hy_mant_bound hxbit'
-        rw [← haln_def, ← hym_a_def] at h99
-        rw [hzm_pre_toNat]
-        omega
-      have h_dom : |y.toRat| < |x.toRat| := by
-        rw [h_y_abs_pre, h_x_abs]
-        have h_pow_pos : (0 : ℚ) < 10 ^ x.exponent_ := by positivity
-        have h_lt : (ym_a.toNat : ℚ) + f_aln < (x.mantissa_.toNat : ℚ) := by
-          have : ((ym_a.toNat : ℚ) + 1) ≤ (x.mantissa_.toNat : ℚ) := by
-            have : (ym_a.toNat + 1 : ℕ) ≤ x.mantissa_.toNat := by omega
-            exact_mod_cast this
-          linarith
-        exact mul_lt_mul_of_pos_right h_lt h_pow_pos
-      have h_sign' := diff_sign_sum_sign_of_dominant (Ne.symm h_diff_sign) h_dom
-      have h_sign : (x.negative_ = true → x.toRat + y.toRat ≤ 0) ∧
-          (x.negative_ = false → 0 ≤ x.toRat + y.toRat) := by
-        rw [add_comm x.toRat y.toRat]; exact h_sign'
-      simp only [if_pos h_xm_gt_uint] at hok
-      exact ⟨x.negative_, zm_pre, x.exponent_, g_aln, f_aln, hf_aln_rep, hzm_pre_pos, hzm_pre_lt,
-        hxbit_big, h_truth_eq_minus, hxe_max, h_sign, hok.symm⟩
-    · -- Case 3: xe = ye, no alignment. The guard starts empty with x's sign, and f_aln = 0.
-      push Not at h_xe_gt_ye
-      have h_xe_eq_ye : x.exponent_ = y.exponent_ := le_antisymm h_xe_gt_ye h_xe_lt_ye
-      rw [if_neg (not_lt.mpr h_xe_lt_ye), if_neg (not_lt.mpr h_xe_gt_ye)] at hok
-      simp only at hok
-      have h_x_abs : |x.toRat| = (x.mantissa_.toNat : ℚ) * 10 ^ x.exponent_ := abs_toRat_eq x
-      have h_y_abs : |y.toRat| = (y.mantissa_.toNat : ℚ) * 10 ^ y.exponent_ := abs_toRat_eq y
-      -- The sign-aware initial guard (no alignment in the equal-exponent case).
-      set g₀ : Guard := if x.negative_ then Guard.new.set_negative else Guard.new with hg₀_def
-      have hg₀_rep : represents g₀ 0 := g0_represents_zero x.negative_
-      have hg₀_xbit : g₀.xbit_ = false := by
-        rw [hg₀_def]
-        cases hxn : x.negative_ <;> rfl
-      by_cases h_xm_gt : x.mantissa_.toNat > y.mantissa_.toNat
-      · -- xm > ym
-        have h_xm_gt_uint : x.mantissa_ > y.mantissa_ := UInt64.lt_iff_toNat_lt.mpr h_xm_gt
-        set zm_pre : UInt128 := toUInt128 x.mantissa_ - toUInt128 y.mantissa_ with hzm_pre_def
-        have h_ym_le_xm : toUInt128 y.mantissa_ ≤ toUInt128 x.mantissa_ := by
-          rw [BitVec.le_def, toNat_toUInt128, toNat_toUInt128]
-          exact Nat.le_of_lt h_xm_gt
-        have hzm_pre_toNat : zm_pre.toNat = x.mantissa_.toNat - y.mantissa_.toNat := by
-          rw [hzm_pre_def, BitVec.toNat_sub_of_le h_ym_le_xm, toNat_toUInt128, toNat_toUInt128]
-        have hzm_pre_pos : 1 ≤ zm_pre.toNat := by rw [hzm_pre_toNat]; omega
-        have h_truth_eq : |x.toRat + y.toRat| = ((zm_pre.toNat : ℚ) - 0) * 10 ^ x.exponent_ := by
-          rw [h_abs_add, h_x_abs, h_y_abs, ← h_xe_eq_ye]
-          have h_diff_nn : (0 : ℚ) ≤ (x.mantissa_.toNat : ℚ) - (y.mantissa_.toNat : ℚ) := by
-            have : ((y.mantissa_.toNat : ℕ) : ℚ) ≤ ((x.mantissa_.toNat : ℕ) : ℚ) := by
-              exact_mod_cast (Nat.le_of_lt h_xm_gt)
-            linarith
-          rw [show (x.mantissa_.toNat : ℚ) * 10 ^ x.exponent_
-                   - (y.mantissa_.toNat : ℚ) * 10 ^ x.exponent_
-                 = ((x.mantissa_.toNat : ℚ) - (y.mantissa_.toNat : ℚ)) * 10 ^ x.exponent_ from by ring]
-          have h_pow_pos : (0 : ℚ) < 10 ^ x.exponent_ := by positivity
-          have h_prod_nn : (0 : ℚ)
-              ≤ ((x.mantissa_.toNat : ℚ) - (y.mantissa_.toNat : ℚ)) * 10 ^ x.exponent_ :=
-            mul_nonneg h_diff_nn (le_of_lt h_pow_pos)
-          rw [abs_of_nonneg h_prod_nn, hzm_pre_toNat]
-          have hsub_q : ((x.mantissa_.toNat - y.mantissa_.toNat : ℕ) : ℚ)
-              = (x.mantissa_.toNat : ℚ) - (y.mantissa_.toNat : ℚ) := by
-            rw [Nat.cast_sub (Nat.le_of_lt h_xm_gt)]
-          rw [hsub_q]; ring
-        have hzm_pre_lt : zm_pre.toNat < 10 ^ 20 := by rw [hzm_pre_toNat]; omega
-        have hxbit_big : g₀.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat := by
-          intro h; rw [hg₀_xbit] at h; exact Bool.noConfusion h
-        have h_dom : |y.toRat| < |x.toRat| := by
-          rw [h_x_abs, h_y_abs, ← h_xe_eq_ye]
-          have h_pow_pos : (0 : ℚ) < 10 ^ x.exponent_ := by positivity
-          have h_lt : (y.mantissa_.toNat : ℚ) < (x.mantissa_.toNat : ℚ) := by
-            exact_mod_cast h_xm_gt
-          exact mul_lt_mul_of_pos_right h_lt h_pow_pos
-        have h_sign' := diff_sign_sum_sign_of_dominant (Ne.symm h_diff_sign) h_dom
-        have h_sign : (x.negative_ = true → x.toRat + y.toRat ≤ 0) ∧
-            (x.negative_ = false → 0 ≤ x.toRat + y.toRat) := by
-          rw [add_comm x.toRat y.toRat]; exact h_sign'
-        simp only [if_pos h_xm_gt_uint] at hok
-        exact ⟨x.negative_, zm_pre, x.exponent_, g₀, 0, hg₀_rep, hzm_pre_pos, hzm_pre_lt,
-          hxbit_big, h_truth_eq, hxe_max, h_sign, hok.symm⟩
-      · push Not at h_xm_gt
-        by_cases h_xm_eq : x.mantissa_.toNat = y.mantissa_.toNat
-        · -- Degenerate: xm = ym ∧ xe = ye ∧ diff-sign means x = -y, which contradicts h_not_zero.
-          exfalso
-          apply h_not_zero
-          have h_xm_eq_uint : x.mantissa_ = y.mantissa_ := UInt64.toNat_inj.mp h_xm_eq
-          have hxn_eq : x.negative_ = !y.negative_ := by
-            cases hxn : x.negative_ <;> cases hyn : y.negative_ <;> simp_all
-          unfold Number.operator_eq Number.operator_neg
-          rw [if_neg (by simp [hy_mant_ne] : ¬ (y.mantissa_ == 0) = true)]
-          simp only [Bool.and_eq_true, beq_iff_eq]
-          exact ⟨⟨hxn_eq, h_xm_eq_uint⟩, h_xe_eq_ye⟩
-        · -- xm < ym
-          have h_xm_lt : x.mantissa_.toNat < y.mantissa_.toNat := by omega
-          set zm_pre : UInt128 := toUInt128 y.mantissa_ - toUInt128 x.mantissa_ with hzm_pre_def
-          have h_xm_le : toUInt128 x.mantissa_ ≤ toUInt128 y.mantissa_ := by
-            rw [BitVec.le_def, toNat_toUInt128, toNat_toUInt128]
-            exact Nat.le_of_lt h_xm_lt
-          have hzm_pre_toNat : zm_pre.toNat = y.mantissa_.toNat - x.mantissa_.toNat := by
-            rw [hzm_pre_def, BitVec.toNat_sub_of_le h_xm_le, toNat_toUInt128, toNat_toUInt128]
-          have hzm_pre_pos : 1 ≤ zm_pre.toNat := by rw [hzm_pre_toNat]; omega
-          have h_truth_eq : |x.toRat + y.toRat| = ((zm_pre.toNat : ℚ) - 0) * 10 ^ x.exponent_ := by
-            rw [h_abs_add, h_x_abs, h_y_abs, ← h_xe_eq_ye]
-            have h_diff_nn : (0 : ℚ) ≤ (y.mantissa_.toNat : ℚ) - (x.mantissa_.toNat : ℚ) := by
-              have : ((x.mantissa_.toNat : ℕ) : ℚ) ≤ ((y.mantissa_.toNat : ℕ) : ℚ) := by
-                exact_mod_cast (Nat.le_of_lt h_xm_lt)
-              linarith
-            rw [show (x.mantissa_.toNat : ℚ) * 10 ^ x.exponent_
-                     - (y.mantissa_.toNat : ℚ) * 10 ^ x.exponent_
-                   = -(((y.mantissa_.toNat : ℚ) - (x.mantissa_.toNat : ℚ)) * 10 ^ x.exponent_)
-                 from by ring]
-            rw [abs_neg]
-            have h_pow_pos : (0 : ℚ) < 10 ^ x.exponent_ := by positivity
-            have h_prod_nn : (0 : ℚ)
-                ≤ ((y.mantissa_.toNat : ℚ) - (x.mantissa_.toNat : ℚ)) * 10 ^ x.exponent_ :=
-              mul_nonneg h_diff_nn (le_of_lt h_pow_pos)
-            rw [abs_of_nonneg h_prod_nn, hzm_pre_toNat]
-            have hsub_q : ((y.mantissa_.toNat - x.mantissa_.toNat : ℕ) : ℚ)
-                = (y.mantissa_.toNat : ℚ) - (x.mantissa_.toNat : ℚ) := by
-              rw [Nat.cast_sub (Nat.le_of_lt h_xm_lt)]
-            rw [hsub_q]; ring
-          have hzm_pre_lt : zm_pre.toNat < 10 ^ 20 := by rw [hzm_pre_toNat]; omega
-          have hxbit_big : g₀.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat := by
-            intro h; rw [hg₀_xbit] at h; exact Bool.noConfusion h
-          have h_not_xm_gt : ¬ x.mantissa_ > y.mantissa_ := by
-            intro h
-            have := UInt64.lt_iff_toNat_lt.mp h; omega
-          have h_dom : |x.toRat| < |y.toRat| := by
-            rw [h_x_abs, h_y_abs, ← h_xe_eq_ye]
-            have h_pow_pos : (0 : ℚ) < 10 ^ x.exponent_ := by positivity
-            have h_lt : (x.mantissa_.toNat : ℚ) < (y.mantissa_.toNat : ℚ) := by
-              exact_mod_cast h_xm_lt
-            exact mul_lt_mul_of_pos_right h_lt h_pow_pos
-          have h_sign := diff_sign_sum_sign_of_dominant h_diff_sign h_dom
-          simp only [if_neg h_not_xm_gt] at hok
-          exact ⟨y.negative_, zm_pre, x.exponent_, g₀, 0, hg₀_rep, hzm_pre_pos, hzm_pre_lt,
-            hxbit_big, h_truth_eq, hxe_max, h_sign, hok.symm⟩
+  have hy0 : ¬ y.operator_eq Number.zero = true := by
+    simp [Number.operator_eq, Number.zero, hy_mant_ne]
+  have hx0 : ¬ x.operator_eq Number.zero = true := by
+    simp [Number.operator_eq, Number.zero, hx_mant_ne]
+  have hsgn : (x.negative_ == y.negative_) = false := by
+    cases hxn : x.negative_ <;> cases hyn : y.negative_ <;> simp_all
+  generalize ha : Number.addAlignSpec x y = a
+  obtain ⟨xa, ya, E, g⟩ := a
+  obtain ⟨f, hrep, -, hEmax, hxa, hya, hlt, hgt, heq⟩ :=
+    Number.addAlignSpec_facts x y hx hy hx_mant_ne hy_mant_ne xa ya E g ha
+  have hspec : ∀ zm zn, (if xa > ya then (xa - ya, x.negative_) else (ya - xa, y.negative_)) = (zm, zn) →
+      x.operator_addSpec y mode = doNormalize128 zn
+        (if (recoverSpec (toUInt128 largeRange.min * 1000) zm E g 40).2.2.empty = true
+          then (recoverSpec (toUInt128 largeRange.min * 1000) zm E g 40).1
+          else (recoverSpec (toUInt128 largeRange.min * 1000) zm E g 40).1 - 1)
+        (recoverSpec (toUInt128 largeRange.min * 1000) zm E g 40).2.1
+        largeRange.min largeRange.max mode
+        (!(recoverSpec (toUInt128 largeRange.min * 1000) zm E g 40).2.2.empty) := by
+    intro zm zn hd
+    unfold Number.operator_addSpec
+    rw [ite_eq_right hy0, ite_eq_right hx0, ite_eq_right h_not_zero]
+    dsimp only
+    rw [ha]
+    dsimp only
+    rw [hsgn]
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    rw [hd]
+  have hf0 : 0 ≤ f := represents_nonneg hrep
+  have hf1 : f < 1 := represents_lt_one hrep
+  have hE : (0 : ℚ) < 10 ^ E := zpow_pos (by norm_num) _
+  have hsub : ∀ a b : UInt128, b.toNat ≤ a.toNat → (a - b).toNat = a.toNat - b.toNat := fun a b h =>
+    BitVec.toNat_sub_of_le (BitVec.le_def.mpr h)
+  have habs := abs_add_eq_of_diff_sign h_diff_sign
+  have hxbit_empty : g.xbit_ = true → g.empty = false := by
+    intro hxb; unfold Guard.empty; simp [hxb]
+  rcases lt_trichotomy x.exponent_ y.exponent_ with h | h | h
+  · -- y has the larger exponent, so it dominates and the subtraction is ya - xa
+    obtain ⟨hxv, hyv, hxa19, hya18, hbig⟩ := hlt h
+    have hdom0 := Number.abs_lt_of_exponent_lt hx hy hx_mant_ne hy_mant_ne h
+    have hdom := hdom0
+    rw [hxv, hyv] at hdom
+    have hlt' : xa.toNat < ya.toNat := by
+      have : (xa.toNat : ℚ) < ya.toNat := by nlinarith
+      exact_mod_cast this
+    have hng : ¬ xa > ya := fun hg' => by have := BitVec.lt_def.mp hg'; omega
+    refine ⟨y.negative_, ya - xa, E, g, f, hrep, ?_, ?_, ?_, ?_, hEmax, ?_, hspec _ _ (by rw [ite_eq_right hng])⟩
+    · rw [hsub _ _ hlt'.le]; omega
+    · rw [hsub _ _ hlt'.le]; omega
+    · intro hxb; have := hbig (hxbit_empty hxb); rw [hsub _ _ hlt'.le]; omega
+    · rw [habs, hxv, hyv, hsub _ _ hlt'.le, Nat.cast_sub hlt'.le, abs_of_neg (by nlinarith)]; ring
+    · exact diff_sign_sum_sign_of_dominant h_diff_sign hdom0
+  · -- equal exponents: no guard, the larger mantissa dominates
+    obtain ⟨rfl, hgemp, hxv, hyv, -, -, -, -⟩ := heq h
+    have hne : xa.toNat ≠ ya.toNat := by
+      intro hxy
+      apply h_not_zero
+      have hm : x.mantissa_.toNat = y.mantissa_.toNat := by
+        have h1 : (x.mantissa_.toNat : ℚ) * 10 ^ x.exponent_ = (y.mantissa_.toNat : ℚ) * 10 ^ y.exponent_ := by
+          rw [← abs_toRat_eq, ← abs_toRat_eq, hxv, hyv, hxy]
+        rw [h] at h1
+        have h2 := mul_right_cancel₀ (ne_of_gt (zpow_pos (by norm_num : (0 : ℚ) < 10) y.exponent_)) h1
+        exact_mod_cast h2
+      have hneg : x.negative_ = !y.negative_ := by
+        cases hxn : x.negative_ <;> cases hyn : y.negative_ <;> simp_all
+      simp [Number.operator_eq, Number.operator_neg, hneg, UInt64.toNat_inj.mp hm, h, hy_mant_ne]
+    have hrep0 : represents g 0 := hrep
+    have hxb : g.xbit_ = false := by
+      cases hx : g.xbit_
+      · rfl
+      · exact absurd (hxbit_empty hx) (by rw [hgemp]; decide)
+    rcases Nat.lt_or_gt_of_ne hne with hlt' | hgt'
+    · have hng : ¬ xa > ya := fun hg' => by have := BitVec.lt_def.mp hg'; omega
+      have hdom : |x.toRat| < |y.toRat| := by
+        rw [hxv, hyv]
+        have : (xa.toNat : ℚ) < ya.toNat := by exact_mod_cast hlt'
+        nlinarith
+      refine ⟨y.negative_, ya - xa, E, g, 0, hrep0, ?_, ?_, fun h' => by rw [hxb] at h'; exact absurd h' (by decide),
+        ?_, hEmax, ?_, hspec _ _ (by rw [ite_eq_right hng])⟩
+      · rw [hsub _ _ hlt'.le]; omega
+      · rw [hsub _ _ hlt'.le]; omega
+      · rw [habs, hxv, hyv, hsub _ _ hlt'.le, Nat.cast_sub hlt'.le, abs_of_neg (by
+          have : (xa.toNat : ℚ) < ya.toNat := by exact_mod_cast hlt'
+          nlinarith)]
+        ring
+      · exact diff_sign_sum_sign_of_dominant h_diff_sign hdom
+    · have hg' : xa > ya := BitVec.lt_def.mpr hgt'
+      have hdom : |y.toRat| < |x.toRat| := by
+        rw [hxv, hyv]
+        have : (ya.toNat : ℚ) < xa.toNat := by exact_mod_cast hgt'
+        nlinarith
+      refine ⟨x.negative_, xa - ya, E, g, 0, hrep0, ?_, ?_, fun h' => by rw [hxb] at h'; exact absurd h' (by decide),
+        ?_, hEmax, ?_, hspec _ _ (by rw [ite_eq_left hg'])⟩
+      · rw [hsub _ _ hgt'.le]; omega
+      · rw [hsub _ _ hgt'.le]; omega
+      · rw [habs, hxv, hyv, hsub _ _ hgt'.le, Nat.cast_sub hgt'.le, abs_of_pos (by
+          have : (ya.toNat : ℚ) < xa.toNat := by exact_mod_cast hgt'
+          nlinarith)]
+        ring
+      · have := diff_sign_sum_sign_of_dominant (Ne.symm h_diff_sign) hdom
+        rw [add_comm] at this
+        exact this
+  · -- x has the larger exponent, so it dominates and the subtraction is xa - ya
+    obtain ⟨hyv, hxv, hya19, hxa18, hbig⟩ := hgt h
+    have hdom := Number.abs_lt_of_exponent_lt hy hx hy_mant_ne hx_mant_ne h
+    have hdom' := hdom
+    rw [hxv, hyv] at hdom'
+    have hgt' : ya.toNat < xa.toNat := by
+      have : (ya.toNat : ℚ) < xa.toNat := by nlinarith
+      exact_mod_cast this
+    have hg' : xa > ya := BitVec.lt_def.mpr hgt'
+    refine ⟨x.negative_, xa - ya, E, g, f, hrep, ?_, ?_, ?_, ?_, hEmax, ?_, hspec _ _ (by rw [ite_eq_left hg'])⟩
+    · rw [hsub _ _ hgt'.le]; omega
+    · rw [hsub _ _ hgt'.le]; omega
+    · intro hxb; have := hbig (hxbit_empty hxb); rw [hsub _ _ hgt'.le]; omega
+    · rw [habs, hxv, hyv, hsub _ _ hgt'.le, Nat.cast_sub hgt'.le, abs_of_pos (by nlinarith)]; ring
+    · have := diff_sign_sum_sign_of_dominant (Ne.symm h_diff_sign) hdom
+      rw [add_comm] at this
+      exact this
 
 /-- A successful opposite-sign addition gives `M`, `δ` in `[0, 1)` and a sign `zn` with
 `|x + y| = (M + δ)·10^ze'`, and `doNormalize128` on `M` returns `result`. -/

@@ -2,10 +2,8 @@ import XRPL.Properties.Protocol.STAmount.Sub.Common.NearestProofs
 
 /-! # IOU subtraction rounds to nearest
 
-In `to_nearest`, IOU subtraction should return an amount at most half a unit away from the exact difference. The
-unit is `10 ^ result.mOffset`. The code rounds twice, to 19 digits and then to 16, and the two steps together can
-miss the nearest amount. The theorem assumes the exact difference is itself a Number (`hfit`), so the first step
-does nothing, and the `_attained` witness shows a difference that breaks it. -/
+IOU subtraction rounds twice, to 19 digits and then to 16, and can miss the nearest amount. The theorem assumes an
+exact difference that is a Number (`hfit`), and the `_attained` witness shows a difference that breaks it. -/
 
 namespace XRPL.Model.Protocol
 

@@ -7,9 +7,8 @@ import XRPL.Properties.Vault.Proofs.ExitOrderWitness
 
 /-! # The order of two exits in the redemption phase
 
-Two holders A and B redeem all their shares from a reachable vault in its redemption phase, so with
-no early-exit fee. A payout that leaves shares is the priced amount floored onto the base grid, and the
-last one pays all the cash left. Each is within one base unit of the shares' worth. -/
+Two holders redeem all their shares from a reachable vault in its redemption phase, with no early-exit fee. Each
+payout is within one base unit of the shares' worth. -/
 
 namespace XRPL.Model.SingleAssetVault
 

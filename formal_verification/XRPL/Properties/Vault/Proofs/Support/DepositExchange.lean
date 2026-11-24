@@ -50,8 +50,8 @@ lemma Vault.assetsTotal_ge_deployed (v : Vault) (assetsTotal : Number) (h : v.as
     have h' := h
     replace h' := Number.operator_add_ok_spec h'
     unfold Number.operator_addSpec at h'
-    rw [Number.operator_eq_zero_false_of_mantissa_ne _ hd, if_neg Bool.false_ne_true,
-      Number.eq_zero_of_mantissa_zero _ hAA ha, if_pos (by decide)] at h'
+    rw [Number.operator_eq_zero_false_of_mantissa_ne _ hd, ite_eq_right Bool.false_ne_true,
+      Number.eq_zero_of_mantissa_zero _ hAA ha, ite_eq_left (by decide)] at h'
     obtain rfl := Except.ok.inj h'
     exact ⟨hAD, le_refl _⟩
   -- both nonzero and nonnegative: a same-sign sum, which never flushes to zero
@@ -147,7 +147,7 @@ lemma assetsToSharesDeposit_pos (v : Vault) (amount shares : STAmount)
   dsimp only at hok
   by_cases hmz : navN.mantissa_ = 0
   · -- empty vault: shares = ⌊normalize(amount·10^scale)⌋
-    rw [if_pos hmz] at hok
+    rw [ite_eq_left hmz] at hok
     obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨n2, hn2, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨sh', hsh, hlast⟩ := bind_ok_peel _ _ _ hok
@@ -183,7 +183,7 @@ lemma assetsToSharesDeposit_pos (v : Vault) (amount shares : STAmount)
     rw [hshval, hn2val]
     exact_mod_cast Int.floor_nonneg.mpr hn1_nonneg
   · -- nonempty vault: shares = ⌊(sharesTotal·amount)/nav⌋
-    rw [if_neg hmz] at hok
+    rw [ite_eq_right hmz] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨amountN, hamN, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨P, hP, hok⟩ := bind_ok_peel _ _ _ hok

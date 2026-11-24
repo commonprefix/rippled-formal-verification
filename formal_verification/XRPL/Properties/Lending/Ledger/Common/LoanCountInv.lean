@@ -61,7 +61,7 @@ private lemma LendingLedger.loansOf_rewrite (l : LendingLedger) (i : Nat) (e e' 
     (storeSlot l.loans i (some e')).countP (fun o => o.any (·.brokerIndex == j)) = l.loansOf j := by
   obtain ⟨hi, hei⟩ := LendingLedger.loan?_getElem he
   unfold storeSlot LendingLedger.loansOf
-  rw [if_pos hi]
+  rw [ite_eq_left hi]
   have := List.countP_set_add (fun o : Option LoanEntry => o.any (·.brokerIndex == j)) l.loans i (some e') hi
   simp only [hei, Option.any_some, hb] at this
   omega
@@ -73,7 +73,7 @@ private lemma LendingLedger.loansOf_delete (l : LendingLedger) (i : Nat) (e : Lo
       l.loansOf j := by
   obtain ⟨hi, hei⟩ := LendingLedger.loan?_getElem he
   unfold storeSlot LendingLedger.loansOf
-  rw [if_pos hi]
+  rw [ite_eq_left hi]
   have := List.countP_set_add (fun o : Option LoanEntry => o.any (·.brokerIndex == j)) l.loans i none hi
   simp only [hei, Option.any_some, Option.any_none, beq_iff_eq] at this
   simpa using this
@@ -83,7 +83,7 @@ private lemma LendingLedger.loansOf_create (l : LendingLedger) (e : LoanEntry) (
     (storeSlot l.loans l.loans.length (some e)).countP (fun o => o.any (·.brokerIndex == j)) =
       l.loansOf j + (if e.brokerIndex = j then 1 else 0) := by
   unfold storeSlot LendingLedger.loansOf
-  rw [if_neg (lt_irrefl _), List.countP_append]
+  rw [ite_eq_right (lt_irrefl _), List.countP_append]
   simp
 
 /-- A loan effect keeps the invariant when every other broker keeps its count and the loan's broker
@@ -156,7 +156,7 @@ lemma LendingLedger.LoanCountInv.loan_step {l : LendingLedger} (hinv : l.LoanCou
         (fun o => o.any (·.brokerIndex == j)) = _
       have hj' : i ≠ j := fun h => hj (h ▸ rfl)
       rw [l.loansOf_create]
-      simp only [if_neg hj', Nat.add_zero]
+      simp only [ite_eq_right hj', Nat.add_zero]
     · show r.loan'.broker.loanCount.toNat = (storeSlot l.loans l.loans.length
         (some { brokerIndex := i, loan := r.loan' })).countP (fun o => o.any (·.brokerIndex == i))
       rw [l.loansOf_create, Loan.create_loanCount _ _ _ _ _ _ _ _ r hpn hpos hcr, hinv.counted i broker hb]
@@ -187,12 +187,12 @@ lemma LendingLedger.LoanCountInv.loan_step {l : LendingLedger} (hinv : l.LoanCou
     · show (storeSlot l.loans i none).countP (fun o => o.any (·.brokerIndex == j)) = _
       have hj' : e.brokerIndex ≠ j := fun h => hj (h ▸ rfl)
       have := hdel j
-      rw [if_neg hj'] at this
+      rw [ite_eq_right hj'] at this
       exact this
     · show r.broker'.loanCount.toNat =
         (storeSlot l.loans i none).countP (fun o => o.any (·.brokerIndex == e.brokerIndex))
       have h1 := hdel e.brokerIndex
-      rw [if_pos rfl] at h1
+      rw [ite_eq_left rfl] at h1
       have hc := hinv.counted _ broker hb
       rw [Loan.delete_loanCount loan _ r hr, hlb, UInt32.toNat_sub_of_le _ _ (by
         rw [UInt32.le_iff_toNat_le]; show 1 ≤ broker.loanCount.toNat; omega)]
@@ -211,27 +211,27 @@ lemma LendingLedger.LoanCountInv.broker_step {l : LendingLedger} (hinv : l.LoanC
       (u.broker = none → l.loansOf (if u.index < l.brokers.length then u.index else l.brokers.length) = 0) := by
     rcases LendingLedger.applyBroker_cases l tx u hu with ⟨hi, b, hb, -, hc⟩ | ⟨b, b2, hb, hb2, -, hc⟩ |
       ⟨b, hb, hb2, hc⟩
-    · rw [hi, if_neg (lt_irrefl _)]
+    · rw [hi, ite_eq_right (lt_irrefl _)]
       refine ⟨fun b' hb' => ?_, fun h => ?_⟩
       · rw [hb] at hb'; cases hb'; rw [hc, hinv.orphans _ (hnone _ le_rfl)]; rfl
       · rw [hb] at h; cases h
-    · rw [if_pos (LendingLedger.broker?_lt hb)]
+    · rw [ite_eq_left (LendingLedger.broker?_lt hb)]
       refine ⟨fun b' hb' => ?_, fun h => ?_⟩
       · rw [hb2] at hb'; cases hb'; rw [hc]; exact hinv.counted _ b hb
       · rw [hb2] at h; cases h
-    · rw [if_pos (LendingLedger.broker?_lt hb)]
+    · rw [ite_eq_left (LendingLedger.broker?_lt hb)]
       refine ⟨fun b' hb' => ?_, fun _ => ?_⟩
       · rw [hb2] at hb'; cases hb'
       · have := hinv.counted _ b hb; rw [hc] at this; exact this.symm
   refine ⟨fun j b' hb' => ?_, fun j hj => ?_⟩ <;> rw [hloans]
   · rw [LendingLedger.broker?_commitBroker] at hb'
     by_cases hj : j = (if u.index < l.brokers.length then u.index else l.brokers.length)
-    · rw [if_pos hj] at hb'; rw [hj]; exact hk.1 b' hb'
-    · rw [if_neg hj] at hb'; exact hinv.counted j b' hb'
+    · rw [ite_eq_left hj] at hb'; rw [hj]; exact hk.1 b' hb'
+    · rw [ite_eq_right hj] at hb'; exact hinv.counted j b' hb'
   · rw [LendingLedger.broker?_commitBroker] at hj
     by_cases hjk : j = (if u.index < l.brokers.length then u.index else l.brokers.length)
-    · rw [if_pos hjk] at hj; rw [hjk]; exact hk.2 hj
-    · rw [if_neg hjk] at hj; exact hinv.orphans j hj
+    · rw [ite_eq_left hjk] at hj; rw [hjk]; exact hk.2 hj
+    · rw [ite_eq_right hjk] at hj; exact hinv.orphans j hj
 
 /-- Every transaction keeps the invariant. -/
 lemma LendingLedger.LoanCountInv.step {l l' : LendingLedger} (hinv : l.LoanCountInv) {tx : LendingTx}

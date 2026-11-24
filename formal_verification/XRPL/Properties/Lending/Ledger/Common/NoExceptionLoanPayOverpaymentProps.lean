@@ -1,11 +1,10 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionLoanSetChecks
 import XRPL.Properties.Lending.Ledger.Common.NoExceptionLoanPayRoom
 
 /-! # The re-amortization of an overpayment computes its loan values
 
-An overpayment re-amortizes the loan for a reduced principal, which need not be an amount of the asset and can be
-zero. The values of the re-amortized loan compute as those of a LoanSet do, and the new PeriodicPayment is at most
-the old one, because it comes from a principal at most the theoretical one through the same payment factor. -/
+The values of the re-amortized loan compute as a LoanSet's do, and the new PeriodicPayment is at most the old one. -/
 
 namespace XRPL.Model.Lending
 
@@ -73,10 +72,10 @@ lemma loanPeriodicPayment_le_of_principal_le (pp rate rp : Number) (n : UInt32) 
     rw [hz, Number.toRat_zero]; positivity
   unfold loanPeriodicPayment at h
   by_cases hc : (rp.operator_eq Number.zero || n == 0) = true
-  · rw [if_pos hc] at h
+  · rw [ite_eq_left hc] at h
     have h' : (Except.ok Number.zero : Except Error Number) = .ok pp' := h
     exact hzero (Except.ok.inj h').symm
-  rw [if_neg hc] at h
+  rw [ite_eq_right hc] at h
   dsimp only at h
   have hn0 : ¬ (n == 0) = true := fun hn => hc (by simp [hn])
   have hn1 : (1 : ℚ) ≤ n.toNat := by
@@ -92,14 +91,14 @@ lemma loanPeriodicPayment_le_of_principal_le (pp rate rp : Number) (n : UInt32) 
   obtain ⟨_, -, htpo⟩ := bind_ok_peel _ _ _ htpo
   by_cases hz : rate.operator_eq Number.zero = true
   · -- no interest: the payment is the principal over `n`, the principal `n` payments
-    rw [if_pos hz] at h htpo
+    rw [ite_eq_left hz] at h htpo
     have h1 := (Number.div_near _ _ _ hrp hN h).le (by rw [hNv]; positivity)
     have h2 := (Number.mul_near _ _ _ hpp hN htpo).le (by rw [hNv]; positivity)
     rw [hNv] at h1 h2
     calc pp'.toRat ≤ rp.toRat / n.toNat * (1 + ε) := h1
       _ ≤ pp.toRat * n.toNat * (1 + ε) / n.toNat * (1 + ε) := by gcongr; linarith
       _ = pp.toRat * (1 + ε) ^ 2 := by field_simp
-  · rw [if_neg hz] at h htpo
+  · rw [ite_eq_right hz] at h htpo
     have hr : 0 < rate.toRat := by
       rcases lt_or_eq_of_le hr0 with h' | h'
       · exact h'
@@ -326,7 +325,8 @@ lemma computeLoanPropertiesFromPeriodicRate_computes (principal rate : Number) (
   have hpp36 : pp.toRat < 10 ^ 36 := by nlinarith
 
   -- the raw total value
-  obtain ⟨amount, hamount⟩ := Number.operator_mul_ok_of_abs pp (Number.ofInt64 n.toInt64) (valueMode rate) hppN hN
+  obtain ⟨amount, hamount⟩ :=
+    Number.operator_mul_ok_of_abs pp (Number.ofInt64 n.toInt64 .to_nearest) (valueMode rate) hppN hN
     (by rw [abs_of_nonneg hpp0]; linarith [show (10 : ℚ) ^ 36 < 10 ^ 200 by norm_num])
     (by rw [hNv, abs_of_nonneg (by positivity)]; linarith [show (2 : ℚ) ^ 32 < 10 ^ 200 by norm_num])
   have hamountN := Number.operator_mul_isNormalized _ _ amount _ hppN hN hamount
@@ -421,6 +421,7 @@ lemma computeLoanPropertiesFromPeriodicRate_computes (principal rate : Number) (
   · unfold computeLoanPropertiesFromPeriodicRate
     rw [hpp, ok_bind]
     dsimp only
+    rw [Number.ofInt64_mode _ (UInt32.toInt64_ne_minValue n)]
     rw [hamount, ok_bind, hst', ok_bind, htvo, ok_bind, hrp, ok_bind, hti, ok_bind, hmfo, ok_bind, htpo, ok_bind]
     rw [hsub, ok_bind]
     rw [htpo', ok_bind, hfirst, ok_bind]

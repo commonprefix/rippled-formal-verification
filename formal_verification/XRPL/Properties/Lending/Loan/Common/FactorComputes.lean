@@ -1,3 +1,4 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.FactorGapLoan
 import XRPL.Properties.Lending.Loan.Common.NumberTotal
 import XRPL.Properties.Lending.Loan.Common.TheoreticalPrincipal
@@ -22,7 +23,7 @@ local notation "ε" => Number.nearestError
 
 /-- A power by squaring computes while the exact power times two roundings per step stays below `10^199`. -/
 private lemma Number.power_computes (base : Number) (hb : base.isNormalized) (h1 : 1 ≤ base.toRat) :
-    ∀ k : Nat, base.toRat ^ k * (1 + ε) ^ (2 * k) < 10 ^ 199 → ∃ r, base.power k = .ok r := by
+    ∀ k : Nat, base.toRat ^ k * (1 + ε) ^ (2 * k) < 10 ^ 199 → ∃ r, base.power k .to_nearest = .ok r := by
   have he : 0 < ε := Number.nearestError_pos
   intro k
   induction k using Nat.strong_induction_on with
@@ -35,7 +36,7 @@ private lemma Number.power_computes (base : Number) (hb : base.isNormalized) (h1
       have hm : 1 ≤ (j + 2) / 2 := by omega
       have hmono : base.toRat ^ ((j + 2) / 2) * (1 + ε) ^ (2 * ((j + 2) / 2)) ≤
           base.toRat ^ (j + 2) * (1 + ε) ^ (2 * (j + 2)) := by
-        gcongr <;> first | exact h1 | omega | linarith
+        gcongr <;> first | omega | linarith
       obtain ⟨half, hh⟩ := ih ((j + 2) / 2) (by omega) (lt_of_le_of_lt hmono hk)
       have hhN := Number.power_isNormalized base hb _ half hh
       have hh1 := Number.power_ge_one base hb h1 _ half hh
@@ -61,13 +62,13 @@ private lemma Number.power_computes (base : Number) (hb : base.isNormalized) (h1
                 gcongr
             _ = base.toRat ^ (2 * m) * (1 + ε) ^ (4 * m + 1) := by ring
             _ ≤ base.toRat ^ (2 * m + 1) * (1 + ε) ^ (4 * m + 2) := by
-                gcongr <;> first | exact h1 | omega | linarith
+                gcongr <;> first | omega | linarith
             _ = base.toRat ^ (j + 2) * (1 + ε) ^ (2 * (j + 2)) := by
                 rw [hk']; ring
         have hbl : base.toRat ≤ base.toRat ^ (j + 2) * (1 + ε) ^ (2 * (j + 2)) := by
           calc base.toRat = base.toRat ^ 1 * 1 := by ring
             _ ≤ base.toRat ^ (j + 2) * (1 + ε) ^ (2 * (j + 2)) := by
-                gcongr <;> first | exact h1 | omega | linarith | exact one_le_pow₀ (by linarith)
+                gcongr <;> first | omega | exact one_le_pow₀ (by linarith)
         exact Number.operator_mul_ok_of_abs sq base .to_nearest hsqN hb
           (by rw [abs_of_nonneg hsq0]; linarith) (by rw [abs_of_nonneg (by linarith)]; linarith)
       · exact ⟨sq, rfl⟩
@@ -227,7 +228,7 @@ private lemma zero_checks (rate : Number) (k : UInt32) (hrate : rate.isNormalize
 at least `10^-12` and below `10^70`. -/
 private lemma computePowerMinusOneHybrid_computes (rate : Number) (k : UInt32) (hrate : rate.isNormalized)
     (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hk0 : k ≠ 0) (hkr : (k.toNat : ℚ) * rate.toRat ≤ 137) :
-    ∃ pm, computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64) k = .ok pm ∧
+    ∃ pm, computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok pm ∧
       pm.isNormalized ∧ 1 / 10 ^ 12 ≤ pm.toRat ∧ pm.toRat < 10 ^ 70 := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
@@ -249,13 +250,13 @@ private lemma computePowerMinusOneHybrid_computes (rate : Number) (k : UInt32) (
   have hnrR := Number.operator_mul_rounded_to_nearest _ _ _ hN hrate hnr
   obtain ⟨w, hw, hwN, hwv⟩ := Number.cancellationThreshold
   unfold computePowerMinusOneHybrid
-  rw [hcond, if_neg (by decide)]
+  rw [hcond, ite_eq_right (by decide)]
   dsimp only
   rw [pure_bind, hnr, ok_bind, hw, ok_bind]
   by_cases hge : nr.operator_ge w = true
   · -- the closed form: `(1 + rate)^k` by squaring, less one
-    rw [if_pos hge]
-    obtain ⟨b, hb⟩ := Number.operator_add_ok_of_abs (Number.ofInt64 1) rate .to_nearest hone hrate
+    rw [ite_eq_left hge]
+    obtain ⟨b, hb⟩ := Number.operator_add_ok_of_abs (Number.ofInt64 1 .to_nearest) rate .to_nearest hone hrate
       (by rw [Number.ofInt64_one_toRat]; norm_num) (by rw [abs_of_nonneg hr0]; linarith)
     have hbN := Number.operator_add_isNormalized_to_nearest_sz _ _ b hone hrate hb
     have hbR := Number.operator_add_rounded_to_nearest _ _ _ hone hrate hb
@@ -299,7 +300,7 @@ private lemma computePowerMinusOneHybrid_computes (rate : Number) (k : UInt32) (
     have hrb := Number.power_ge_base b hbN hb1 _ raised hk1' hraised
     have hrle := Number.power_le b hbN hb1 _ raised hk1' hraised
     have hrl : raised.toRat ≤ 3 ^ 137 * 2 := by nlinarith
-    obtain ⟨pm, hpm⟩ := Number.operator_sub_ok_of_abs raised (Number.ofInt64 1) .to_nearest hrN hone
+    obtain ⟨pm, hpm⟩ := Number.operator_sub_ok_of_abs raised (Number.ofInt64 1 .to_nearest) .to_nearest hrN hone
       (by rw [abs_of_nonneg (by linarith)]; linarith [show (3 : ℚ) ^ 137 * 2 < 10 ^ 200 by norm_num])
       (by rw [Number.ofInt64_one_toRat]; norm_num)
     refine ⟨pm, ?_, Number.operator_sub_isNormalized_to_nearest_sz _ _ pm hrN hone hpm, ?_, ?_⟩
@@ -312,7 +313,7 @@ private lemma computePowerMinusOneHybrid_computes (rate : Number) (k : UInt32) (
       have : (raised.toRat - 1) * (1 + ε) ≤ 3 ^ 137 * 2 * 2 := by gcongr <;> linarith
       linarith [show (3 : ℚ) ^ 137 * 2 * 2 < 10 ^ 70 by norm_num]
   · -- the binomial series, for `k·rate` below `10^-9`
-    rw [if_neg hge]
+    rw [ite_eq_right hge]
     have hsm : (k.toNat : ℚ) * rate.toRat < 1 / 10 ^ 9 := by
       by_contra hc
       push Not at hc
@@ -347,16 +348,16 @@ private lemma computePowerMinusOneHybrid_computes (rate : Number) (k : UInt32) (
       (k.toNat - 1) 1 nr nr rfl le_rfl hnrN hnrN hnr0 hnr0 hB
     refine ⟨pm, ?_, ?_, le_trans hnrlo hnrpm, by linarith [show (2 : ℚ) < 10 ^ 70 by norm_num]⟩
     · unfold computePowerMinusOne
-      rw [hcond, if_neg (by decide)]
+      rw [hcond, ite_eq_right (by decide)]
       dsimp only
       rw [pure_bind, hnr, ok_bind, hloop]
-    · have h : computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64) k = .ok pm := by
+    · have h : computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok pm := by
         unfold computePowerMinusOneHybrid
-        rw [hcond, if_neg (by decide)]
+        rw [hcond, ite_eq_right (by decide)]
         dsimp only
-        rw [pure_bind, hnr, ok_bind, hw, ok_bind, if_neg hge]
+        rw [pure_bind, hnr, ok_bind, hw, ok_bind, ite_eq_right hge]
         unfold computePowerMinusOne
-        rw [hcond, if_neg (by decide)]
+        rw [hcond, ite_eq_right (by decide)]
         dsimp only
         rw [pure_bind, hnr, ok_bind, hloop]
       exact computePowerMinusOneHybrid_isNormalized rate _ k pm hrate hN h
@@ -365,7 +366,7 @@ private lemma computePowerMinusOneHybrid_computes (rate : Number) (k : UInt32) (
 least `10^-82`. -/
 private lemma computePaymentFactor_computes (rate : Number) (k : UInt32) (hrate : rate.isNormalized)
     (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hk0 : k ≠ 0) (hkr : (k.toNat : ℚ) * rate.toRat ≤ 137) :
-    ∃ f, computePaymentFactor rate (Number.ofInt64 k.toInt64) k = .ok f ∧ f.isNormalized ∧
+    ∃ f, computePaymentFactor rate (Number.ofInt64 k.toInt64 .to_nearest) k = .ok f ∧ f.isNormalized ∧
       1 / 10 ^ 82 ≤ f.toRat := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
@@ -379,7 +380,7 @@ private lemma computePaymentFactor_computes (rate : Number) (k : UInt32) (hrate 
   obtain ⟨⟨w12, hw12N, hw12⟩, -⟩ := Number.tenth12
   obtain ⟨pm, hpm, hpmN, hpmlo, hpmhi⟩ := computePowerMinusOneHybrid_computes rate k hrate hlow hk0 hkr
   have hpm0 : 0 ≤ pm.toRat := le_trans (by positivity) hpmlo
-  obtain ⟨rr, hrr⟩ := Number.operator_add_ok_of_abs (Number.ofInt64 1) pm .to_nearest hone hpmN
+  obtain ⟨rr, hrr⟩ := Number.operator_add_ok_of_abs (Number.ofInt64 1 .to_nearest) pm .to_nearest hone hpmN
     (by rw [Number.ofInt64_one_toRat]; norm_num)
     (by rw [abs_of_nonneg hpm0]; linarith [show (10 : ℚ) ^ 70 < 10 ^ 200 by norm_num])
   have hrrN := Number.operator_add_isNormalized_to_nearest_sz _ _ rr hone hpmN hrr
@@ -429,9 +430,9 @@ private lemma computePaymentFactor_computes (rate : Number) (k : UInt32) (hrate 
     linarith
   refine ⟨f, ?_, hfN, hflo⟩
   unfold computePaymentFactor
-  rw [hk', if_neg (by decide)]
+  rw [hk', ite_eq_right (by decide)]
   dsimp only
-  rw [pure_bind, hz, if_neg (by decide), hpm, ok_bind, hrr, ok_bind, hnum, ok_bind, hf]
+  rw [pure_bind, hz, ite_eq_right (by decide), hpm, ok_bind, hrr, ok_bind, hnum, ok_bind, hf]
 
 /-- The theoretical principal of `k` payments computes for the periodic rate of a loan's terms and a PeriodicPayment
 from zero up to `10^100`, while `k` payment intervals fit the 32-bit clock. -/
@@ -453,15 +454,15 @@ lemma loanPrincipalFromPeriodicPayment_computes (pp rate : Number) (ir : TenthBi
     exact ⟨Number.zero, rfl⟩
   have hk' : (k == 0) = false := by simpa using hk0
   unfold loanPrincipalFromPeriodicPayment
-  rw [hk', if_neg (by decide)]
+  rw [hk', ite_eq_right (by decide)]
   dsimp only
   rw [pure_bind]
   by_cases hz : rate.operator_eq Number.zero = true
-  · rw [if_pos hz]
+  · rw [ite_eq_left hz]
     exact Number.operator_mul_ok_of_abs pp _ .to_nearest hpp hN
       (by rw [abs_of_nonneg hpp0]; linarith [show (10 : ℚ) ^ 100 < 10 ^ 200 by norm_num])
       (by rw [hNv, abs_of_nonneg (by positivity)]; linarith [show (2 : ℚ) ^ 32 < 10 ^ 200 by norm_num])
-  rw [if_neg hz]
+  rw [ite_eq_right hz]
   have hr00 : rate.toRat ≠ 0 := fun h0 =>
     hz ((Number.operator_eq_iff rate Number.zero hrN Number.zero_isNormalized).mpr (by rw [h0, Number.toRat_zero]))
   have hlow := loanPeriodicRate_ge ir interval rate hiv hrate hr00

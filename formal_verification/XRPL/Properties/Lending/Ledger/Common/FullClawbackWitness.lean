@@ -2,11 +2,9 @@ import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 
 /-! # A full clawback that would leave cash in a vault with no shares
 
-Late interest takes an MPT vault past `10^18` units. A clawback of every share prices them with 19-digit Numbers
-and recovers one unit less than the cash. That would leave the unit in a vault with no shares, so the clawback fails
-its lawfulness re-check. -/
+A full clawback on an MPT vault past `10^18` units leaves a unit with no shares and fails (FV_M4_36, FV_M4_38). -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.Lending
 
@@ -28,7 +26,7 @@ private def fcGenesis : LendingLedger := { vault := fcVault, shares := [], broke
 private lemma fcGenesis_genesis : fcGenesis.Genesis where
   created := ⟨none, none, fcSchedule, none, false, .int64, by native_decide, by
     unfold Vault.create RawVault.to_lawful
-    exact dif_pos ⟨fcVault.wf, fcVault.valid⟩⟩
+    exact dite_eq_left ⟨fcVault.wf, fcVault.valid⟩⟩
   holds_asset := Or.inr (Or.inr rfl)
   no_holders := rfl
   no_brokers := rfl

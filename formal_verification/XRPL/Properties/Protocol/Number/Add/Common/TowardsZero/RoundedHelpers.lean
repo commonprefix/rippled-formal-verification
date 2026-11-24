@@ -111,7 +111,7 @@ theorem Number.operator_add_rounded_towards_zero_proof (x y result : Number)
     have h_result : result = x := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_pos hy_guard] at hok
+      rw [ite_eq_left hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     rw [hy0, add_zero]
     by_cases hx_mant : x.mantissa_ = 0
@@ -119,19 +119,19 @@ theorem Number.operator_add_rounded_towards_zero_proof (x y result : Number)
       rw [hx0]
       change ∃ n' : Number, (if (0 : ℚ) ≥ 0 then Number.lower 0 else Number.upper 0)
         = some n' ∧ result.toRat = n'.toRat
-      rw [if_pos (by norm_num : (0 : ℚ) ≥ 0)]
+      rw [ite_eq_left (by norm_num : (0 : ℚ) ≥ 0)]
       refine ⟨Number.zero, ?_, ?_⟩
       · unfold Number.lower
-        rw [if_pos rfl]
+        rw [ite_eq_left rfl]
       · rw [h_result, hx0, Number.toRat_zero]
     · have hx_ne : x.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero x hx_mant
       change ∃ n' : Number, (if x.toRat ≥ 0 then Number.lower x.toRat else Number.upper x.toRat)
         = some n' ∧ result.toRat = n'.toRat
       by_cases h_nn : x.toRat ≥ 0
-      · rw [if_pos h_nn]
+      · rw [ite_eq_left h_nn]
         obtain ⟨n, h_lo, h_val⟩ := Number.lower_value_self x hx hx_ne
         exact ⟨n, h_lo, by rw [h_result]; exact h_val⟩
-      · rw [if_neg h_nn]
+      · rw [ite_eq_right h_nn]
         obtain ⟨n, h_up, h_val⟩ := Number.upper_value_self x hx hx_ne
         exact ⟨n, h_up, by rw [h_result]; exact h_val⟩
   -- Zero-`x` guard: the model returns `y` verbatim.
@@ -143,7 +143,7 @@ theorem Number.operator_add_rounded_towards_zero_proof (x y result : Number)
     have h_result : result = y := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_pos hx_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_left hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have hy_mant_ne : y.mantissa_ ≠ 0 := by
       intro h
@@ -156,10 +156,10 @@ theorem Number.operator_add_rounded_towards_zero_proof (x y result : Number)
     change ∃ n' : Number, (if y.toRat ≥ 0 then Number.lower y.toRat else Number.upper y.toRat)
       = some n' ∧ result.toRat = n'.toRat
     by_cases h_nn : y.toRat ≥ 0
-    · rw [if_pos h_nn]
+    · rw [ite_eq_left h_nn]
       obtain ⟨n, h_lo, h_val⟩ := Number.lower_value_self y hy hy_ne
       exact ⟨n, h_lo, by rw [h_result]; exact h_val⟩
-    · rw [if_neg h_nn]
+    · rw [ite_eq_right h_nn]
       obtain ⟨n, h_up, h_val⟩ := Number.upper_value_self y hy hy_ne
       exact ⟨n, h_up, by rw [h_result]; exact h_val⟩
   -- Exact cancellation: the model returns the canonical zero.
@@ -168,16 +168,16 @@ theorem Number.operator_add_rounded_towards_zero_proof (x y result : Number)
     have h_result : result = Number.zero := by
       replace hok := Number.operator_add_ok_spec hok
       unfold Number.operator_addSpec at hok
-      rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
+      rw [ite_eq_right hy_guard, ite_eq_right hx_guard, ite_eq_left heq_guard] at hok
       exact (Except.ok.inj
         (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
     rw [h_truth0]
     change ∃ n' : Number, (if (0 : ℚ) ≥ 0 then Number.lower 0 else Number.upper 0)
       = some n' ∧ result.toRat = n'.toRat
-    rw [if_pos (by norm_num : (0 : ℚ) ≥ 0)]
+    rw [ite_eq_left (by norm_num : (0 : ℚ) ≥ 0)]
     refine ⟨Number.zero, ?_, ?_⟩
     · unfold Number.lower
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
     · rw [h_result]
   -- Generic path: both operands nonzero, no cancellation.
   have hx_mant_ne : x.mantissa_ ≠ 0 := by
@@ -209,12 +209,12 @@ theorem Number.operator_add_rounded_towards_zero_proof (x y result : Number)
       change ∃ n' : Number, (if x.toRat + y.toRat ≥ 0 then Number.lower (x.toRat + y.toRat)
         else Number.upper (x.toRat + y.toRat)) = some n' ∧ result.toRat = n'.toRat
       rcases lt_or_gt_of_ne h_truth_ne with h_neg | h_pos
-      · rw [if_neg (not_le.mpr h_neg)]
+      · rw [ite_eq_right (not_le.mpr h_neg)]
         refine ⟨Number.zero, ?_, ?_⟩
         · exact Number.upper_eq_zero_of_neg_small _ h_neg
             (by rwa [abs_of_neg h_neg] at h_small)
         · rw [h_res0, Number.toRat_zero]
-      · rw [if_pos (le_of_lt h_pos : (0 : ℚ) ≤ x.toRat + y.toRat)]
+      · rw [ite_eq_left (le_of_lt h_pos : (0 : ℚ) ≤ x.toRat + y.toRat)]
         refine ⟨Number.zero, ?_, ?_⟩
         · exact Number.lower_eq_zero_of_pos_small _ h_pos
             (by rwa [abs_of_pos h_pos] at h_small)
@@ -238,17 +238,19 @@ theorem Number.operator_add_rounded_towards_zero_proof (x y result : Number)
       hx_mant_ne hy_mant_ne heq_guard hok hresult)
   have h_truth_top : result.exponent_ ≥ maxExponent →
       |x.toRat + y.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := by
-    intro _
+    intro h_exp
     by_cases h_sign_eq : x.negative_ = y.negative_
-    · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_top⟩ :=
-        Number.operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
-          hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
-      exact h_top
+    · obtain ⟨M, ze0, δ, sticky, -, -, -, -, hM18, -, -, -, -, -, hok128⟩ :=
+        Number.operator_add_algorithmic_facts_same_sign_represents x y result .towards_zero hx hy hx_mant_ne
+          hy_mant_ne h_sign_eq heq_guard hok
+      exact truth_top_of_result_cap result _ h_result_norm hresult h_bound
+        (doNormalize128_no_overflow_mantissa _ M ze0 sticky .towards_zero (by omega) result hok128 hresult h_exp)
+        h_exp
     · exact add_diff_sign_truth_top x y hx hy h_sign_eq
   change ∃ n' : Number, (if x.toRat + y.toRat ≥ 0 then Number.lower (x.toRat + y.toRat)
     else Number.upper (x.toRat + y.toRat)) = some n' ∧ result.toRat = n'.toRat
   by_cases h_truth_nn : x.toRat + y.toRat ≥ 0
-  · rw [if_pos h_truth_nn]
+  · rw [ite_eq_left h_truth_nn]
     -- Direction: result ≤ |result| ≤ |truth| = truth.
     have h_round_down : result.toRat ≤ x.toRat + y.toRat := by
       calc result.toRat ≤ |result.toRat| := le_abs_self _
@@ -258,7 +260,7 @@ theorem Number.operator_add_rounded_towards_zero_proof (x y result : Number)
       h_truth_ne h_bound h_truth_top h_round_down
       (Number.operator_add_no_inbetween_below_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
         heq_guard hok hresult h_round_down)
-  · rw [if_neg h_truth_nn]
+  · rw [ite_eq_right h_truth_nn]
     push Not at h_truth_nn
     have h_truth_np : x.toRat + y.toRat ≤ 0 := le_of_lt h_truth_nn
     -- Direction: truth = −|truth| ≤ −|result| ≤ result.

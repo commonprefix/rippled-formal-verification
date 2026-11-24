@@ -7,9 +7,8 @@ import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.AlgorithmicFacts.Sam
 
 /-! # `postSumExponent` monotonicity
 
-A larger delta never gives a finer post-sum grid. The sum packs downward to 16 digits, so its
-exponent steps up exactly at the powers of ten, and a `to_nearest` sum only crosses such a power when
-the exact sum sits just below it, where the rounding picks a nearest representable. -/
+A larger delta never gives a finer post-sum grid. A `to_nearest` sum crosses a power of ten only when the exact sum
+sits just below it. -/
 
 namespace XRPL.Model.Protocol
 
@@ -59,9 +58,9 @@ private lemma STAmount.ofNumber_frac_downward_exp (n : Number) (r : STAmount) (h
   have hre_lo : minExponent ≤ n.exponent_ := Number.exponent_ge_min n hn hnz
   have hneg_dec : decide (n.signum < 0) = false := by rw [Number.signum_neg_decide]; exact hneg
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide : ¬ (NumericType.fractional.isIntegral = true))] at hok
+  rw [ite_eq_right (by decide : ¬ (NumericType.fractional.isIntegral = true))] at hok
   rw [hneg_dec] at hok
-  simp only [Bool.false_eq_true, if_false] at hok
+  simp only [Bool.false_eq_true, ite_false] at hok
   cases hnorm : n.normalizeToRange kMinValue kMaxValue .downward with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -96,9 +95,9 @@ lemma numberExponent_frac_lower (n : Number) (exponent e : Int) (hn : n.isNormal
     e = n.exponent_ + 3 ∧ (10 : ℚ) ^ (e + 15) ≤ n.toRat := by
   unfold numberExponent at hok
   by_cases hz : n.operator_eq Number.zero = true
-  · simp only [hz, if_true, pure, Except.pure, Except.ok.injEq] at hok
+  · simp only [hz, ite_true, pure, Except.pure, Except.ok.injEq] at hok
     omega
-  simp only [hz, Bool.false_eq_true, if_false] at hok
+  simp only [hz, Bool.false_eq_true, ite_false] at hok
   have hnz : n.mantissa_ ≠ 0 := by
     intro hm
     rw [Number.eq_zero_of_mantissa_zero n hn hm] at hz
@@ -138,7 +137,7 @@ lemma numberExponent_frac_of_le (n : Number) (exponent e k : Int) (hn : n.isNorm
     linarith
   unfold numberExponent at hok
   have hz : ¬ n.operator_eq Number.zero = true := Number.not_operator_eq_zero_of_mantissa_ne hnz
-  simp only [hz, Bool.false_eq_true, if_false] at hok
+  simp only [hz, Bool.false_eq_true, ite_false] at hok
   cases ha : STAmount.ofNumber .fractional n .downward with
   | error err => rw [ha] at hok; simp [bind, Except.bind, pure, Except.pure] at hok
   | ok a =>
@@ -163,7 +162,7 @@ lemma numberExponent_frac_lt (n : Number) (exponent e : Int) (hn : n.isNormalize
   have h1 := Number.toRat_lt_pow_exponent_add n hn hnz hneg
   unfold numberExponent at hok
   have hz : ¬ n.operator_eq Number.zero = true := Number.not_operator_eq_zero_of_mantissa_ne hnz
-  simp only [hz, Bool.false_eq_true, if_false] at hok
+  simp only [hz, Bool.false_eq_true, ite_false] at hok
   cases ha : STAmount.ofNumber .fractional n .downward with
   | error err => rw [ha] at hok; simp [bind, Except.bind, pure, Except.pure] at hok
   | ok a =>
@@ -187,9 +186,11 @@ lemma add_nearestTo_below_pow (x y s : Number)
     (hlo : (999999999999999999 : ℚ) * 10 ^ j < x.toRat + y.toRat)
     (hhi : x.toRat + y.toRat < (1000000000000000000 : ℚ) * 10 ^ j) :
     s.NearestTo (x.toRat + y.toRat) := by
-  obtain ⟨zm, ze', f, g, res_pos, hzm_lo, hzm_hi, hf_nn, hf_lt, -, hval, hrup, habs, hres_ne,
-      hrep, hsneg, -, -, -⟩ :=
-    Number.operator_add_algorithmic_facts_same_sign_to_nearest x y s hx hy hxm hym (by rw [hxn, hyn]) hnz hok
+  obtain ⟨zm, ze', f, g, res_pos, hzm_succ, hzm_hi, hf_nn, hf_lt, hval, hrup, habs, hres_ne, hsneg, hrl⟩ :=
+    Number.operator_add_same_sign_nearest_facts x y s hx hy hxm hym (by rw [hxn, hyn]) hnz hok
+  have hzm_lo : mantissaFloor ≤ zm.toNat := by
+    have : mantissaFloor < mantissaFloorSucc := by decide
+    omega
   set t := x.toRat + y.toRat with ht_def
   have hj : (0 : ℚ) < 10 ^ j := zpow_pos (by norm_num) _
   have hpos : 0 < t := lt_trans (by positivity) hlo
@@ -226,7 +227,7 @@ lemma add_nearestTo_below_pow (x y s : Number)
   have hs_nn : 0 ≤ s.toRat := Number.toRat_nonneg_of_nonnegative s (hsneg.trans hxn)
   have hs_abs : s.toRat = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
     rw [← abs_of_nonneg hs_nn]; exact habs
-  have hcase := doRoundUp_clean_down_up g zm ze' f res_pos s _ hrep hrup hs_abs hres_ne hclean
+  have hcase := doRoundUp_clean_down_up g zm ze' f res_pos s _ hrl hrup hs_abs hres_ne hclean
   exact Number.nearestTo_of_gap t f zm ze' s hpos htv hf_nn hf_lt (by omega) (by omega) hcase
 
 /-- The post-sum exponent is monotone in the delta. On a nonnegative total, a larger nonnegative
@@ -337,7 +338,7 @@ lemma clampToSumExponent_twice (A : Number) (a c c' : STAmount) (exponent : Int)
   have hcneg : c.mIsNegative = false := STAmount.mIsNegative_false_of_pos c hcpos
   have hcfr : c.integral = false := by unfold STAmount.integral; rw [hci.is_fractional]; rfl
   obtain ⟨cNum, e₂, hcN, he₂, hround⟩ := clampToSumExponent_frac_reduces A c c' exponent hcfr h₂
-  rw [show c.negative = false from hcneg, if_neg (by decide)] at hround
+  rw [show c.negative = false from hcneg, ite_eq_right (by decide)] at hround
   -- the amounts convert exactly, and the clamped one is the smaller
   obtain ⟨an, han, hanv, hann⟩ := STAmount.toNumber_iou_exact a .to_nearest hia
   obtain ⟨cn, hcn, hcnv, hcnn⟩ := STAmount.toNumber_iou_exact c .to_nearest hci
@@ -361,7 +362,7 @@ lemma clampToSumExponent_twice (A : Number) (a c c' : STAmount) (exponent : Int)
   have hrnd := STAmount.roundToExponent_rounded c c' e₂ .towards_zero hci he₂lo he₂hi hc'0 hround
   simp only [RoundsToRepresentableAt] at hrnd
   change c'.toRat = _ at hrnd
-  rw [if_pos hcpos.le] at hrnd
+  rw [ite_eq_left hcpos.le] at hrnd
   have hgrid : ∃ z : ℤ, c.toRat = (z : ℚ) * 10 ^ e₂ := by
     refine ⟨⌊|a.toRat| / 10 ^ e₁⌋ * 10 ^ (e₁ - e₂).toNat, ?_⟩
     rw [hcval]

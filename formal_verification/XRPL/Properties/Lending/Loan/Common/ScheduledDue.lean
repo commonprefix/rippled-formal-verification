@@ -1,12 +1,12 @@
+import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.InstalmentCap
 import XRPL.Properties.Lending.Loan.Common.OverpaymentReduces
 import XRPL.Properties.Lending.Loan.Common.PaySums
 
 /-! # What each scheduled payment of a regular payment is due
 
-A regular payment pays the loan's scheduled payments in turn. Each one is due at most what the payment sums, and one
-that is not the loan's last is due at most ⌈PeriodicPayment⌉ + LoanServiceFee while the amount fits 16 digits. It
-also takes less than PeriodicPayment + 1 ULP at LoanScale off TotalValueOutstanding. -/
+A regular payment pays the loan's scheduled payments in turn. This file bounds what each of them is due and what it
+takes off TotalValueOutstanding. -/
 
 namespace XRPL.Model.Lending
 
@@ -369,7 +369,6 @@ lemma Loan.scheduled_value_lt (l : Loan) (v : Vault) (now : UInt32) (pc : Paymen
   have hle := Loan.scheduledComponents_value_le l pc0 pp' hlo hint' hi hpp hpc0 hf
   have hval := Loan.doPayment_value l q.loan _ hf ht.totalValue_grid ht.totalValue_range.1 ht.totalValue_range.2 hdo
   have hpl := Loan.rounded_periodicPayment_lt l pp' hlo hint hpp hlt
-  simp only at hval
   linarith
 
 end XRPL.Model.Lending

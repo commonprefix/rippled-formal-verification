@@ -2,9 +2,8 @@ import XRPL.Properties.Vault.Proofs.OpenZone
 
 /-! # Operations keep the vault's amounts stored exactly
 
-`associateAsset` rounds each vault amount to the asset's precision. A deposit, withdrawal or
-clawback rounds its new cash to the asset, and touches no other such amount, so the step has
-nothing left to round in the amounts the operation writes. -/
+A deposit, withdrawal or clawback rounds its new cash to the asset and touches no other such amount, so
+`associateAsset` has nothing left to round. -/
 
 namespace XRPL.Model.SingleAssetVault
 

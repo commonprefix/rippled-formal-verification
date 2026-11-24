@@ -4,9 +4,8 @@ import XRPL.Properties.Lending.Ledger.Common.BrokerSteps
 
 /-! # Isolation of loan transactions
 
-A transaction on one loan or broker leaves another loan as it was and gives its broker back with the same terms.
-So a transaction on the other loan that succeeded before succeeds after it as well, while a LoanAccept still fits
-the Open limit and the vault is not coarsened. -/
+A transaction on one loan or broker leaves another loan as it was, so a transaction on that loan that succeeded before
+still succeeds, while a LoanAccept fits the Open limit and the vault is not coarsened. -/
 
 namespace XRPL.Model.Lending
 
@@ -109,7 +108,7 @@ private lemma LendingLedger.keepsLoan_of_loanTx {l la : LendingLedger} {tx : Len
   obtain ⟨hslot, hbk, b0, hb0, hrate⟩ := LendingLedger.applyLoan_effect hu
   have hjl := LendingLedger.loan?_lt he
   have hloan : (l.commitLoan u).loan? j = some e := by
-    rw [LendingLedger.loan?_commitLoan, if_neg, he]
+    rw [LendingLedger.loan?_commitLoan, ite_eq_right, he]
     intro hjeq
     split at hjeq
     · rcases hslot with h | h
@@ -120,12 +119,12 @@ private lemma LendingLedger.keepsLoan_of_loanTx {l la : LendingLedger} {tx : Len
   refine ⟨⟨rfl, rfl, l.applyLoan_keepsSettings tx u hu, hloan, fun b hb => ?_⟩, fun hne b hb => ?_⟩
   · rw [hbr]
     by_cases hk : e.brokerIndex = u.brokerIndex
-    · rw [if_pos hk]
+    · rw [ite_eq_left hk]
       rw [hk, hb0] at hb
       obtain rfl := Option.some.inj hb
       exact ⟨_, rfl, hrate⟩
-    · rw [if_neg hk]; exact ⟨b, hb, rfl⟩
-  · rw [hbr, if_neg (fun hk => hne (by rw [hbk, hk]))]
+    · rw [ite_eq_right hk]; exact ⟨b, hb, rfl⟩
+  · rw [hbr, ite_eq_right (fun hk => hne (by rw [hbk, hk]))]
     exact hb
 
 /-- A broker transaction on another broker keeps what a transaction on loan `j` reads, the broker of `j` and
@@ -139,7 +138,7 @@ private lemma LendingLedger.keepsLoan_of_brokerTx {l la : LendingLedger} {tx : L
   have hkeep : ∀ b, l.broker? e.brokerIndex = some b → (l.commitBroker u).broker? e.brokerIndex = some b := by
     intro b hb
     have hlt := LendingLedger.broker?_lt hb
-    rw [LendingLedger.broker?_commitBroker, if_neg, hb]
+    rw [LendingLedger.broker?_commitBroker, ite_eq_right, hb]
     intro heq
     split at heq
     · exact hk (by rw [hidx, heq])

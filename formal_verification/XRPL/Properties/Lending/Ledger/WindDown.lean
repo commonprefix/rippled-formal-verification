@@ -69,16 +69,13 @@ theorem Lending.Reachable.wind_down (l : LendingLedger) (hr : l.Reachable) (hnd 
     -- the asset's maximum
     (hca : ∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
       b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount)
-    -- the holders' shares add up to SharesTotal. C++ keeps them so with the share MPT maximum it enforces on a
-    -- deposit
-    (hsum : l.SharesSum)
     -- while the vault winds down with whole redemptions, no holder is left owning shares worth less than one unit at
     -- the scale of AssetsAvailable (FV_M4_24)
     (hdust : ∀ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' → (∀ i, l'.loan? i = none) →
       l'.NoDust) :
     ∃ (txs : List LendingTx) (l' : LendingLedger), LendingLedger.Reaches l txs l' ∧ (∀ tx ∈ txs, tx.isWindDown) ∧
       (l'.apply .vaultDelete).run = .ok (.ok { l' with vaultDeleted := true }) :=
-  LendingLedger.wind_down_proof l hr hnd s hs hpast hgrace hpending hactive hca hsum hdust
+  LendingLedger.wind_down_proof l hr hnd s hs hpast hgrace hpending hactive hca hdust
 
 /-- Witness: a run where two holders can never redeem their shares. Past RedemptionDate and loan A's grace period,
 with no broker or loan left, each holder's shares are worth half a base unit, so every VaultWithdraw fails. -/
@@ -94,7 +91,6 @@ theorem Lending.Reachable.wind_down_attained :
       (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false → e.loan.paymentRemaining ≠ 0 →
         l.NotCoarsened) ∧
       (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b → b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
-      l.SharesSum ∧
       ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' → (∀ tx ∈ txs, tx.isWindDown) →
         (l'.apply .vaultDelete).run ≠ .ok (.ok l'') :=
   LendingLedger.wind_down_dust_witness
@@ -113,7 +109,6 @@ theorem Lending.Reachable.wind_down_grace_attained :
       (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false → e.loan.paymentRemaining ≠ 0 →
         l.NotCoarsened) ∧
       (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b → b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
-      l.SharesSum ∧
       (∀ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' → (∀ i, l'.loan? i = none) → l'.NoDust) ∧
       ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' → (∀ tx ∈ txs, tx.isWindDown) →
         (l'.apply .vaultDelete).run ≠ .ok (.ok l'') :=

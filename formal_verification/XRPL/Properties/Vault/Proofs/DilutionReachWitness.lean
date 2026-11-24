@@ -2,11 +2,9 @@ import XRPL.Properties.Vault.Proofs.DilutionWitness
 
 /-! # Witness for the history dilution bound
 
-A reachable `int64` vault of 7 assets and 4 shares (a deposit of 4, then a donation of 3) redeems 2
-shares, worth `3.5`, for `4`, then 1 of the remaining 2, worth `1.5`, for `2`. Per-share value falls
-`7/4 → 3/2 → 1` although the run has no deposit, so its budget is zero. -/
+Two redemptions from a reachable vault lower the per-share value from `7/4` to `1` with no deposit in the run. -/
 
-set_option linter.style.nativeDecide false
+set_option linter.style.native false
 
 namespace XRPL.Model.SingleAssetVault.DilWit
 

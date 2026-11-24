@@ -49,12 +49,12 @@ lemma LendingLedger.LossInv.commitLoan {l : LendingLedger} (hinv : l.LossInv) {u
   · rw [hv, hs.baseExponent_eq]
     rw [LendingLedger.loan?_commitLoan] at he
     by_cases hj : j = (if u.loanIndex < l.loans.length then u.loanIndex else l.loans.length)
-    · rw [if_pos hj] at he; exact (hloan e he).1
-    · rw [if_neg hj] at he; exact hinv.principal j e he
+    · rw [ite_eq_left hj] at he; exact (hloan e he).1
+    · rw [ite_eq_right hj] at he; exact hinv.principal j e he
   · rw [LendingLedger.loan?_commitLoan] at he
     by_cases hj : j = (if u.loanIndex < l.loans.length then u.loanIndex else l.loans.length)
-    · rw [if_pos hj] at he; exact (hloan e he).2 hp
-    · rw [if_neg hj] at he; exact hinv.active j e he hp
+    · rw [ite_eq_left hj] at he; exact (hloan e he).2 hp
+    · rw [ite_eq_right hj] at he; exact hinv.active j e he hp
   · rw [hv]
     have := hinv.sum
     linarith
@@ -94,7 +94,7 @@ lemma LendingLedger.LossInv.loan_step {l : LendingLedger} (hinv : l.LossInv) {tx
       e.loan.principalOutstanding.toRat ≤ l.vault.lossUnrealized.toRat := fun i e he hi => by
     have := l.principalIf_le_sum (·.isImpaired) i
     rw [he] at this
-    simp only [LoanEntry.principalIf, hi, if_true] at this
+    simp only [LoanEntry.principalIf, hi, ite_true] at this
     rw [hinv.sum]; exact this
   have hsub : ∀ (i : Nat) (e : LoanEntry) (d : Number), l.loan? i = some e → e.loan.isImpaired = true →
       l.vault.lossUnrealized.operator_add e.loan.principalOutstanding.operator_neg .to_nearest = .ok d →
@@ -186,7 +186,7 @@ lemma LendingLedger.LossInv.loan_step {l : LendingLedger} (hinv : l.LossInv) {tx
         ⟨by omega, by omega⟩ hsb hLU
       refine hinv.ofLoan he hres hs ?_ (by rw [hAD]) (by rw [hPO', hePO]) hp'
       have hei : e.loan.isImpaired = false := by rw [← heI]; exact hni
-      simp only [LoanEntry.principalIf, hei, hI', if_true, Bool.false_eq_true, if_false, add_zero]
+      simp only [LoanEntry.principalIf, hei, hI', ite_true, Bool.false_eq_true, ite_false, add_zero]
       rw [hval, hn, hPO', hePO, hm]; push_cast; ring
     | unimpair =>
       have hii := Loan.canManage_unimpair_impaired loan l.now hc
@@ -194,7 +194,7 @@ lemma LendingLedger.LossInv.loan_step {l : LendingLedger} (hinv : l.LossInv) {tx
       have hei : e.loan.isImpaired = true := by rw [← heI]; exact hii
       have hval := hsub i e _ he hei (by rw [← hePO]; exact hLU)
       refine hinv.ofLoan he hres hs ?_ (by rw [hAD]) (by rw [hPO', hePO]) hp'
-      simp only [LoanEntry.principalIf, hei, hI', if_true, Bool.false_eq_true, if_false, add_zero]
+      simp only [LoanEntry.principalIf, hei, hI', ite_true, Bool.false_eq_true, ite_false, add_zero]
       rw [hval]; ring
     | default =>
       simp only [Loan.manage] at hr
@@ -213,13 +213,13 @@ lemma LendingLedger.LossInv.loan_step {l : LendingLedger} (hinv : l.LossInv) {tx
       rw [hnew]
       cases hi : loan.isImpaired
       · have hei : e.loan.isImpaired = false := by rw [← heI]; exact hi
-        rw [hi, if_neg Bool.false_ne_true, Number.operator_add_zero_right, Except.ok.injEq] at hLU
-        simp only [LoanEntry.principalIf, hei, Bool.false_eq_true, if_false, add_zero]
+        rw [hi, ite_eq_right Bool.false_ne_true, Number.operator_add_zero_right, Except.ok.injEq] at hLU
+        simp only [LoanEntry.principalIf, hei, Bool.false_eq_true, ite_false, add_zero]
         rw [← hLU]
       · have hei : e.loan.isImpaired = true := by rw [← heI]; exact hi
-        rw [hi, if_pos rfl] at hLU
+        rw [hi, ite_eq_left rfl] at hLU
         have hval := hsub i e _ he hei (by rw [← hePO]; exact hLU)
-        simp only [LoanEntry.principalIf, hei, if_true, add_zero]
+        simp only [LoanEntry.principalIf, hei, ite_true, add_zero]
         rw [hval]; ring
   | loanPay i paymentType amount =>
     obtain ⟨e, broker, loan, r, he, hb, hw, hc, hr, rfl⟩ := l.applyLoan_pay_inv u i paymentType amount hu
@@ -235,11 +235,11 @@ lemma LendingLedger.LossInv.loan_step {l : LendingLedger} (hinv : l.LossInv) {tx
     refine hinv.ofLoan he hres hs ?_ hAD (by rw [← hePO]; exact hPO') hp'
     cases hi : loan.isImpaired
     · have hei : e.loan.isImpaired = false := by rw [← heI]; exact hi
-      simp only [LoanEntry.principalIf, hei, hI', Bool.false_eq_true, if_false, add_zero]
+      simp only [LoanEntry.principalIf, hei, hI', Bool.false_eq_true, ite_false, add_zero]
       rw [hnot hi]
     · have hei : e.loan.isImpaired = true := by rw [← heI]; exact hi
       have hval := hsub i e _ he hei (by rw [← hePO]; exact himpd hi)
-      simp only [LoanEntry.principalIf, hei, hI', if_true, Bool.false_eq_true, if_false, add_zero]
+      simp only [LoanEntry.principalIf, hei, hI', ite_true, Bool.false_eq_true, ite_false, add_zero]
       rw [hval]; ring
   | _ => simp only [LendingLedger.applyLoan] at hu; cases hu
 

@@ -146,10 +146,10 @@ private lemma Loan.create_grid_next (bo : LoanBroker) (hp : principal.isNormaliz
   · exact atExponent_of_int _ ((d : ℤ) + j) _ (by rw [had, hdv, hj]; push_cast; ring) hAD0 (by linarith)
   · refine atExponent_of_int _ ((n : ℤ) + if pending then (j : ℤ) else 0) _ ?_ hAR0 (by linarith)
     rw [har, hnv, hj]
-    cases pending <;> simp only [if_true, if_false, Bool.false_eq_true] <;> push_cast <;> ring
+    cases pending <;> simp only [ite_true, ite_false, Bool.false_eq_true] <;> push_cast <;> ring
   · refine atExponent_of_int _ ((y : ℤ) + if pending then 0 else z) _ ?_ hYU0 hyield
     rw [hyu, hyv, hz]
-    cases pending <;> simp only [if_true, if_false, Bool.false_eq_true] <;> push_cast <;> ring
+    cases pending <;> simp only [ite_true, ite_false, Bool.false_eq_true] <;> push_cast <;> ring
   · exact hdebt
 
 /-- The new DebtTotal of a create on the base grid is a whole number of base units, below `10^16` units when

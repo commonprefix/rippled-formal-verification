@@ -19,11 +19,11 @@ lemma tenthBipsOfValue_upward_tight (d : Number) (rate : TenthBips32) (fee c c5 
     (hc5 : c5.isNormalized) (hc5v : c5.toRat = c.toRat * 100000)
     (hge : d.toRat * rate.toNat / 100000 ≤ c.toRat)
     (hok : tenthBipsOfValue d rate .upward = .ok fee) : fee.toRat ≤ c.toRat := by
-  obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts rate
-  obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
+  obtain ⟨hrn, hrv⟩ := TenthBips32.toNumber_facts rate .upward
+  obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity .upward
   have hu : ((kTenthBipsPerUnity.toNat : ℕ) : ℚ) = 100000 := by rfl
   rw [hu] at huv
-  have hun0 : ¬ kTenthBipsPerUnity.toNumber.operator_eq Number.zero = true := by
+  have hun0 : ¬ (kTenthBipsPerUnity.toNumber .upward).operator_eq Number.zero = true := by
     intro h
     have := (Number.operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
     rw [huv, Number.toRat_zero] at this
@@ -36,7 +36,7 @@ lemma tenthBipsOfValue_upward_tight (d : Number) (rate : TenthBips32) (fee c c5 
   · rw [Number.toRat_eq_zero_of_mantissa_zero fee hfm]; exact hc0
   have hpm : p.mantissa_ ≠ 0 := Number.operator_div_numerator_ne_zero_sz _ _ _ _ hun0 hok hfm
   -- the product rounds up to at most the representable `100000·c`
-  obtain ⟨n, hn, hpv⟩ := Number.operator_mul_rounded_upward d rate.toNumber p hd hrn hp hpm
+  obtain ⟨n, hn, hpv⟩ := Number.operator_mul_rounded_upward d (rate.toNumber .upward) p hd hrn hp hpm
   have hple : p.toRat ≤ c5.toRat := by
     rw [hpv]
     refine Number.upper_tight _ n hn c5 hc5 ?_
