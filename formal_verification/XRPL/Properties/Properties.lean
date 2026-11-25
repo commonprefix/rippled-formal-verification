@@ -54,5 +54,12 @@ import XRPL.Properties.Lending.LoanBroker.Reachable
 import XRPL.Properties.Lending.LoanBroker.AssociateAsset
 import XRPL.Properties.Lending.Loan.LoanValid
 import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
+import XRPL.Properties.Lending.Loan.LoanAccept
+import XRPL.Properties.Lending.Loan.LoanAcceptReturn
+import XRPL.Properties.Lending.Loan.LoanDelete
+import XRPL.Properties.Lending.Loan.LoanDeleteReturn
+import XRPL.Properties.Lending.Loan.LoanSet
+import XRPL.Properties.Lending.Loan.LoanSetReturn
+import XRPL.Properties.Lending.Loan.Reachable
 import XRPL.Properties.Protocol.Number.AtExponent
 import XRPL.Properties.Protocol.Number.Totality

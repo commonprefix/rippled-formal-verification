@@ -25,8 +25,9 @@ theorem Lending.Reachable.loan_lifetime (l l' : LendingLedger) (txs : List Lendi
     (loan'.paymentRemaining.toNat ≤ loan.paymentRemaining.toNat ∧
       loan'.principalOutstanding.toRat ≤ loan.principalOutstanding.toRat ∧
       loan'.totalValueOutstanding.toRat ≤ loan.totalValueOutstanding.toRat ∧
-      loan'.managementFeeOutstanding.toRat ≤ loan.managementFeeOutstanding.toRat) := by
-  sorry
+      loan'.managementFeeOutstanding.toRat ≤ loan.managementFeeOutstanding.toRat) :=
+  ⟨LendingLedger.fixed_terms_proof l l' txs i loan loan' hrun hat hat',
+    LendingLedger.outstanding_monotone_proof l l' txs i loan loan' hrun hat hat'⟩
 
 /-- Any sequence of transactions from a reachable ledger -> a loan's interestDue never increases, where interestDue =
 TotalValueOutstanding − PrincipalOutstanding − ManagementFeeOutstanding. -/
@@ -45,8 +46,8 @@ theorem Lending.Reachable.interest_monotone (l l' : LendingLedger) (txs : List L
       LendingLedger.Reaches l pre l₁ → (l₁.apply (.loanPay i .overpayment amount)).run = .ok (.ok l₂) →
       l₁.LoanAt i loan₁ → loan₁.rates.overpaymentInterestRate ≠ 0 →
       (loan₁.payInstalments l₁.vault .regular amount l₁.now).run = .ok (.ok p) → 0 ≤ p.amounts.interestPaid.toRat) :
-    loan'.toExact.interestDue ≤ loan.toExact.interestDue := by
-  sorry
+    loan'.toExact.interestDue ≤ loan.toExact.interestDue :=
+  LendingLedger.interest_monotone_proof l l' txs i loan loan' hr hrun hat hat' hlate hover
 
 /-- Witness: a run where interestDue rises without `hlate`. A late payment at a 100% LateInterestRate covers
 the interest part of −3.24 of the third instalment, so interestDue rises by 3.24. -/
@@ -61,8 +62,8 @@ theorem Lending.Reachable.interest_monotone_late_attained :
         (l₁.apply (.loanPay i .overpayment amount)).run = .ok (.ok l₂) → l₁.LoanAt i loan₁ →
         loan₁.rates.overpaymentInterestRate ≠ 0 → (loan₁.payInstalments l₁.vault .regular amount l₁.now).run = .ok
         (.ok p) → 0 ≤ p.amounts.interestPaid.toRat) ∧
-      loan.toExact.interestDue < loan'.toExact.interestDue := by
-  sorry
+      loan.toExact.interestDue < loan'.toExact.interestDue :=
+  LendingLedger.interest_monotone_late_witness
 
 /-- Witness: a run where interestDue rises without `hover`. An overpayment at a 50% OverpaymentInterestRate
 covers the interest part of −3.24 of the third instalment, so interestDue rises by 3.24. -/
@@ -76,8 +77,8 @@ theorem Lending.Reachable.interest_monotone_overpayment_attained :
         (d : Number), pre ++ [.loanPay i .late amount] <+: txs → LendingLedger.Reaches l pre l₁ →
         (l₁.apply (.loanPay i .late amount)).run = .ok (.ok l₂) → l₁.LoanAt i loan₁ → loan₁.rates.lateInterestRate ≠ 0 →
         loan₁.paymentComponents .late l₁.now = .ok pc → pc.interestDelta = .ok d → 0 ≤ d.toRat) ∧
-      loan.toExact.interestDue < loan'.toExact.interestDue := by
-  sorry
+      loan.toExact.interestDue < loan'.toExact.interestDue :=
+  LendingLedger.interest_monotone_overpayment_witness
 
 /-- Regular payoff -> the cost and what the vault and the broker receive follow from the loan at create. From any
 reachable loan, with PaymentRemaining for PaymentTotal. -/
@@ -96,8 +97,10 @@ theorem Lending.Reachable.regularPayoff (l l' : LendingLedger) (i : Nat) (loan l
     (l.RegularPayoff i LendingLedger.PaysCoverUncoarsened l' cost toVault toBroker →
       loan.totalValueOutstanding.toRat + loan.fees.serviceFee.toRat * loan.paymentRemaining.toNat <
         10 ^ 16 * 10 ^ loan.loanScale →
-      toBroker = loan.managementFeeOutstanding.toRat + loan.fees.serviceFee.toRat * loan.paymentRemaining.toNat) := by
-  sorry
+      toBroker = loan.managementFeeOutstanding.toRat + loan.fees.serviceFee.toRat * loan.paymentRemaining.toNat) :=
+  ⟨LendingLedger.regularPayoff_cost_proof l l' i loan loan' cost toVault toBroker hr hat hrun hat' hpaid,
+    fun hv => LendingLedger.regularPayoff_vault_proof l l' i loan loan' cost toVault toBroker hr hat hv hat' hpaid,
+    fun hc => LendingLedger.regularPayoff_broker_proof l l' i loan loan' cost toVault toBroker hr hat hc hat' hpaid⟩
 
 /-- Witness: a run where the cost is less. A LoanServiceFee of `10^30` drops the loan's value from the 19-digit
 charge. -/
@@ -108,8 +111,8 @@ theorem Lending.Reachable.regularPayoff_cost_attained :
       l.RegularPayoff i (fun _ _ _ => True) l' cost toVault toBroker ∧
       l'.LoanAt i loan' ∧
       loan'.paymentRemaining = 0 ∧
-      cost < loan.totalValueOutstanding.toRat + loan.fees.serviceFee.toRat * loan.paymentRemaining.toNat := by
-  sorry
+      cost < loan.totalValueOutstanding.toRat + loan.fees.serviceFee.toRat * loan.paymentRemaining.toNat :=
+  LendingLedger.regularPayoff_cost_witness
 
 /-- Witness: a run where the vault receives less. On a reachable coarsened vault a payoff of 1.5 is credited as 1. -/
 theorem Lending.Reachable.regularPayoff_vault_attained :
@@ -119,8 +122,8 @@ theorem Lending.Reachable.regularPayoff_vault_attained :
       l.RegularPayoff i (fun _ _ _ => True) l' cost toVault toBroker ∧
       l'.LoanAt i loan' ∧
       loan'.paymentRemaining = 0 ∧
-      toVault < loan.totalValueOutstanding.toRat - loan.managementFeeOutstanding.toRat := by
-  sorry
+      toVault < loan.totalValueOutstanding.toRat - loan.managementFeeOutstanding.toRat :=
+  LendingLedger.regularPayoff_vault_witness
 
 /-- Witness: a run where the broker receives less. A LoanServiceFee of `10^30` drops the management fee from the
 19-digit fee. -/
@@ -131,7 +134,7 @@ theorem Lending.Reachable.regularPayoff_broker_attained :
       l.RegularPayoff i LendingLedger.PaysCoverUncoarsened l' cost toVault toBroker ∧
       l'.LoanAt i loan' ∧
       loan'.paymentRemaining = 0 ∧
-      toBroker < loan.managementFeeOutstanding.toRat + loan.fees.serviceFee.toRat * loan.paymentRemaining.toNat := by
-  sorry
+      toBroker < loan.managementFeeOutstanding.toRat + loan.fees.serviceFee.toRat * loan.paymentRemaining.toNat :=
+  LendingLedger.regularPayoff_broker_witness
 
 end XRPL.Model

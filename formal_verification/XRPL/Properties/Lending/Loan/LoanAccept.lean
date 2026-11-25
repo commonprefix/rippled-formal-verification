@@ -26,8 +26,9 @@ theorem Lending.accept_releases (l : LendingLedger) (hr : l.Reachable) (l' : Len
       loan'.broker = loan.broker ∧
       r.amountToBorrower.toRat + loan.fees.originationFee.toRat = loan.principalOutstanding.toRat ∧
       l.vault.assetsReserved.toRat - l'.vault.assetsReserved.toRat =
-        r.amountToBorrower.toRat + loan.fees.originationFee.toRat := by
-  sorry
+        r.amountToBorrower.toRat + loan.fees.originationFee.toRat :=
+  let ⟨h1, h2, h3, h4⟩ := LendingLedger.accept_releases_proof hr h hat hat' hi
+  ⟨h1, h2, h3, h4, LendingLedger.accept_amountToBorrower_proof hr h hat hat' hi r hacc⟩
 
 /-- Create pending then accept -> the same vault, broker and loan as an active create with that StartDate.
 `hclose` - an active LoanSet starts the loan at the close time, so the ledger closes at StartDate first -/
@@ -40,8 +41,8 @@ theorem Lending.createPending_accept (l : LendingLedger) (hr : l.Reachable) (l�
     (hclose : (l.apply (.close startDate)).run = .ok (.ok lc)) :
     ∃ lA, (lc.apply (.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate false
       allowsOverpayment)).run = .ok (.ok lA) ∧
-      lA.vault = l₂.vault ∧ lA.brokers = l₂.brokers ∧ lA.loans = l₂.loans := by
-  sorry
+      lA.vault = l₂.vault ∧ lA.brokers = l₂.brokers ∧ lA.loans = l₂.loans :=
+  LendingLedger.createPending_accept_proof hr hset haccept hclose
 
 /-- LoanAccept -> it succeeds only when the broker is at or above minCover. -/
 theorem Lending.accept_keeps_minimum_cover (l l' : LendingLedger) (i : Nat)
@@ -50,7 +51,11 @@ theorem Lending.accept_keeps_minimum_cover (l l' : LendingLedger) (i : Nat)
     -- the broker is at or above minCover before, the check LoanAccept leaves out (FV_M4_46)
     (hcover : loan.broker.hasMinimumCover l.vault.baseExponent = .ok true) :
     loan'.broker.hasMinimumCover l'.vault.baseExponent = .ok true := by
-  sorry
+  obtain ⟨-, loan₀, r, -, hat₀, -, hacc, -, hv, hat₁, -, -⟩ := LendingLedger.loanAccept_ok h
+  obtain rfl := hat.eq hat₀
+  obtain rfl := hat'.eq hat₁
+  rw [Loan.accept_broker loan _ r hacc, hv, (Loan.accept_keepsSettings loan _ r hacc).baseExponent_eq]
+  exact hcover
 
 /-- Witness: a run where LoanAccept succeeds from a broker below minCover. A broker at 10% minimum cover holds 100 for
 loan A of 600 and pending loan B of 400, the default of A takes all 100, then B is accepted with minCover 40. -/
@@ -61,7 +66,7 @@ theorem Lending.accept_keeps_minimum_cover_attained :
       l.LoanAt i loan ∧
       l'.LoanAt i loan' ∧
       loan.broker.hasMinimumCover l.vault.baseExponent = .ok false ∧
-      loan'.broker.hasMinimumCover l'.vault.baseExponent = .ok false := by
-  sorry
+      loan'.broker.hasMinimumCover l'.vault.baseExponent = .ok false :=
+  LendingLedger.accept_keeps_minimum_cover_witness
 
 end XRPL.Model

@@ -25,14 +25,17 @@ theorem Loan.canAccept_exits :
       v.exceedsOpenLimit interestDue = .ok true → loan.canAccept v t = .ok .tecLIMIT_EXCEEDED) ∧
     (∀ interestDue : Number, loan.isPending = true → t < loan.schedule.startDate →
       (v.phase t = .noPhase ∨ v.phase t = .investment) → loan.interestDue = .ok interestDue →
-      v.exceedsOpenLimit interestDue = .ok false → loan.canAccept v t = .ok .tesSUCCESS) := by
-  sorry
+      v.exceedsOpenLimit interestDue = .ok false → loan.canAccept v t = .ok .tesSUCCESS) :=
+  ⟨Loan.canAccept_not_pending_proof loan v t, Loan.canAccept_start_passed_proof loan v t,
+    Loan.canAccept_subscription_proof loan v t, Loan.canAccept_redemption_proof loan v t,
+    fun interestDue hp ht hphase => Loan.canAccept_open_zone_proof loan v t hp ht hphase interestDue,
+    fun interestDue hp ht hphase => Loan.canAccept_success_proof loan v t hp ht hphase interestDue⟩
 
 /-- Error codes: success, tecNO_PERMISSION, tecEXPIRED, tecTOO_SOON or tecLIMIT_EXCEEDED. -/
 theorem Loan.canAccept_error_codes (ter : TER) (hok : loan.canAccept v t = .ok ter) :
     ter = .tesSUCCESS ∨ ter = .tecNO_PERMISSION ∨ ter = .tecEXPIRED ∨ ter = .tecTOO_SOON ∨
-      ter = .tecLIMIT_EXCEEDED := by
-  sorry
+      ter = .tecLIMIT_EXCEEDED :=
+  Loan.canAccept_error_codes_proof loan v t ter hok
 
 /-- Success ⟺ the loan is pending, now < StartDate, the phase allows it, and its interestDue
 fits the Open limit. -/
@@ -40,8 +43,8 @@ theorem Loan.canAccept_lawful_iff (interestDue : Number) (hi : loan.interestDue 
     (exceeds : Bool) (hopen : v.exceedsOpenLimit interestDue = .ok exceeds) :
     loan.canAccept v t = .ok .tesSUCCESS ↔
       loan.isPending = true ∧ t < loan.schedule.startDate ∧
-        (v.phase t = .noPhase ∨ v.phase t = .investment) ∧ exceeds = false := by
-  sorry
+        (v.phase t = .noPhase ∨ v.phase t = .investment) ∧ exceeds = false :=
+  Loan.canAccept_lawful_iff_proof loan v t interestDue hi exceeds hopen
 
 /-! ## `Loan.accept` -/
 
@@ -60,12 +63,12 @@ theorem Loan.accept_exits :
       ({ loan.toRawLoan with isPending := false } : RawLoan).to_lawful = .ok loan' →
       -- the borrower gets PrincipalOutstanding less the origination fee
       loan.principalOutstanding.operator_sub loan.fees.originationFee .to_nearest = .ok amountToBorrower →
-      (loan.accept v).run = .ok (.ok { loan' := loan', pool' := v', amountToBorrower := amountToBorrower })) := by
-  sorry
+      (loan.accept v).run = .ok (.ok { loan' := loan', pool' := v', amountToBorrower := amountToBorrower })) :=
+  ⟨Loan.accept_bad_ledger_proof loan v, Loan.accept_success_proof loan v⟩
 
 /-- The only accept rejection is tefBAD_LEDGER. -/
 theorem Loan.accept_error_codes (ter : TER) (hok : (loan.accept v).run = .ok (.error ter)) :
-    ter = .tefBAD_LEDGER := by
-  sorry
+    ter = .tefBAD_LEDGER :=
+  Loan.accept_error_codes_proof loan v ter hok
 
 end XRPL.Model.Lending

@@ -47,16 +47,23 @@ theorem Loan.canCreate_exits :
       schedule.FitsVault v t → v.assetsTotal = .ok assetsTotal →
       numberExponent assetsTotal v.baseExponent broker.numericType = .ok v.baseExponent →
       (∀ x ∈ principalRequested :: fees.amountFields, STAmount.isRounded broker.numericType x = false) →
-      Loan.canCreate broker v principalRequested fees schedule t twoStep = .ok .tesSUCCESS) := by
-  sorry
+      Loan.canCreate broker v principalRequested fees schedule t twoStep = .ok .tesSUCCESS) :=
+  ⟨Loan.canCreate_schedule_too_long_proof broker v principalRequested fees schedule t twoStep,
+    Loan.canCreate_start_passed_proof broker v principalRequested fees schedule t,
+    Loan.canCreate_subscription_proof broker v principalRequested fees schedule t twoStep,
+    Loan.canCreate_redemption_proof broker v principalRequested fees schedule t twoStep,
+    Loan.canCreate_ends_late_proof broker v principalRequested fees schedule t twoStep,
+    Loan.canCreate_base_scale_proof broker v principalRequested fees schedule t twoStep,
+    Loan.canCreate_precision_loss_proof broker v principalRequested fees schedule t twoStep,
+    Loan.canCreate_success_proof broker v principalRequested fees schedule t twoStep⟩
 
 /-- Error codes: success, tecKILLED, tecTOO_SOON, tecEXPIRED, tecNO_PERMISSION, tecLIMIT_EXCEEDED or
 tecPRECISION_LOSS. -/
 theorem Loan.canCreate_error_codes (ter : TER)
     (hok : Loan.canCreate broker v principalRequested fees schedule t twoStep = .ok ter) :
     ter = .tesSUCCESS ∨ ter = .tecKILLED ∨ ter = .tecTOO_SOON ∨ ter = .tecEXPIRED ∨
-      ter = .tecNO_PERMISSION ∨ ter = .tecLIMIT_EXCEEDED ∨ ter = .tecPRECISION_LOSS := by
-  sorry
+      ter = .tecNO_PERMISSION ∨ ter = .tecLIMIT_EXCEEDED ∨ ter = .tecPRECISION_LOSS :=
+  Loan.canCreate_error_codes_proof broker v principalRequested fees schedule t twoStep ter hok
 
 /-- Success ⟺ the schedule fits the ledger clock and the vault's phases, now < StartDate for a pending loan, the current
 vault scale = the initial vault scale, and PrincipalRequested and the fees fit an STAmount exactly. -/
@@ -67,8 +74,8 @@ theorem Loan.canCreate_lawful_iff (assetsTotal : Number) (e : Int)
     Loan.canCreate broker v principalRequested fees schedule t twoStep = .ok .tesSUCCESS ↔
       schedule.Fits ∧ (twoStep = false ∨ t < schedule.startDate) ∧ schedule.FitsVault v t ∧
         e = v.baseExponent ∧
-        ∀ x ∈ principalRequested :: fees.amountFields, STAmount.isRounded broker.numericType x = false := by
-  sorry
+        ∀ x ∈ principalRequested :: fees.amountFields, STAmount.isRounded broker.numericType x = false :=
+  Loan.canCreate_lawful_iff_proof broker v principalRequested fees schedule t twoStep assetsTotal e hn hi hat hexp
 
 /-! ## `Loan.create` -/
 
@@ -179,8 +186,17 @@ theorem Loan.create_exits :
       -- an active loan sends the borrower PrincipalRequested less the origination fee, a pending one sends nothing
       Loan.createAmountToBorrower principalRequested fees pending = .ok amountToBorrower →
       (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
-        .ok (.ok { loan' := loan, pool' := v', amountToBorrower := amountToBorrower })) := by
-  sorry
+        .ok (.ok { loan' := loan, pool' := v', amountToBorrower := amountToBorrower })) :=
+  ⟨Loan.create_insufficient_funds_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
+    Loan.create_precision_loss_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
+    Loan.create_no_interest_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
+    Loan.create_no_principal_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
+    Loan.create_zero_payment_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
+    Loan.create_payment_count_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
+    Loan.create_open_zone_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
+    Loan.create_limit_exceeded_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
+    Loan.create_below_minCover_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
+    Loan.create_success_proof broker v principalRequested rates fees schedule allowsOverpayment pending⟩
 
 /-- All checks pass but a term is out of range -> `create` returns notLawful, one line per term. -/
 theorem Loan.create_not_lawful :
@@ -214,8 +230,22 @@ theorem Loan.create_not_lawful :
           .error .notLawful) ∧
       (schedule.gracePeriod < defaultGracePeriod ∨ schedule.paymentInterval < schedule.gracePeriod →
         (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
-          .error .notLawful) := by
-  sorry
+          .error .notLawful) :=
+  fun properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue =>
+    ⟨Loan.create_rate_out_of_range_proof broker v principalRequested rates fees schedule allowsOverpayment pending
+        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue,
+      Loan.create_overpaymentFee_out_of_range_proof broker v principalRequested rates fees schedule
+        allowsOverpayment pending properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv'
+        hbroker hcount hdue,
+      Loan.create_fee_negative_proof broker v principalRequested rates fees schedule allowsOverpayment pending
+        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue,
+      Loan.create_originationFee_above_principal_proof broker v principalRequested rates fees schedule
+        allowsOverpayment pending properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv'
+        hbroker hcount hdue,
+      Loan.create_interval_too_short_proof broker v principalRequested rates fees schedule allowsOverpayment pending
+        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue,
+      Loan.create_grace_out_of_range_proof broker v principalRequested rates fees schedule allowsOverpayment pending
+        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue⟩
 
 /-- The only create rejections on a reachable ledger are tecINSUFFICIENT_FUNDS, tecPRECISION_LOSS or
 tecLIMIT_EXCEEDED. The guards never reject with tecINTERNAL, and the vault update never with tefBAD_LEDGER. -/
@@ -229,8 +259,9 @@ theorem Loan.create_error_codes (l : LendingLedger) (hr : l.Reachable) (j : Nat)
     (hcount : broker.loanCount + 1 ≠ 0) -- LoanCount does not overflow
     (hok : (Loan.create broker l.vault principalRequested rates fees schedule allowsOverpayment pending).run =
       .ok (.error ter)) :
-    ter = .tecINSUFFICIENT_FUNDS ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecLIMIT_EXCEEDED := by
-  sorry
+    ter = .tecINSUFFICIENT_FUNDS ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecLIMIT_EXCEEDED :=
+  Loan.create_error_codes_reachable_proof l hr j broker hb principalRequested rates fees schedule twoStep
+    allowsOverpayment pending ter hpre hc hroom hcount hok
 
 /-- Witness for `create_error_codes`: on a reachable XRP ledger with `3.3·10^15` drops in the vault, a LoanSet whose
 total value is above the largest XRP amount ends in an error, not a result code. -/
@@ -241,7 +272,7 @@ theorem Loan.create_error_codes_attained :
       l.Reachable ∧
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent ∧
       (l.apply (.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
-        allowsOverpayment)).run = .error .outOfRange := by
-  sorry
+        allowsOverpayment)).run = .error .outOfRange :=
+  LendingLedger.loanSet_out_of_range_witness
 
 end XRPL.Model.Lending
