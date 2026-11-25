@@ -1,0 +1,124 @@
+import XRPL.Properties.Protocol.Number.Common.Notation
+import XRPL.Properties.Protocol.Number.Mul.Common.ToNearest.BoundProof
+import XRPL.Properties.Protocol.Number.Common.ProofTactics
+
+
+namespace XRPL.Model.Protocol
+
+/-! # Witness for `Number.operator_mul_rounding_bound_to_nearest`
+
+The bound `5/(2^63 + 7)` is attained at `x = 5*10^18`, `y = (2^63 + 7)/5`. -/
+
+local syntax "sd_step" : tactic
+local macro_rules | `(tactic| sd_step) => `(tactic|
+  (conv_lhs => rw [scaleDown128Spec]; rw [dite_eq_left (by decide)]; rfl))
+
+/-- `scaleDown128Spec` trace for the witness inputs. -/
+lemma scaleDown128_to_nearest_witness :
+    scaleDown128Spec (toUInt128 (5000000000000000000 : UInt64) * toUInt128 (1844674407370955163 : UInt64))
+                 (0 : Int) Guard.new
+        = (mantissaFloorSucc, 19,
+           { digits_ := 5764607523034234880, xbit_ := false, sbit_ := false }) := by
+  have hprod : toUInt128 (5000000000000000000 : UInt64) * toUInt128 (1844674407370955163 : UInt64)
+        = (9223372036854775815000000000000000000 : UInt128) := by decide
+  rw [hprod]
+  sd_step; sd_step; sd_step; sd_step; sd_step
+  sd_step; sd_step; sd_step; sd_step; sd_step
+  sd_step; sd_step; sd_step; sd_step; sd_step
+  sd_step; sd_step; sd_step; sd_step
+  conv_lhs => rw [scaleDown128Spec]; rw [dite_eq_right (by decide)]
+  rfl
+
+/-- `doNormalize` trace for the witness result. -/
+lemma doNormalize_witness :
+    doNormalize false (9223372036854775820 : UInt64) (18 : Int)
+        largeRange.min largeRange.max .to_nearest =
+        .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 18 } := by
+  rw [doNormalize_eq_spec]
+  all_goals try min_fit
+  unfold doNormalizeSpec
+  rw [show ((9223372036854775820 : UInt64) == 0) = false from rfl]
+  simp only [Bool.false_eq_true, ite_false]
+  rw [show doNormalize_scaleUpSpec largeRange.min (9223372036854775820 : UInt64) (18 : Int)
+        = ((9223372036854775820 : UInt64), (18 : Int)) by
+        unfold doNormalize_scaleUpSpec; rw [ite_eq_right (by decide)]]
+  rw [show doNormalize_scaleDown largeRange.max (9223372036854775820 : UInt64) (18 : Int) Guard.new
+        = .ok ((9223372036854775820 : UInt64), (18 : Int), Guard.new) by
+        unfold doNormalize_scaleDown; rw [dite_eq_right (by decide)]]
+  simp only []
+  rw [show ((18 : Int) < minExponent || (9223372036854775820 : UInt64) < largeRange.min) = false from by decide]
+  simp only [Bool.false_eq_true, ite_false]
+  have h_divu : divu10 (9223372036854775820 : UInt64) = (922337203685477582, 0) := by decide
+  rw [show doNormalize_capAtMaxRep (9223372036854775820 : UInt64) (18 : Int) Guard.new
+        = .ok ((922337203685477582 : UInt64), (19 : Int), Guard.new) from by
+      unfold doNormalize_capAtMaxRep
+      rw [ite_eq_left (by decide), ite_eq_right (by decide), h_divu]; simp only [guard_new_push_zero]; norm_num]
+  simp only []
+  have h_rup : Guard.new.doRoundUp false (922337203685477582 : UInt64) (19 : Int)
+      largeRange.min largeRange.max .to_nearest .normalize2 =
+      .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 18 } := by
+    rw_doRoundUp_spec
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl
+  rw [h_rup]
+  simp only [RoundResult.toNumber]
+
+/-- `operator_mul` trace for the witness inputs. -/
+lemma Number.operator_mul_to_nearest_witness :
+    Number.operator_mul
+        ⟨false, 5000000000000000000, 0⟩
+        ⟨false, 1844674407370955163, 0⟩
+        .to_nearest =
+      .ok ⟨false, 9223372036854775820, 18⟩ := by
+  rw [Number.operator_mul_eq_spec]
+  unfold Number.operator_mulSpec
+  have hx_ne : (⟨false, 5000000000000000000, 0⟩ : Number).operator_eq Number.zero = false := by decide
+  have hy_ne : (⟨false, 1844674407370955163, 0⟩ : Number).operator_eq Number.zero = false := by decide
+  simp only [hx_ne, hy_ne, Bool.false_eq_true, ite_false, bne_self_eq_false, add_zero]
+  rw [scaleDown128_to_nearest_witness]
+  have h_rup : ({ digits_ := 5764607523034234880, xbit_ := false, sbit_ := false } : Guard).doRoundUp
+      false (mantissaFloorSucc : UInt64) (19 : Int) largeRange.min largeRange.max .to_nearest
+      .overflow =
+      .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 18 } := by
+    rw_doRoundUp_spec
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl
+  rw [h_rup]
+  simp only [RoundResult.toNumber]
+  unfold Number.normalize
+  rw [doNormalize_witness]
+
+
+theorem Number.operator_mul_to_nearest_attained :
+    ∃ (x y result : Number),
+      x.isNormalized ∧ y.isNormalized ∧
+      Number.operator_mul x y .to_nearest = .ok result ∧
+      result.mantissa_ ≠ 0 ∧
+      |result.toRat - x.toRat * y.toRat|
+        = |x.toRat * y.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) := by
+  refine ⟨⟨false, 5000000000000000000, 0⟩,
+          ⟨false, 1844674407370955163, 0⟩,
+          ⟨false, 9223372036854775820, 18⟩,
+          ?_, ?_, ?_, ?_, ?_⟩
+  · norm_isNormalized
+  · norm_isNormalized
+  · exact Number.operator_mul_to_nearest_witness
+  · decide
+  · have hx_rat : (⟨false, 5000000000000000000, 0⟩ : Number).toRat = 5000000000000000000 := by
+      unfold Number.toRat; rfl
+    have hy_rat : (⟨false, 1844674407370955163, 0⟩ : Number).toRat = 1844674407370955163 := by
+      unfold Number.toRat; rfl
+    have hr_rat : (⟨false, 9223372036854775820, 18⟩ : Number).toRat
+                = 9223372036854775820 * (10 : ℚ) ^ (18 : ℕ) := by
+      unfold Number.toRat; simp; ring
+    rw [hx_rat, hy_rat, hr_rat]
+    change |9223372036854775820 * (10 : ℚ) ^ (18 : ℕ) - 5000000000000000000 * 1844674407370955163|
+       = |(5000000000000000000 : ℚ) * 1844674407370955163| * (5 / (2 ^ 63 + 7 : ℚ))
+    rw [show (5000000000000000000 : ℚ) * 1844674407370955163
+          = 9223372036854775815 * 10 ^ (18 : ℕ) by norm_num]
+    rw [show (9223372036854775820 : ℚ) * 10 ^ (18 : ℕ) - 9223372036854775815 * 10 ^ (18 : ℕ)
+          = 5 * 10 ^ (18 : ℕ) by ring]
+    rw [show ((2 : ℚ) ^ 63 + 7) = 9223372036854775815 by norm_num]
+    rw [abs_of_pos (by positivity : (0 : ℚ) < 5 * 10 ^ (18 : ℕ))]
+    rw [abs_of_pos (by positivity : (0 : ℚ) < 9223372036854775815 * 10 ^ (18 : ℕ))]
+    field_simp
+
+end XRPL.Model.Protocol

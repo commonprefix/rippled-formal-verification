@@ -1,0 +1,725 @@
+import XRPL.Properties.Protocol.Number.Accessors.Accessors
+import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
+import XRPL.Properties.Protocol.Number.Common.DropDigitEquivalence
+import Mathlib.Tactic
+
+
+namespace XRPL.Model.Protocol
+
+/-! # Helper invariants for `Number.to_rep`
+
+Guard, sign and `grow`/`shift` lemmas behind `Number.to_rep_within_one` and `Number.to_rep_exact_of_exponent_nonneg`. -/
+
+/-- `to_rep.grow` with a raw multiplication. -/
+def growSpec (drops : rep) (offset : Int) : Except Error rep :=
+  if offset > 0 then
+    if drops > maxRep.toInt64 / 10 then
+      .error .overflow
+    else growSpec (drops * 10) (offset - 1)
+  else .ok drops
+termination_by offset.toNat
+decreasing_by omega
+
+/-- `to_rep` with raw fixed-width operations and the digit loop of `shiftSpec`. `Number.to_rep_eq_spec` shows
+that `to_rep` gives the same result, so none of its checked operations wraps. -/
+def Number.to_repSpec (n : Number) (mode : rounding_mode) : Except Error rep :=
+  let drops : rep := n.mantissa
+  let offset : Int := n.exponent
+  if drops == 0 then .ok 0
+  else
+    let g := if n.negative_ then Guard.new.set_negative else Guard.new
+    let drops : rep := if n.negative_ then -drops else drops
+    let (drops, g) :=
+      if offset < 0 then shiftSpec drops offset g
+      else (drops, g)
+    match (if offset ≥ 0 then growSpec drops offset else .ok drops) with
+    | .error e => .error e
+    | .ok drops =>
+      let r := g.round mode
+      if r == 1 || (r == 0 && drops % 2 == 1) then
+        if drops ≥ maxRep.toInt64 then
+          .error .overflow
+        else
+          let drops := drops + 1
+          .ok (if n.negative_ then -drops else drops)
+      else
+        .ok (if n.negative_ then -drops else drops)
+
+/-- A clean guard is empty, so it rounds to the sentinel `-2` (never rounds up). -/
+lemma clean_guard_round (g : Guard) (h1 : g.digits_ = 0) (h2 : g.xbit_ = false)
+    (mode : rounding_mode) : g.round mode = -2 := by
+  have h_empty : g.empty = true := by unfold Guard.empty Guard.unrecoverable; rw [h1, h2]; decide
+  unfold Guard.round
+  rw [ite_eq_left h_empty]
+
+/-- Pushing the digit `0` onto a clean guard keeps it clean. -/
+lemma push_zero_clean (g : Guard) (h1 : g.digits_ = 0) (h2 : g.xbit_ = false) :
+    (g.push 0).digits_ = 0 ∧ (g.push 0).xbit_ = false := by
+  refine ⟨?_, ?_⟩
+  · change ((g.digits_ >>> 4) ||| ((0 : UInt64) &&& 0xF) <<< 60) = 0
+    rw [h1]; decide
+  · change (g.xbit_ || ((g.digits_ &&& 0xF) != 0)) = false
+    rw [h1, h2]; decide
+
+/-- If the magnitude divides evenly by `10^(-offset)`, `shift` leaves the guard
+clean: every dropped digit is `0`. -/
+lemma shift_snd_clean (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt)
+    (hg1 : g.digits_ = 0) (hg2 : g.xbit_ = false)
+    (hdvd : D.toInt % 10 ^ (-off).toNat = 0) :
+    (shiftSpec D off g).2.digits_ = 0 ∧ (shiftSpec D off g).2.xbit_ = false := by
+  induction D, off, g using shiftSpec.induct with
+  | case1 drops offset gg hneg ih =>
+    rw [shiftSpec, ite_eq_left hneg]
+    -- dropped digit is 0
+    have hk : (-offset).toNat = (-(offset + 1)).toNat + 1 := by omega
+    rw [hk, pow_succ'] at hdvd
+    have hdvd_full : (10 * 10 ^ (-(offset + 1)).toNat : ℤ) ∣ drops.toInt :=
+      Int.dvd_of_emod_eq_zero hdvd
+    have hdvd10 : drops.toInt % 10 = 0 := by
+      apply Int.emod_eq_zero_of_dvd
+      exact dvd_trans ⟨10 ^ (-(offset + 1)).toNat, by ring⟩ hdvd_full
+    have hdig0 : (drops % 10).toUInt64 = 0 := by
+      have : (drops % 10).toInt = 0 := by rw [toInt_mod_ten_of_nonneg drops h0, hdvd10]
+      have hz : drops % 10 = 0 := Int64.toInt_inj.mp (by rw [this]; decide)
+      rw [hz]; rfl
+    have hdiv_nn : 0 ≤ (drops / 10).toInt := by
+      rw [toInt_div_ten_of_nonneg drops h0]; exact Int.ediv_nonneg h0 (by norm_num)
+    have hdiv_dvd : (drops / 10).toInt % 10 ^ (-(offset + 1)).toNat = 0 := by
+      rw [toInt_div_ten_of_nonneg drops h0]
+      obtain ⟨c, hc⟩ := hdvd_full
+      rw [hc]
+      rw [show (10 * 10 ^ (-(offset + 1)).toNat * c) / 10 = 10 ^ (-(offset + 1)).toNat * c from by
+        rw [mul_assoc, Int.mul_ediv_cancel_left _ (by norm_num)]]
+      exact Int.mul_emod_right _ _
+    rcases push_zero_clean gg hg1 hg2 with ⟨hpc1, hpc2⟩
+    nth_rewrite 1 [← hdig0] at hpc1
+    nth_rewrite 1 [← hdig0] at hpc2
+    exact ih hdiv_nn hpc1 hpc2 hdiv_dvd
+  | case2 drops offset gg hnneg =>
+    rw [shiftSpec, ite_eq_right hnneg]
+    exact ⟨hg1, hg2⟩
+
+/-- The external mantissa is nonpositive when negative, nonnegative otherwise. -/
+lemma Number.mantissa_sign (n : Number) :
+    (n.negative_ = true → n.mantissa.toInt ≤ 0) ∧
+    (n.negative_ = false → 0 ≤ n.mantissa.toInt) := by
+  rw [Number.mantissa_toInt n]
+  refine ⟨fun h => ?_, fun h => ?_⟩
+  · rw [ite_eq_left h]
+    apply mul_nonpos_of_nonpos_of_nonneg (by norm_num)
+    split <;> positivity
+  · rw [ite_eq_right (by rw [h]; decide), one_mul]
+    split <;> positivity
+
+/-- The `Int64` magnitude formed at the start of `to_rep`
+(`if n.negative_ then -drops else drops`) has integer value `|M|`. -/
+lemma magnitude_toInt (n : Number) :
+    (if n.negative_ then -n.mantissa else n.mantissa).toInt = n.mantissa.toInt.natAbs := by
+  have hbound : n.mantissa.toInt.natAbs ≤ maxRep.toNat := Number.mantissa_natAbs_le n
+  have hlt : (n.mantissa.toInt.natAbs : ℤ) < 2 ^ 63 := by rw [maxRep_val] at hbound; omega
+  rcases Number.mantissa_sign n with ⟨hsneg, hsnn⟩
+  by_cases hneg : n.negative_
+  · rw [ite_eq_left hneg, Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
+    have hnp : n.mantissa.toInt ≤ 0 := hsneg hneg
+    rw [Int.ofNat_natAbs_of_nonpos hnp] at hlt ⊢
+    constructor <;> [omega; (push_cast; omega)]
+  · rw [ite_eq_right hneg]
+    have hnn : 0 ≤ n.mantissa.toInt := hsnn (by simpa using hneg)
+    rw [Int.natAbs_of_nonneg hnn]
+
+/-- A successful `grow` multiplies a nonnegative magnitude by exactly `10^offset`, or leaves it unchanged when
+`offset ≤ 0`. -/
+lemma grow_ok_eq (D D' : Int64) (off : Int) (h0 : 0 ≤ D.toInt)
+    (hok : growSpec D off = .ok D') :
+    (D'.toInt : ℤ) = D.toInt * 10 ^ off.toNat := by
+  induction D, off using growSpec.induct with
+  | case1 drops offset hpos hover =>
+    rw [growSpec, ite_eq_left hpos, ite_eq_left hover] at hok
+    exact absurd hok (by simp)
+  | case2 drops offset hpos hover ih =>
+    rw [growSpec, ite_eq_left hpos, ite_eq_right hover] at hok
+    have hguard : drops.toInt ≤ (maxRep.toNat : ℤ) / 10 := by
+      have hle : drops ≤ maxRep.toInt64 / 10 := Int64.not_lt.mp hover
+      have hb : (maxRep.toInt64 / 10).toInt = (maxRep.toNat : ℤ) / 10 := by decide
+      have : drops.toInt ≤ (maxRep.toInt64 / 10).toInt := Int64.le_iff_toInt_le.mp hle
+      rw [hb] at this; exact this
+    have hmul := toInt_mul_ten_of_le drops h0 hguard
+    have h0' : 0 ≤ (drops * 10).toInt := by rw [hmul]; positivity
+    have ihr := ih h0' hok
+    rw [ihr, hmul]
+    have hoff : offset.toNat = (offset - 1).toNat + 1 := by omega
+    rw [hoff, pow_succ]
+    ring
+  | case3 drops offset hnpos =>
+    rw [growSpec, ite_eq_right hnpos] at hok
+    have hd : drops = D' := by injection hok
+    have hoff : offset.toNat = 0 := by omega
+    rw [← hd, hoff, pow_zero, mul_one]
+
+/-- `grow` keeps the magnitude within `maxRep`, since its overflow check (`drops ≤ maxRep/10`) runs before
+each multiplication by 10. -/
+lemma grow_ok_le_maxRep (D D' : Int64) (off : Int) (h0 : 0 ≤ D.toInt)
+    (h_le : D.toInt ≤ (maxRep.toNat : ℤ))
+    (hok : growSpec D off = .ok D') :
+    D'.toInt ≤ (maxRep.toNat : ℤ) := by
+  induction D, off using growSpec.induct with
+  | case1 drops offset hpos hover =>
+    rw [growSpec, ite_eq_left hpos, ite_eq_left hover] at hok
+    exact absurd hok (by simp)
+  | case2 drops offset hpos hover ih =>
+    rw [growSpec, ite_eq_left hpos, ite_eq_right hover] at hok
+    have hguard : drops.toInt ≤ (maxRep.toNat : ℤ) / 10 := by
+      have hle : drops ≤ maxRep.toInt64 / 10 := Int64.not_lt.mp hover
+      have hb : (maxRep.toInt64 / 10).toInt = (maxRep.toNat : ℤ) / 10 := by decide
+      have := Int64.le_iff_toInt_le.mp hle
+      rw [hb] at this; exact this
+    have hmul := toInt_mul_ten_of_le drops h0 hguard
+    have h0' : 0 ≤ (drops * 10).toInt := by rw [hmul]; positivity
+    have h_le' : (drops * 10).toInt ≤ (maxRep.toNat : ℤ) := by
+      rw [hmul]
+      rw [maxRep_val] at hguard ⊢
+      omega
+    exact ih h0' h_le' hok
+  | case3 drops offset hnpos =>
+    rw [growSpec, ite_eq_right hnpos] at hok
+    have hd : drops = D' := by injection hok
+    rw [← hd]
+    exact h_le
+
+/-- For a nonnegative magnitude `D`, `shift` returns `D / 10^(-offset)` (integer division), or `D` when
+`offset ≥ 0`. -/
+lemma shift_fst_eq (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt) :
+    ((shiftSpec D off g).fst).toInt = D.toInt / 10 ^ (-off).toNat := by
+  induction D, off, g using shiftSpec.induct with
+  | case1 drops offset gg hneg ih =>
+    rw [shiftSpec, ite_eq_left hneg]
+    have hdiv : (drops / 10).toInt = drops.toInt / 10 := toInt_div_ten_of_nonneg drops h0
+    have h0' : 0 ≤ (drops / 10).toInt := by
+      rw [hdiv]; exact Int.ediv_nonneg h0 (by norm_num)
+    have ihr := ih h0'
+    rw [ihr, hdiv]
+    have hk : (-offset).toNat = (-(offset + 1)).toNat + 1 := by omega
+    rw [hk, pow_succ', Int.ediv_ediv_of_nonneg (by norm_num)]
+  | case2 drops offset gg hnneg =>
+    rw [shiftSpec, ite_eq_right hnneg]
+    have hk : (-offset).toNat = 0 := by omega
+    rw [hk, pow_zero, Int.ediv_one]
+
+/-- The starting guard (empty, possibly with only the sign bit set) is empty, so it
+rounds to the sentinel `-2` (never rounds up). -/
+lemma start_guard_round (mode : rounding_mode) (neg : Bool) :
+    (if neg then Guard.new.set_negative else Guard.new).round mode = -2 := by
+  have h_empty : (if neg then Guard.new.set_negative else Guard.new).empty = true := by
+    cases neg <;> decide
+  unfold Guard.round; rw [ite_eq_left h_empty]
+
+
+/-- A non-negative `Int64` is not the smallest one, so negating it is exact. -/
+private lemma ne_minValue_of_nonneg {a : Int64} (h : 0 ≤ a.toInt) : a ≠ Int64.minValue := by
+  rintro rfl; exact absurd h (by decide)
+
+/-- The checked `grow` agrees with `growSpec` on a non-negative magnitude. -/
+private lemma grow_eq_spec (D : Int64) (off : Int) (h0 : 0 ≤ D.toInt) :
+    Number.to_rep.grow D off = growSpec D off := by
+  induction D, off using growSpec.induct with
+  | case1 drops offset hpos hover =>
+    rw [Number.to_rep.grow, growSpec, ite_eq_left hpos, ite_eq_left hover, ite_eq_left hpos, ite_eq_left hover]
+  | case2 drops offset hpos hover ih =>
+    have hguard : drops.toInt ≤ (maxRep.toNat : ℤ) / 10 := by
+      have hle : drops ≤ maxRep.toInt64 / 10 := Int64.not_lt.mp hover
+      have hb : (maxRep.toInt64 / 10).toInt = (maxRep.toNat : ℤ) / 10 := by decide
+      have := Int64.le_iff_toInt_le.mp hle
+      rw [hb] at this; exact this
+    have hmul := toInt_mul_ten_of_le drops h0 hguard
+    have hmax : (maxRep.toNat : ℤ) / 10 * 10 < 2 ^ 63 := by rw [maxRep_val]; norm_num
+    rw [Number.to_rep.grow, growSpec, ite_eq_left hpos, ite_eq_right hover, ite_eq_left hpos, ite_eq_right hover,
+      Int64.mulChecked_of_bounds (by rw [int64_ten_toInt]; omega) (by rw [int64_ten_toInt]; omega), ok_bind]
+    exact ih (by rw [hmul]; positivity)
+  | case3 drops offset hnpos =>
+    rw [Number.to_rep.grow, growSpec, ite_eq_right hnpos, ite_eq_right hnpos]
+
+/-- `to_rep` gives the same result as `to_repSpec` on every `Number`: its sign flips, digit drops,
+multiplications and conversions never wrap. -/
+lemma Number.to_rep_eq_spec (n : Number) (mode : rounding_mode) : n.to_rep mode = n.to_repSpec mode := by
+  unfold Number.to_rep Number.to_rep.shift Number.to_repSpec
+  dsimp only
+  split
+  · rfl
+  have hmag := magnitude_toInt n
+  set D0 : rep := if n.negative_ then -n.mantissa else n.mantissa with hD0def
+  set g0 : Guard := if n.negative_ then Guard.new.set_negative else Guard.new with hg0def
+  have hD0nn : 0 ≤ D0.toInt := by rw [hmag]; positivity
+  have hD0le : D0.toInt ≤ (maxRep.toNat : ℤ) := by rw [hmag]; exact_mod_cast Number.mantissa_natAbs_le n
+  have hneg_ok : (if n.negative_ then n.mantissa.negChecked else pure n.mantissa) = .ok D0 := by
+    rw [hD0def]
+    split
+    · rename_i hneg
+      apply Int64.negChecked_of_ne
+      intro hmin
+      have hb := Number.mantissa_natAbs_le n
+      rw [hmin] at hb
+      exact absurd hb (by decide)
+    · rfl
+  rw [hneg_ok, ok_bind]
+  have hshift : (if n.exponent < 0 then g0.doDropDigitWithTargetI64 D0 n.exponent 0 else pure (D0, g0))
+      = .ok (if n.exponent < 0 then shiftSpec D0 n.exponent g0 else (D0, g0)) := by
+    split
+    · exact doDropDigitWithTargetI64_eq_shiftSpec g0 D0 n.exponent hD0nn
+    · rfl
+  rw [hshift, ok_bind]
+  have hpair : 0 ≤ (if n.exponent < 0 then shiftSpec D0 n.exponent g0 else (D0, g0)).1.toInt ∧
+      (if n.exponent < 0 then shiftSpec D0 n.exponent g0 else (D0, g0)).1.toInt ≤ (maxRep.toNat : ℤ) := by
+    split
+    · rw [shift_fst_eq D0 n.exponent g0 hD0nn]
+      exact ⟨Int.ediv_nonneg hD0nn (by positivity), (Int.ediv_le_self _ hD0nn).trans hD0le⟩
+    · exact ⟨hD0nn, hD0le⟩
+  generalize (if n.exponent < 0 then shiftSpec D0 n.exponent g0 else (D0, g0)) = p at hpair ⊢
+  obtain ⟨D1, g1⟩ := p
+  obtain ⟨hD1nn, hD1le⟩ := hpair
+  dsimp only
+  have hgrow : (if n.exponent ≥ 0 then Number.to_rep.grow D1 n.exponent else .ok D1)
+      = (if n.exponent ≥ 0 then growSpec D1 n.exponent else .ok D1) := by
+    split
+    · exact grow_eq_spec D1 n.exponent hD1nn
+    · rfl
+  rw [hgrow]
+  rcases hG : (if n.exponent ≥ 0 then growSpec D1 n.exponent else .ok D1) with e | D2
+  · rfl
+  have hD2 : 0 ≤ D2.toInt ∧ D2.toInt ≤ (maxRep.toNat : ℤ) := by
+    split at hG
+    · have h := grow_ok_eq D1 D2 n.exponent hD1nn hG
+      exact ⟨by rw [h]; positivity, grow_ok_le_maxRep D1 D2 n.exponent hD1nn hD1le hG⟩
+    · cases hG; exact ⟨hD1nn, hD1le⟩
+  obtain ⟨hD2nn, hD2le⟩ := hD2
+  dsimp only
+  by_cases hb : (g1.round mode == 1 || g1.round mode == 0 && D2 % 2 == 1) = true
+  · rw [ite_eq_left hb, ite_eq_left hb]
+    by_cases hovf : D2 ≥ maxRep.toInt64
+    · rw [ite_eq_left hovf, ite_eq_left hovf]
+    · rw [ite_eq_right hovf, ite_eq_right hovf]
+      have hlt : D2.toInt < (maxRep.toNat : ℤ) := by
+        have := (Int64.lt_iff_toInt_lt).mp (Int64.not_le.mp hovf)
+        rwa [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at this
+      have hadd : (D2 + 1).toInt = D2.toInt + 1 := by
+        rw [Int64.toInt_add, int64_one_toInt, Int.bmod_eq_iff (by norm_num)]
+        rw [maxRep_val] at hlt
+        refine ⟨?_, ?_⟩ <;> push_cast <;> omega
+      rw [Int64.addChecked_of_bounds (by rw [int64_one_toInt]; omega)
+        (by rw [int64_one_toInt]; rw [maxRep_val] at hlt; omega), ok_bind]
+      by_cases hneg : n.negative_
+      · rw [ite_eq_left hneg, ite_eq_left hneg, Int64.negChecked_of_ne (ne_minValue_of_nonneg (by rw [hadd]; omega))]
+      · rw [ite_eq_right hneg, ite_eq_right hneg]; rfl
+  · rw [ite_eq_right hb, ite_eq_right hb]
+    by_cases hneg : n.negative_
+    · rw [ite_eq_left hneg, ite_eq_left hneg, Int64.negChecked_of_ne (ne_minValue_of_nonneg hD2nn)]
+    · rw [ite_eq_right hneg, ite_eq_right hneg]; rfl
+
+/-- A successful `to_rep` on a normalized `Number` returns an integer less than 1 away from `n.toRat`. -/
+theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
+    (hn : n.isNormalized)
+    (hok : n.to_rep mode = .ok r) :
+    |(r.toInt : ℚ) - n.toRat| < 1 := by
+  rw [Number.to_rep_eq_spec] at hok
+  unfold Number.to_repSpec at hok
+  simp only at hok
+  by_cases hz : (n.mantissa == 0) = true
+  · -- zero magnitude: result is 0 and value is 0
+    rw [ite_eq_left hz] at hok
+    have hr : r = 0 := by injection hok with h; exact h.symm
+    have hmant : n.mantissa.toInt = 0 := by
+      rw [beq_iff_eq] at hz
+      rw [hz]; decide
+    have htr : n.toRat = 0 := by
+      rw [← Number.mantissa_mul_exponent_eq_toRat n hn, hmant]; norm_num
+    rw [hr, htr]
+    have : (0 : Int64).toInt = 0 := by decide
+    rw [this]; norm_num
+  · rw [ite_eq_right hz] at hok
+    -- magnitude facts
+    have hmant_ne : n.mantissa.toInt ≠ 0 := by
+      intro hc
+      apply hz
+      rw [beq_iff_eq]
+      have : n.mantissa = 0 := by
+        have := hc; exact Int64.toInt_inj.mp (by rw [hc]; decide)
+      exact this
+    have hmagM_pos : 0 < n.mantissa.toInt.natAbs := Int.natAbs_pos.mpr hmant_ne
+    have hmagM_le : n.mantissa.toInt.natAbs ≤ maxRep.toNat := Number.mantissa_natAbs_le_maxRep n hn
+    have hmag : (if n.negative_ then -n.mantissa else n.mantissa).toInt
+        = (n.mantissa.toInt.natAbs : ℤ) := magnitude_toInt n
+    have hD0_nonneg : 0 ≤ (if n.negative_ then -n.mantissa else n.mantissa).toInt := by
+      rw [hmag]; positivity
+    by_cases hexp : n.exponent < 0
+    · -- offset < 0: shift floor + guard round-up by at most 1
+      have hge : ¬ n.exponent ≥ 0 := by omega
+      rw [ite_eq_left hexp, ite_eq_right hge] at hok
+      simp only at hok
+      set D0 : Int64 := if n.negative_ then -n.mantissa else n.mantissa with hD0def
+      set g0 : Guard := if n.negative_ then Guard.new.set_negative else Guard.new with hg0def
+      set sp := shiftSpec D0 n.exponent g0 with hspdef
+      -- Df = floor magnitude
+      have hDf := shift_fst_eq D0 n.exponent g0 hD0_nonneg
+      rw [hmag] at hDf
+      set k : ℕ := (-n.exponent).toNat with hkdef
+      rw [← hspdef] at hDf
+      -- magnitude of the truth value, as a rational
+      set magM : ℕ := (Int64.toInt n.mantissa).natAbs with hmagMdef
+      have hpowk_pos : (0 : ℚ) < (10 : ℚ) ^ k := by positivity
+      -- |n.toRat| = magM / 10^k
+      have hexp_pow : (10 : ℚ) ^ n.exponent = ((10 : ℚ) ^ k)⁻¹ := by
+        rw [show n.exponent = -(k : ℤ) from by rw [hkdef]; omega, zpow_neg, zpow_natCast]
+      have habs : |n.toRat| = (magM : ℚ) / (10 : ℚ) ^ k := by
+        rw [← Number.mantissa_mul_exponent_eq_toRat n hn, abs_mul, abs_zpow]
+        rw [show |(10 : ℚ)| = 10 from by norm_num, hexp_pow]
+        rw [show |(n.mantissa.toInt : ℚ)| = (magM : ℚ) from by
+          rw [hmagMdef, Nat.cast_natAbs]; push_cast; rfl]
+        rw [div_eq_mul_inv]
+      -- floor bounds (integer): q*10^k ≤ magM < (q+1)*10^k
+      have hpowk_ne : (10 : ℤ) ^ k ≠ 0 := by positivity
+      have hint_lb : (sp.1.toInt) * 10 ^ k ≤ (magM : ℤ) := by
+        rw [hDf]
+        exact Int.ediv_mul_le (magM : ℤ) hpowk_ne
+      have hint_ub : (magM : ℤ) < (sp.1.toInt + 1) * 10 ^ k := by
+        rw [hDf]
+        have h1 := Int.emod_lt_of_pos (magM : ℤ) (show (0 : ℤ) < (10 : ℤ) ^ k by positivity)
+        have h2 := Int.mul_ediv_add_emod (magM : ℤ) ((10 : ℤ) ^ k)
+        have h3 := Int.emod_nonneg (magM : ℤ) hpowk_ne
+        nlinarith
+      -- floor bounds (rational)
+      have hfloor_lb : (sp.1.toInt : ℚ) ≤ (magM : ℚ) / (10 : ℚ) ^ k := by
+        rw [le_div_iff₀ hpowk_pos]
+        have := (Int.cast_le (R := ℚ)).mpr hint_lb
+        push_cast at this; linarith
+      have hfloor_ub : (magM : ℚ) / (10 : ℚ) ^ k < (sp.1.toInt : ℚ) + 1 := by
+        rw [div_lt_iff₀ hpowk_pos]
+        have := (Int.cast_lt (R := ℚ)).mpr hint_ub
+        push_cast at this; linarith
+      -- bracket: 0 ≤ |n.toRat| - Df.toInt < 1
+      have hbra_lo : (0 : ℚ) ≤ |n.toRat| - (sp.1.toInt : ℚ) := by rw [habs]; linarith
+      have hbra_hi : |n.toRat| - (sp.1.toInt : ℚ) < 1 := by rw [habs]; linarith
+      -- n.toRat = sign * |n.toRat|
+      have hsign_toRat : n.toRat = (if n.negative_ then -1 else 1) * |n.toRat| := by
+        by_cases hneg : n.negative_
+        · rw [ite_eq_left hneg, abs_of_nonpos (Number.toRat_nonpos_of_negative n hneg)]; ring
+        · rw [ite_eq_right hneg, abs_of_nonneg (Number.toRat_nonneg_of_nonnegative n (by simpa using hneg))]; ring
+      have hDf_nn : 0 ≤ sp.1.toInt := by rw [hDf]; exact Int.ediv_nonneg (by positivity) (by positivity)
+      -- key reduction: |r.toInt - toRat| = |mg - |toRat|| where mg is the magnitude
+      have hkey : ∀ (mg : Int64), 0 ≤ mg.toInt →
+          r = (if n.negative_ then -mg else mg) →
+          |(r.toInt : ℚ) - n.toRat| = abs ((mg.toInt : ℚ) - |n.toRat|) := by
+        intro mg hmg_nn hrmg
+        set s : ℚ := if n.negative_ then (-1 : ℚ) else 1 with hsdef
+        have hrInt : (r.toInt : ℚ) = s * (mg.toInt : ℚ) := by
+          rw [hrmg, hsdef]
+          by_cases hneg : n.negative_
+          · rw [ite_eq_left hneg, ite_eq_left hneg, toInt_neg_of_nonneg _ hmg_nn]; push_cast; ring
+          · rw [ite_eq_right hneg, ite_eq_right hneg, one_mul]
+        have hdiff : (r.toInt : ℚ) - n.toRat = s * ((mg.toInt : ℚ) - |n.toRat|) := by
+          rw [hrInt]; nth_rewrite 1 [hsign_toRat]; ring
+        have habs_s : |s| = 1 := by rw [hsdef]; by_cases hneg : n.negative_ <;>
+          [rw [ite_eq_left hneg]; rw [ite_eq_right hneg]] <;> norm_num
+        rw [hdiff, abs_mul, habs_s, one_mul]
+      -- the shifted magnitude is below maxRep
+      -- case on the round-up boolean
+      by_cases hb : (sp.2.round mode == 1 || sp.2.round mode == 0 && sp.1 % 2 == 1) = true
+      · -- round up: r = ±(Df + 1)
+        rw [ite_eq_left hb] at hok
+        by_cases hovf : sp.1 ≥ maxRep.toInt64
+        · rw [ite_eq_left hovf] at hok; exact absurd hok (by simp)
+        · rw [ite_eq_right hovf] at hok
+          have hr : r = (if n.negative_ then -(sp.1 + 1) else sp.1 + 1) := by
+            injection hok with h; exact h.symm
+          -- Df + 1 is nonneg and exact
+          have hovf' : sp.1.toInt < maxRep.toInt64.toInt :=
+            (Int64.lt_iff_toInt_lt).mp (Int64.not_le.mp hovf)
+          clear hovf
+          have hmaxval : maxRep.toInt64.toInt = (maxRep.toNat : ℤ) := by decide
+          have hadd : (sp.1 + 1).toInt = sp.1.toInt + 1 := by
+            rw [Int64.toInt_add, int64_one_toInt, Int.bmod_eq_iff (by norm_num)]
+            rw [hmaxval] at hovf'
+            refine ⟨?_, ?_⟩ <;> push_cast <;> [omega; (rw [maxRep_val] at hovf'; omega)]
+          have hmg_nn : 0 ≤ (sp.1 + 1).toInt := by rw [hadd]; omega
+          -- round-up implies a nonzero digit was dropped: magM % 10^k ≠ 0
+          have hg0_clean : g0.digits_ = 0 ∧ g0.xbit_ = false := by
+            rw [hg0def]; by_cases hneg : n.negative_ <;> [rw [ite_eq_left hneg]; rw [ite_eq_right hneg]] <;>
+              exact ⟨rfl, rfl⟩
+          have hdvd_ne : (magM : ℤ) % 10 ^ k ≠ 0 := by
+            intro hdvd
+            have hDeq : D0.toInt % 10 ^ (-n.exponent).toNat = 0 := by
+              rw [hmag, ← hkdef]; exact hdvd
+            have hclean := shift_snd_clean D0 n.exponent g0 hD0_nonneg hg0_clean.1 hg0_clean.2 hDeq
+            rw [← hspdef] at hclean
+            have hround := clean_guard_round sp.2 hclean.1 hclean.2 mode
+            rw [hround] at hb
+            exact absurd hb (by simp)
+          have hstrict : (sp.1.toInt : ℚ) < |n.toRat| := by
+            rw [habs, lt_div_iff₀ hpowk_pos]
+            have hlt : (sp.1.toInt) * 10 ^ k < (magM : ℤ) := by
+              rcases lt_or_eq_of_le hint_lb with h | h
+              · exact h
+              · exfalso; apply hdvd_ne; rw [← h, Int.mul_emod_left]
+            have := (Int.cast_lt (R := ℚ)).mpr hlt
+            push_cast at this; linarith
+          rw [hkey (sp.1 + 1) hmg_nn hr, hadd]
+          push_cast
+          rw [abs_lt]
+          constructor <;> linarith
+      · -- no round up: r = ±Df
+        rw [ite_eq_right hb] at hok
+        have hr : r = (if n.negative_ then -sp.1 else sp.1) := by injection hok with h; exact h.symm
+        rw [hkey sp.1 hDf_nn hr]
+        rw [abs_lt]
+        constructor <;> linarith
+    · -- offset ≥ 0: grow is exact, and the guard is empty so there is no round-up
+      have hexp' : n.exponent ≥ 0 := not_lt.mp hexp
+      rw [ite_eq_right hexp, ite_eq_left hexp'] at hok
+      cases hgrow : growSpec (if n.negative_ then -n.mantissa else n.mantissa) n.exponent with
+      | error e => rw [hgrow] at hok; exact absurd hok (by simp)
+      | ok drops =>
+        rw [hgrow] at hok
+        simp only at hok
+        -- drops ≤ maxRep and the guard is empty
+        rw [start_guard_round] at hok
+        -- the empty guard rounds to the sentinel -2, so the round-up condition is false
+        rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && drops % 2 == 1) = true from by
+          simp)] at hok
+        have hr : r = (if n.negative_ then -drops else drops) := by injection hok with h; exact h.symm
+        -- exact: drops.toInt = magM * 10^exp
+        have hdrops := grow_ok_eq _ drops n.exponent hD0_nonneg hgrow
+        rw [hmag] at hdrops
+        -- r.toInt = M * 10^exp = n.toRat
+        have hdrops_nn : 0 ≤ drops.toInt := by rw [hdrops]; positivity
+        have hsign : n.mantissa.toInt
+            = (if n.negative_ then -1 else 1) * (n.mantissa.toInt.natAbs : ℤ) := by
+          rcases Number.mantissa_sign n with ⟨hsn, hsp⟩
+          by_cases hneg : n.negative_
+          · rw [ite_eq_left hneg, Int.ofNat_natAbs_of_nonpos (hsn hneg)]; ring
+          · rw [ite_eq_right hneg, Int.natAbs_of_nonneg (hsp (by simpa using hneg))]; ring
+        have hrInt : (r.toInt : ℤ) = n.mantissa.toInt * 10 ^ n.exponent.toNat := by
+          have hrsign : (r.toInt : ℤ) = (if n.negative_ then -1 else 1) * drops.toInt := by
+            rw [hr]
+            by_cases hneg : n.negative_
+            · rw [ite_eq_left hneg, toInt_neg_of_nonneg _ hdrops_nn, ite_eq_left hneg]; ring
+            · rw [ite_eq_right hneg, ite_eq_right hneg]; ring
+          rw [hrsign, hdrops]
+          conv_rhs => rw [hsign]
+          ring
+        have htoRat : n.toRat = (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent := by
+          rw [Number.mantissa_mul_exponent_eq_toRat n hn]
+        have hpow : (10 : ℚ) ^ n.exponent = (10 : ℚ) ^ n.exponent.toNat := by
+          rw [← zpow_natCast]; congr 1; omega
+        rw [htoRat, hpow, hrInt]
+        push_cast
+        rw [sub_self, abs_zero]; norm_num
+
+/-- When `0 ≤ n.exponent`, `to_rep` is exact: the magnitude is grown by an exact
+power of ten with no digits dropped, so the returned integer equals the value. -/
+theorem Number.to_rep_exact_of_exponent_nonneg_proof (n : Number) (mode : rounding_mode) (r : Int64)
+    (hn : n.isNormalized) (hexp : 0 ≤ n.exponent)
+    (hok : n.to_rep mode = .ok r) :
+    (r.toInt : ℚ) = n.toRat := by
+  rw [Number.to_rep_eq_spec] at hok
+  unfold Number.to_repSpec at hok
+  simp only at hok
+  by_cases hz : (n.mantissa == 0) = true
+  · rw [ite_eq_left hz] at hok
+    have hr : r = 0 := by injection hok with h; exact h.symm
+    have hmant : n.mantissa.toInt = 0 := by rw [beq_iff_eq] at hz; rw [hz]; decide
+    have htr : n.toRat = 0 := by rw [← Number.mantissa_mul_exponent_eq_toRat n hn, hmant]; norm_num
+    rw [hr, htr]; decide
+  · rw [ite_eq_right hz] at hok
+    have hmant_ne : n.mantissa.toInt ≠ 0 := by
+      intro hc; apply hz; rw [beq_iff_eq]
+      exact Int64.toInt_inj.mp (by rw [hc]; decide)
+    have hmag : (if n.negative_ then -n.mantissa else n.mantissa).toInt
+        = (n.mantissa.toInt.natAbs : ℤ) := magnitude_toInt n
+    have hD0_nonneg : 0 ≤ (if n.negative_ then -n.mantissa else n.mantissa).toInt := by
+      rw [hmag]; positivity
+    have hge : ¬ n.exponent < 0 := by omega
+    rw [ite_eq_right hge, ite_eq_left hexp] at hok
+    cases hgrow : growSpec (if n.negative_ then -n.mantissa else n.mantissa) n.exponent with
+    | error e => rw [hgrow] at hok; exact absurd hok (by simp)
+    | ok drops =>
+      rw [hgrow] at hok
+      simp only at hok
+      -- drops ≤ maxRep and the guard is empty
+      have hdrops := grow_ok_eq _ drops n.exponent hD0_nonneg hgrow
+      rw [hmag] at hdrops
+      have hdrops_nn : 0 ≤ drops.toInt := by rw [hdrops]; positivity
+      rw [start_guard_round] at hok
+      -- the empty guard rounds to the sentinel -2, so the round-up condition is false
+      rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && drops % 2 == 1) = true from by
+        simp)] at hok
+      have hr : r = (if n.negative_ then -drops else drops) := by injection hok with h; exact h.symm
+      have hsign : n.mantissa.toInt
+          = (if n.negative_ then -1 else 1) * (n.mantissa.toInt.natAbs : ℤ) := by
+        rcases Number.mantissa_sign n with ⟨hsn, hsp⟩
+        by_cases hneg : n.negative_
+        · rw [ite_eq_left hneg, Int.ofNat_natAbs_of_nonpos (hsn hneg)]; ring
+        · rw [ite_eq_right hneg, Int.natAbs_of_nonneg (hsp (by simpa using hneg))]; ring
+      have hrInt : (r.toInt : ℤ) = n.mantissa.toInt * 10 ^ n.exponent.toNat := by
+        have hrsign : (r.toInt : ℤ) = (if n.negative_ then -1 else 1) * drops.toInt := by
+          rw [hr]
+          by_cases hneg : n.negative_
+          · rw [ite_eq_left hneg, toInt_neg_of_nonneg _ hdrops_nn, ite_eq_left hneg]; ring
+          · rw [ite_eq_right hneg, ite_eq_right hneg]; ring
+        rw [hrsign, hdrops]; conv_rhs => rw [hsign]
+        ring
+      have htoRat : n.toRat = (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent := by
+        rw [Number.mantissa_mul_exponent_eq_toRat n hn]
+      have hpow : (10 : ℚ) ^ n.exponent = (10 : ℚ) ^ n.exponent.toNat := by
+        rw [← zpow_natCast]; congr 1; omega
+      rw [htoRat, hpow, hrInt]; push_cast; ring
+
+/-- `to_rep` is exact on an exponent-0 (integer) number whose magnitude fits in `maxRep`, with no normalization
+needed: the result is exactly the signed mantissa. -/
+lemma Number.to_rep_exact_of_exponent_zero_proof (neg : Bool) (m : UInt64) (mode : rounding_mode) (r : Int64)
+    (hm : m.toNat ≤ maxRep.toNat)
+    (hok : (Number.unchecked neg m 0).to_rep mode = .ok r) :
+    (r.toInt : ℚ) = (if neg then (-1 : ℚ) else 1) * (m.toNat : ℚ) := by
+  have hmaxlt : m.toNat < 2 ^ 63 := by
+    have h63 : maxRep.toNat = 2 ^ 63 - 1 := by decide
+    omega
+  have hnpre : ¬ (maxRep < m) := by rw [UInt64.lt_iff_toNat_lt]; omega
+  have hmant : (Number.unchecked neg m 0).mantissa = (if neg then -m.toInt64 else m.toInt64) := by
+    simp only [Number.mantissa, Number.unchecked, gt_iff_lt, ite_eq_right hnpre]
+  have hexp : (Number.unchecked neg m 0).exponent = 0 := by
+    simp only [Number.exponent, Number.unchecked, gt_iff_lt, ite_eq_right hnpre]
+  have hneg_ : (Number.unchecked neg m 0).negative_ = neg := rfl
+  rw [Number.to_rep_eq_spec] at hok
+  unfold Number.to_repSpec at hok
+  simp only [hmant, hexp, hneg_] at hok
+  by_cases hz : (if neg then -m.toInt64 else m.toInt64) == 0
+  · -- magnitude zero ⟹ m = 0, so both sides vanish
+    rw [ite_eq_left hz] at hok
+    have hr : r = 0 := by injection hok with h; exact h.symm
+    rw [beq_iff_eq] at hz
+    have hm0 : m.toNat = 0 := by
+      have h : (if neg then -m.toInt64 else m.toInt64).toInt = (0 : Int64).toInt :=
+        congrArg Int64.toInt hz
+      rw [signed_mantissa_toInt neg m hmaxlt, show (0 : Int64).toInt = 0 from by decide] at h
+      rcases mul_eq_zero.mp h with h1 | h1
+      · cases neg <;> simp at h1
+      · exact_mod_cast h1
+    rw [hr]; simp [hm0]
+  · rw [ite_eq_right hz] at hok
+    -- the sign step recovers the (nonneg) magnitude `m.toInt64`
+    have hmag : (if neg then -(if neg then -m.toInt64 else m.toInt64)
+        else (if neg then -m.toInt64 else m.toInt64)) = m.toInt64 := by
+      cases neg <;> simp
+    rw [hmag] at hok
+    have hm0_lt : (0 : Int) < 2 := by norm_num
+    -- offset = 0: no shift, grow is the identity
+    simp only [lt_irrefl, ite_false, ge_iff_le, le_refl, ite_true] at hok
+    have hgrow : growSpec m.toInt64 0 = .ok m.toInt64 := by
+      rw [growSpec]; simp
+    rw [hgrow] at hok
+    simp only at hok
+    -- the guard is empty, so it never rounds up
+    rw [start_guard_round] at hok
+    rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && m.toInt64 % 2 == 1) = true from by
+      simp)] at hok
+    have hr : r = (if neg then -m.toInt64 else m.toInt64) := by injection hok with h; exact h.symm
+    rw [hr]
+    have := signed_mantissa_toInt neg m hmaxlt
+    rw [this]; push_cast; ring
+
+/-- The signed mantissa of a sign-cleared `Number` lies in `[0, maxRep]`. -/
+lemma Number.mantissa_range_of_nonneg (n : Number) (hneg : n.negative_ = false) :
+    0 ≤ n.mantissa.toInt ∧ n.mantissa.toInt ≤ (maxRep.toNat : ℤ) := by
+  unfold Number.mantissa
+  rw [ite_eq_right (by rw [hneg]; decide)]
+  by_cases hgt : n.mantissa_ > maxRep
+  · rw [ite_eq_left hgt]
+    have hlt : (n.mantissa_ / 10).toNat < 2 ^ 63 := by
+      rw [UInt64.toNat_div, uint64_ten_toNat]
+      have := UInt64.toNat_lt_size n.mantissa_
+      rw [uint64_size_val] at this; omega
+    rw [UInt64.toInt64_toInt_of_lt _ hlt]
+    refine ⟨Int.natCast_nonneg _, ?_⟩
+    rw [UInt64.toNat_div, uint64_ten_toNat, maxRep_val]
+    have := UInt64.toNat_lt_size n.mantissa_
+    rw [uint64_size_val] at this; omega
+  · rw [ite_eq_right hgt]
+    have hle : n.mantissa_.toNat ≤ maxRep.toNat :=
+      UInt64.le_iff_toNat_le.mp (UInt64.not_lt.mp hgt)
+    have hlt : n.mantissa_.toNat < 2 ^ 63 := by rw [maxRep_val] at hle; omega
+    rw [UInt64.toInt64_toInt_of_lt _ hlt]
+    exact ⟨Int.natCast_nonneg _, by exact_mod_cast hle⟩
+
+/-- `to_rep` of a sign-cleared `Number` returns an integer in `[0, maxRep]`. -/
+lemma Number.to_rep_nonneg_range (n : Number) (mode : rounding_mode) (r : Int64)
+    (hneg : n.negative_ = false)
+    (hok : n.to_rep mode = .ok r) :
+    0 ≤ r.toInt ∧ r.toInt ≤ (maxRep.toNat : ℤ) := by
+  rw [Number.to_rep_eq_spec] at hok
+  unfold Number.to_repSpec at hok
+  simp only at hok
+  by_cases hz : (n.mantissa == 0) = true
+  · rw [ite_eq_left hz] at hok
+    have hr : r = 0 := by injection hok with h; exact h.symm
+    rw [hr]
+    refine ⟨by decide, ?_⟩
+    rw [show (0 : Int64).toInt = 0 from by decide, maxRep_val]
+    norm_num
+  · rw [ite_eq_right hz] at hok
+    -- the start magnitude is in [0, maxRep]
+    have hD0_range := Number.mantissa_range_of_nonneg n hneg
+    rw [hneg] at hok
+    simp only [Bool.false_eq_true, ite_false] at hok
+    by_cases hexp : n.exponent < 0
+    · have hge : ¬ n.exponent ≥ 0 := by omega
+      rw [ite_eq_left hexp, ite_eq_right hge] at hok
+      simp only at hok
+      set sp := shiftSpec n.mantissa n.exponent Guard.new with hspdef
+      have hDf := shift_fst_eq n.mantissa n.exponent Guard.new hD0_range.1
+      rw [← hspdef] at hDf
+      have hsp_nn : 0 ≤ sp.1.toInt := by
+        rw [hDf]; exact Int.ediv_nonneg hD0_range.1 (by positivity)
+      have hsp_le : sp.1.toInt ≤ (maxRep.toNat : ℤ) := by
+        rw [hDf]
+        calc n.mantissa.toInt / 10 ^ (-n.exponent).toNat ≤ n.mantissa.toInt :=
+              Int.ediv_le_self _ hD0_range.1
+          _ ≤ (maxRep.toNat : ℤ) := hD0_range.2
+      rcases hb : (sp.2.round mode == 1 || (sp.2.round mode == 0 && sp.1 % 2 == 1)) with _ | _
+      · rw [hb] at hok
+        simp only [Bool.false_eq_true, ite_false] at hok
+        have hr : r = sp.1 := by injection hok with h; exact h.symm
+        rw [hr]; exact ⟨hsp_nn, hsp_le⟩
+      · rw [hb] at hok
+        simp only [ite_true] at hok
+        by_cases hovf : sp.1 ≥ maxRep.toInt64
+        · rw [ite_eq_left hovf] at hok; exact absurd hok (by simp)
+        · rw [ite_eq_right hovf] at hok
+          have hovf' : sp.1.toInt < (maxRep.toNat : ℤ) := by
+            have := (Int64.lt_iff_toInt_lt).mp (Int64.not_le.mp hovf)
+            rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at this
+            exact this
+          have hadd : (sp.1 + 1).toInt = sp.1.toInt + 1 := by
+            rw [Int64.toInt_add, int64_one_toInt, Int.bmod_eq_iff (by norm_num)]
+            rw [maxRep_val] at hovf'
+            refine ⟨?_, ?_⟩ <;> push_cast <;> [omega; (rw [maxRep_val] at hsp_le; omega)]
+          have hr : r = sp.1 + 1 := by injection hok with h; exact h.symm
+          rw [hr, hadd]
+          exact ⟨by omega, by omega⟩
+    · have hexp' : n.exponent ≥ 0 := not_lt.mp hexp
+      rw [ite_eq_right hexp, ite_eq_left hexp'] at hok
+      cases hgrow : growSpec n.mantissa n.exponent with
+      | error e => rw [hgrow] at hok; exact absurd hok (by simp)
+      | ok drops =>
+        rw [hgrow] at hok
+        simp only at hok
+        have h_drops_nn : 0 ≤ drops.toInt := by
+          rw [grow_ok_eq _ drops n.exponent hD0_range.1 hgrow]
+          exact mul_nonneg hD0_range.1 (by positivity)
+        have h_drops_le : drops.toInt ≤ (maxRep.toNat : ℤ) :=
+          grow_ok_le_maxRep _ drops n.exponent hD0_range.1 hD0_range.2 hgrow
+        rw [show Guard.new.round mode = -2 from by
+          have := start_guard_round mode false
+          simpa using this] at hok
+        rw [ite_eq_right (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && drops % 2 == 1) = true from by
+          simp)] at hok
+        have hr : r = drops := by injection hok with h; exact h.symm
+        rw [hr]; exact ⟨h_drops_nn, h_drops_le⟩
+
+end XRPL.Model.Protocol

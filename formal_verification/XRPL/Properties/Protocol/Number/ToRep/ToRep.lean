@@ -7,22 +7,22 @@ namespace XRPL.Model.Protocol
 theorem Number.to_rep_within_one (n : Number) (mode : rounding_mode) (r : Int64)
     (hn : n.isNormalized)
     (hok : n.to_rep mode = .ok r) :
-    |(r.toInt : ℚ) - n.toRat| < 1 := by
-  sorry
+    |(r.toInt : ℚ) - n.toRat| < 1 :=
+  Number.to_rep_within_one_proof n mode r hn hok
 
 /-- `to_rep` is exact when the public exponent is not negative. -/
 theorem Number.to_rep_exact_of_exponent_nonneg (n : Number) (mode : rounding_mode) (r : Int64)
     (hn : n.isNormalized) (hexp : 0 ≤ n.exponent)
     (hok : n.to_rep mode = .ok r) :
-    (r.toInt : ℚ) = n.toRat := by
-  sorry
+    (r.toInt : ℚ) = n.toRat :=
+  Number.to_rep_exact_of_exponent_nonneg_proof n mode r hn hexp hok
 
 /-- `to_rep` is exact on an exponent-0 (integer) number whose magnitude fits in `maxRep`, even when it is not
 normalized. -/
 theorem Number.to_rep_exact_of_exponent_zero (neg : Bool) (m : UInt64) (mode : rounding_mode) (r : Int64)
     (hm : m.toNat ≤ maxRep.toNat)
     (hok : (Number.unchecked neg m 0).to_rep mode = .ok r) :
-    (r.toInt : ℚ) = (if neg then (-1 : ℚ) else 1) * (m.toNat : ℚ) := by
-  sorry
+    (r.toInt : ℚ) = (if neg then (-1 : ℚ) else 1) * (m.toNat : ℚ) :=
+  Number.to_rep_exact_of_exponent_zero_proof neg m mode r hm hok
 
 end XRPL.Model.Protocol

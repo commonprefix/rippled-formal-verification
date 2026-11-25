@@ -13,23 +13,23 @@ namespace XRPL.Model.Protocol
 theorem Number.normalize_rounded_downward (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .downward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
-    Number.RoundsToRepresentable result n.toRat .downward := by
-  sorry
+    Number.RoundsToRepresentable result n.toRat .downward :=
+  Number.normalize_rounded_downward_proof n result hok hresult
 
 theorem Number.normalize_rounded_upward (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .upward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
-    Number.RoundsToRepresentable result n.toRat .upward := by
-  sorry
+    Number.RoundsToRepresentable result n.toRat .upward :=
+  Number.normalize_rounded_upward_proof n result hok hresult
 
 theorem Number.normalize_rounded_towards_zero (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result) :
-    Number.RoundsToRepresentable result n.toRat .towards_zero := by
-  sorry
+    Number.RoundsToRepresentable result n.toRat .towards_zero :=
+  Number.normalize_rounded_towards_zero_proof n result hok
 
 theorem Number.normalize_rounded_to_nearest (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result) :
-    Number.RoundsToRepresentable result n.toRat .to_nearest := by
-  sorry
+    Number.RoundsToRepresentable result n.toRat .to_nearest :=
+  Number.normalize_rounded_to_nearest_proof n result hok
 
 end XRPL.Model.Protocol

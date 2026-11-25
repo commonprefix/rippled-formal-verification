@@ -22,60 +22,70 @@ theorem Number.normalize_rounds_downward (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .downward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     RoundsWithin result n.toRat .downward (10 / (2 ^ 63 + 2 : ℚ)) := by
-  sorry
+  have hn_mant_ne := Number.normalize_operand_ne_zero n result .downward hok hresult
+  obtain ⟨h_dir, h_mag⟩ :=
+    Number.normalize_rounding_bound_downward n result hn_mant_ne hok hresult
+  exact ⟨h_dir, le_of_lt h_mag⟩
 
 theorem Number.normalize_rounding_bound_downward_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .downward = .ok result ∧
       result.mantissa_ ≠ 0 ∧
-      RoundsWithinWitness result n.toRat (8 / (2 ^ 63 + 2 : ℚ)) := by
-  sorry
+      RoundsWithinWitness result n.toRat (8 / (2 ^ 63 + 2 : ℚ)) :=
+  Number.normalize_downward_attained
 
 theorem Number.normalize_rounds_upward (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .upward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     RoundsWithin result n.toRat .upward (10 / (2 ^ 63 + 2 : ℚ)) := by
-  sorry
+  have hn_mant_ne := Number.normalize_operand_ne_zero n result .upward hok hresult
+  obtain ⟨h_dir, h_mag⟩ :=
+    Number.normalize_rounding_bound_upward n result hn_mant_ne hok hresult
+  exact ⟨h_dir, le_of_lt h_mag⟩
 
 theorem Number.normalize_rounding_bound_upward_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .upward = .ok result ∧
       result.mantissa_ ≠ 0 ∧
-      RoundsWithinWitness result n.toRat (8 / (2 ^ 63 + 2 : ℚ)) := by
-  sorry
+      RoundsWithinWitness result n.toRat (8 / (2 ^ 63 + 2 : ℚ)) :=
+  Number.normalize_upward_attained
 
 theorem Number.normalize_rounds_towards_zero (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     RoundsWithin result n.toRat .towards_zero (10 / (2 ^ 63 + 2 : ℚ)) := by
-  sorry
+  have hn_mant_ne := Number.normalize_operand_ne_zero n result .towards_zero hok hresult
+  obtain ⟨h_dir, h_mag⟩ :=
+    Number.normalize_rounding_bound_towards_zero n result hn_mant_ne hok hresult
+  exact ⟨h_dir, le_of_lt h_mag⟩
 
 theorem Number.normalize_rounding_bound_towards_zero_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .towards_zero = .ok result ∧
       result.mantissa_ ≠ 0 ∧
-      RoundsWithinWitness result n.toRat (8 / (2 ^ 63 + 2 : ℚ)) := by
-  sorry
+      RoundsWithinWitness result n.toRat (8 / (2 ^ 63 + 2 : ℚ)) :=
+  Number.normalize_towards_zero_attained
 
 theorem Number.normalize_rounds_to_nearest (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     RoundsWithin result n.toRat .to_nearest (5 / (2 ^ 63 + 7 : ℚ)) := by
-  sorry
+  have hn_mant_ne := Number.normalize_operand_ne_zero n result .to_nearest hok hresult
+  exact Number.normalize_rounding_bound_to_nearest n result hn_mant_ne hok hresult
 
 theorem Number.normalize_rounding_bound_to_nearest_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .to_nearest = .ok result ∧
       result.mantissa_ ≠ 0 ∧
-      |result.toRat - n.toRat| = |n.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) := by
-  sorry
+      |result.toRat - n.toRat| = |n.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) :=
+  Number.normalize_to_nearest_attained
 
 /-- A zero `normalize` result of a nonzero input means the value is below the smallest positive `Number`. -/
 theorem Number.normalize_underflow_truth_small (n result : Number) (mode : rounding_mode)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
     (hres0 : result.mantissa_ = 0) :
-    |n.toRat| < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
-  sorry
+    |n.toRat| < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) :=
+  Number.normalize_underflow_truth_small_proof n result mode hn_mant_ne hok hres0
 
 end XRPL.Model.Protocol

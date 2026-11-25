@@ -1,0 +1,34 @@
+import Mathlib.Tactic
+
+import XRPL.Model.Protocol.Number
+
+/-! # Rounding within a relative error
+
+`RatValued` maps each amount type to its exact rational value. `RoundsWithin` states that a result is a correct
+rounding of an exact value in a given mode, within a relative error. -/
+
+namespace XRPL.Model.Protocol
+
+class RatValued (A : Type) where
+  toRat : A → ℚ
+
+instance : RatValued Number where
+  toRat := Number.toRat
+
+/-- `result` rounds `truth` in direction `mode` with relative error at most `ε`. For `towards_zero` this compares
+magnitudes only, so a `result` of the wrong sign also passes. -/
+def RoundsWithin {A : Type} [RatValued A] (result : A) (truth : ℚ) (mode : rounding_mode) (ε : ℚ) : Prop :=
+  match mode with
+  | .to_nearest   => |RatValued.toRat result - truth| ≤ |truth| * ε
+  | .upward       => truth ≤ RatValued.toRat result ∧
+                     RatValued.toRat result - truth ≤ |truth| * ε
+  | .downward     => RatValued.toRat result ≤ truth ∧
+                     truth - RatValued.toRat result ≤ |truth| * ε
+  | .towards_zero => |RatValued.toRat result| ≤ |truth| ∧
+                     |truth| - |RatValued.toRat result| ≤ |truth| * ε
+
+/-- `result` errs by more than relative error `lo`, so no error bound of `lo` or less holds for it. -/
+def RoundsWithinWitness {A : Type} [RatValued A] (result : A) (truth : ℚ) (lo : ℚ) : Prop :=
+  |RatValued.toRat result - truth| > |truth| * lo
+
+end XRPL.Model.Protocol
