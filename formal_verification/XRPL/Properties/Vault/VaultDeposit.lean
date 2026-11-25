@@ -62,8 +62,22 @@ theorem Vault.deposit_sharesCreated (v : Vault) :
       -- the 19-digit price can cross a whole number within `sharesε` relatively of the ideal
       (∀ n : ℤ, v.idealSharesDepositAt assetsTotal.toRat roundedAmount.toRat * sharesε <
         |v.idealSharesDepositAt assetsTotal.toRat roundedAmount.toRat - n|) →
-      r.shares.toRat = ⌊v.idealSharesDepositAt assetsTotal.toRat roundedAmount.toRat⌋ := by
-  sorry
+      r.shares.toRat = ⌊v.idealSharesDepositAt assetsTotal.toRat roundedAmount.toRat⌋ :=
+  ⟨fun amountDeposit hcanon hpos =>
+    ⟨fun roundedAmount hrounded =>
+      Vault.roundedDepositAmount_bounds_proof v amountDeposit roundedAmount hcanon hpos hrounded,
+      fun assetsTotal hint hat => Vault.roundedDepositAmount_integral_proof v amountDeposit assetsTotal hint hpos hat⟩,
+    fun amountDeposit roundedAmount hc hint hpos hrounded =>
+      Vault.roundedDepositAmount_integral_floor_proof v amountDeposit roundedAmount hc hint hpos hrounded,
+    fun amountDeposit₁ amountDeposit₂ roundedAmount₁ roundedAmount₂ t₁ t₂ hpos₁ hpos₂ hcanon₁ hcanon₂ hrounded₁
+        hrounded₂ r₁ r₂ hok₁ hok₂ hle =>
+      Vault.deposit_shares_monotone_proof v amountDeposit₁ amountDeposit₂ roundedAmount₁ roundedAmount₂ t₁ t₂
+        hcanon₁ hcanon₂ hpos₁ hpos₂ hrounded₁ hrounded₂ r₁ r₂ hok₁ hok₂ hle,
+    fun amountDeposit roundedAmount t assetsTotal hposA hcanon hat hrounded r hok hmint hgap =>
+      let h := shares_floor_of_gap _ _ _ _ sharesShortε_le sharesOverε_nonneg sharesOverε_le
+        (Vault.deposit_sharesCreated_total_proof v amountDeposit roundedAmount t hcanon hposA assetsTotal hat
+          hrounded r hok hmint) hgap
+      shares_eq_floor _ _ h.1 h.2.2.1 h.2.2.2⟩
 
 /-- A successful donation takes exactly `roundedAmount` and issues no shares. -/
 theorem Vault.deposit_donation (amountDeposit roundedAmount : STAmount) (t : UInt32)
@@ -71,8 +85,8 @@ theorem Vault.deposit_donation (amountDeposit roundedAmount : STAmount) (t : UIn
     (hcanon : amountDeposit.Canonical)
     (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount))
     (r : VaultWithAmounts) (hok : (v.deposit amountDeposit true t hpos).run = .ok (.ok r)) :
-    r.assets = roundedAmount ∧ r.shares = STAmount.zero .int64 := by
-  sorry
+    r.assets = roundedAmount ∧ r.shares = STAmount.zero .int64 :=
+  Vault.deposit_donation_proof v amountDeposit roundedAmount t hpos hcanon hrounded r hok
 
 /-- Deposit on any lawful vault -> assetsDeposited ≤ amount and assetsDeposited = ⌈sharesWorth⌉, shown exactly for a
 sharesWorth of whole base units. -/
@@ -89,8 +103,8 @@ theorem Vault.deposit_charge (v : Vault) (amountDeposit : STAmount) (t : UInt32)
     -- a price rounds to nearest, so the lower side needs a worth of whole base units
     ((∃ k : ℤ, v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat = k * 10 ^ v.baseExponent) →
       v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat ≤ r.assets.toRat ∧
-      (v.numericType.isIntegral = false → r.assets.toRat ≤ v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat)) := by
-  sorry
+      (v.numericType.isIntegral = false → r.assets.toRat ≤ v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat)) :=
+  Vault.deposit_charge_intended_total_proof v amountDeposit t hcanon hpos assetsTotal hat r hok hsmall
 
 /-- Shortfall witness for `deposit_sharesCreated`: on a reachable vault a deposit creates fewer shares than the ideal
 rounded down. -/
@@ -103,8 +117,8 @@ theorem Vault.deposit_sharesCreated_shortfall_attained :
       (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) ∧
       (v.deposit amountDeposit false t hposA).run = .ok (.ok r) ∧
       v.sharesTotal.toRat + r.shares.toRat ≤ maxRep.toNat ∧
-      r.shares.toRat < ⌊v.idealSharesDepositAt assetsTotal.toRat roundedAmount.toRat⌋ := by
-  sorry
+      r.shares.toRat < ⌊v.idealSharesDepositAt assetsTotal.toRat roundedAmount.toRat⌋ :=
+  Vault.deposit_sharesCreated_shortfall_witness
 
 /-- Overshoot witness for `deposit_sharesCreated`: on a reachable vault a deposit creates more shares than the ideal
 rounded down. -/
@@ -117,8 +131,8 @@ theorem Vault.deposit_sharesCreated_overshoot_attained :
       (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) ∧
       (v.deposit amountDeposit false t hposA).run = .ok (.ok r) ∧
       v.sharesTotal.toRat + r.shares.toRat ≤ maxRep.toNat ∧
-      ⌊v.idealSharesDepositAt assetsTotal.toRat roundedAmount.toRat⌋ < r.shares.toRat := by
-  sorry
+      ⌊v.idealSharesDepositAt assetsTotal.toRat roundedAmount.toRat⌋ < r.shares.toRat :=
+  Vault.deposit_sharesCreated_overshoot_witness
 
 /-- Witness for `deposit_charge`: on a reachable IOU vault a run charges less than the issued shares' worth, the
 fraction dropped (`1` for `1.999999999999999`). -/
@@ -131,8 +145,8 @@ theorem Vault.deposit_charge_undercharge_frac_attained :
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
       v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent ∧
       v.numericType.isIntegral = false ∧
-      r.assets.toRat < v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat := by
-  sorry
+      r.assets.toRat < v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat :=
+  Vault.deposit_charge_undercharge_frac_witness
 
 /-- Witness for `deposit_charge`: on a reachable integral vault a run charges less than the issued shares' worth,
 half a unit below it (`2` for `2.5`). -/
@@ -145,7 +159,7 @@ theorem Vault.deposit_charge_undercharge_integral_attained :
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
       v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent ∧
       v.numericType.isIntegral = true ∧
-      r.assets.toRat < v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat := by
-  sorry
+      r.assets.toRat < v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat :=
+  Vault.deposit_charge_undercharge_integral_witness
 
 end XRPL.Model.SingleAssetVault

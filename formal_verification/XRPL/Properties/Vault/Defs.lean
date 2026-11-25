@@ -47,7 +47,14 @@ def RawVault.Exact.assetsTotal (s : RawVault.Exact) : ℚ :=
 /-- On a well-formed record the share count `toExact` reads casts back to the stored value. -/
 lemma RawVault.WF.toExact_sharesTotal (rv : RawVault) (h : rv.WF) :
     ((rv.toExact.sharesTotal : ℕ) : ℚ) = rv.sharesTotal.toRat := by
-  sorry
+  show ((rv.sharesTotal.toRat.num.toNat : ℕ) : ℚ) = rv.sharesTotal.toRat
+  set q := rv.sharesTotal.toRat with hq
+  have hden : q.den = 1 := h.sharesTotal_int
+  have hnum_nn : 0 ≤ q.num := Rat.num_nonneg.mpr h.sharesTotal_nonneg
+  have hcast : (q.num : ℚ) = q := by
+    have hnd := Rat.num_div_den q
+    rw [hden] at hnd; simpa using hnd
+  rw [← Int.cast_natCast, Int.toNat_of_nonneg hnum_nn, hcast]
 
 /-- The vault invariant (XLS-0065 §4.5) in exact rationals. On a well-formed representation it is
 the operator `RawVault.Valid` (`RawVault.valid_iff_exact`). -/

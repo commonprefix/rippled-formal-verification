@@ -91,8 +91,22 @@ theorem Vault.deposit_exits (amountDeposit : STAmount) (isDonation : Bool) (t : 
         assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero)) = false →
       (v.toExact.sharesTotal : ℚ) + amounts.shares.toRat ≤ 2 ^ 63 - 1 →
       ∃ v' : Vault, (v.deposit amountDeposit isDonation t hpos).run = .ok (.ok { amounts with vault' := v' }) ∧
-        v'.toRawVault = raw := by
-  sorry
+        v'.toRawVault = raw :=
+  ⟨Vault.deposit_expired_proof v amountDeposit t hpos, Vault.deposit_donation_no_shares_proof v amountDeposit t hpos,
+    Vault.deposit_insolvent_proof v amountDeposit t hpos,
+    Vault.deposit_blocked_proof v amountDeposit isDonation t hpos,
+    Vault.deposit_rounded_zero_proof v amountDeposit isDonation t hpos,
+    Vault.deposit_zero_shares_proof v amountDeposit t hpos, Vault.deposit_overpriced_proof v amountDeposit t hpos,
+    Vault.deposit_zero_charge_proof v amountDeposit t hpos, Vault.deposit_zero_donation_proof v amountDeposit t hpos,
+    fun roundedAmount hopen hrounded => Vault.deposit_compute_rejected_proof v amountDeposit isDonation t hpos
+      roundedAmount _ hopen hrounded,
+    Vault.deposit_inflow_rejected_proof v amountDeposit isDonation t hpos,
+    Vault.deposit_maximum_exceeded_proof v amountDeposit isDonation t hpos,
+    fun roundedAmount amounts raw assetsTotal' hc hty =>
+      Vault.deposit_share_overflow_proof v amountDeposit isDonation t hpos hc hty roundedAmount amounts raw
+        assetsTotal',
+    fun roundedAmount amounts raw assetsTotal' hc hty =>
+      Vault.deposit_success_proof v amountDeposit isDonation t hpos hc hty roundedAmount amounts raw assetsTotal'⟩
 
 /-- Every rejection of a deposit. -/
 theorem Vault.deposit_error_codes (amountDeposit : STAmount) (isDonation : Bool) (t : UInt32)
@@ -101,7 +115,7 @@ theorem Vault.deposit_error_codes (amountDeposit : STAmount) (isDonation : Bool)
     (hty : amountDeposit.mNumericType = v.numericType)
     (ter : TER) (hok : (v.deposit amountDeposit isDonation t hpos).run = .ok (.error ter)) :
     ter = .tecEXPIRED ∨ ter = .tecNO_PERMISSION ∨ ter = .tecLOCKED ∨ ter = .tecPRECISION_LOSS ∨
-      ter = .tecINTERNAL ∨ ter = .tecPATH_DRY ∨ ter = .tecLIMIT_EXCEEDED := by
-  sorry
+      ter = .tecINTERNAL ∨ ter = .tecPATH_DRY ∨ ter = .tecLIMIT_EXCEEDED :=
+  Vault.deposit_error_codes_proof v amountDeposit isDonation t hpos hc hty ter hok
 
 end XRPL.Model.SingleAssetVault
