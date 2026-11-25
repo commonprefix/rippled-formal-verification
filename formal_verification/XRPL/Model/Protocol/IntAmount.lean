@@ -1,13 +1,24 @@
+import XRPL.Model.Protocol.Number
+
+
 namespace XRPL.Model.Protocol
 
-/-- An integer amount, such as `XRPAmount` and its count of drops. -/
+-- Integer-valued amount (an int64 at offset 0). XRP and MPT share this one representation.
 structure IntAmount where
   value : Int64
+  deriving DecidableEq, Repr
 
-/-- Mirrors `XRPAmount::signum`. -/
-def IntAmount.signum (x : IntAmount) : Int :=
-  if x.value < 0 then -1
-  else if x.value != 0 then 1
-  else 0
+def IntAmount.toRat (x : IntAmount) : Rat := (x.value.toInt : Rat)
+
+def IntAmount.ofNumber (n : Number) (mode : rounding_mode) : Except Error IntAmount :=
+  match n.to_rep mode with
+  | .ok r => .ok { value := r }
+  | .error e => .error e
+
+def IntAmount.toNumber (x : IntAmount) (mode : rounding_mode) : Except Error Number :=
+  Number.from_rep x.value 0 largeRange.min largeRange.max mode
+
+def isMPTOverflow (sendAmount outstandingAmount : UInt64) : Bool :=
+  sendAmount > maxRep || outstandingAmount > maxRep - sendAmount
 
 end XRPL.Model.Protocol
