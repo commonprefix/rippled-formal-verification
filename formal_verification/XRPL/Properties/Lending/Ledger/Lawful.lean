@@ -63,8 +63,16 @@ theorem Lending.transactions_lawful (hr : l.Reachable) :
     (∀ (assetsMaximum : Option Number) (blockDeposit : Option Bool),
       (l.apply (.vaultSet assetsMaximum blockDeposit)).run ≠ .error .notLawful) ∧
     (l.apply .vaultDelete).run ≠ .error .notLawful ∧
-    ∀ time : UInt32, (l.apply (.close time)).run ≠ .error .notLawful := by
-  sorry
+    ∀ time : UInt32, (l.apply (.close time)).run ≠ .error .notLawful :=
+  ⟨LendingLedger.loanSet_ne_notLawful l hr, LendingLedger.loanAccept_ne_notLawful l hr,
+    LendingLedger.pay_ne_notLawful l hr, LendingLedger.loanManage_ne_notLawful l hr,
+    LendingLedger.loanDelete_ne_notLawful l hr, LendingLedger.loanBrokerCreate_ne_notLawful l,
+    LendingLedger.loanBrokerUpdate_ne_notLawful l, LendingLedger.loanBrokerCoverDeposit_ne_notLawful l hr,
+    LendingLedger.loanBrokerCoverWithdraw_ne_notLawful l, LendingLedger.loanBrokerCoverClawback_ne_notLawful l hr,
+    LendingLedger.loanBrokerDelete_ne_notLawful l, LendingLedger.vaultDeposit_ne_notLawful l hr,
+    LendingLedger.vaultWithdraw_ne_notLawful l hr, LendingLedger.vaultClawback_ne_notLawful l hr,
+    LendingLedger.vaultBurnShares_ne_notLawful l hr,
+    LendingLedger.vaultSet_ne_notLawful l, LendingLedger.vaultDelete_ne_notLawful l, LendingLedger.close_ne_notLawful l⟩
 
 /-- Witness: a run where a full VaultClawback would leave AssetsAvailable > 0 with SharesTotal = 0. The MPT vault,
 grown past 10^18 units by late interest, prices a full clawback one unit short of its cash. -/
@@ -75,7 +83,7 @@ theorem Lending.transactions_lawful_attained :
       (∀ (hs : STAmount) (amounts : VaultAmounts), STAmount.ofNumber .int64 (l.sharesOf h) .to_nearest = .ok hs →
         (computeClawback l.vault assets hs (l.isSoleShareholder h)).run = .ok (.ok amounts) →
         amounts.shares.toRat ≤ (l.sharesOf h).toRat) ∧
-      (l.apply (.vaultClawback h assets)).run = .error .notLawful := by
-  sorry
+      (l.apply (.vaultClawback h assets)).run = .error .notLawful :=
+  LendingLedger.vaultClawback_lawful_witness
 
 end XRPL.Model

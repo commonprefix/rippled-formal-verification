@@ -56,8 +56,11 @@ theorem Lending.Reachable.loan_resolvable (l : LendingLedger) (hr : l.Reachable)
       -- the loan's interest still fits the Open limit. Accepting another pending loan can use up that room
       -- (Question FV_M4_33)
       (∀ x, e.loan.interestDue = .ok x → l.vault.exceedsOpenLimit x = .ok false) →
-      ∃ l', (l.apply (.loanAccept i)).run = .ok (.ok l')) := by
-  sorry
+      ∃ l', (l.apply (.loanAccept i)).run = .ok (.ok l')) :=
+  ⟨LendingLedger.loan_closable_proof l hr hnd i e he,
+    fun hp hd hrem hlate htotal hca => LendingLedger.default_possible_proof l hr hnd hr.holdsAsset i e he hp hd hrem
+      hlate htotal (hr.assetsAvailable_units hr.holdsAsset) hr.yield_lt (hr.interest_le_yield he hp) hca,
+    LendingLedger.accept_before_start_proof l hr hnd i e he⟩
 
 /-- Witness: a run where a pending loan can't be accepted before its StartDate. Two pending loans each fit the Open
 limit, and once one is accepted and books its interest the other one exceeds it. -/
@@ -69,8 +72,8 @@ theorem Lending.Reachable.loan_resolvable_attained :
         l.loan? i = some e ∧
         e.loan.isPending = true ∧
         l.now < e.loan.schedule.startDate ∧
-        (l.apply (.loanAccept i)).run = .ok (.error .tecLIMIT_EXCEEDED) := by
-  sorry
+        (l.apply (.loanAccept i)).run = .ok (.error .tecLIMIT_EXCEEDED) :=
+  LendingLedger.accept_before_start_witness
 
 /-- Loan transaction that passes its checks -> succeeds: a payment, an impair, a LoanAccept, and on an impaired loan
 a LoanManage and a LoanDelete. -/
@@ -116,8 +119,15 @@ theorem Lending.loan_ops_total (l : LendingLedger) (hr : l.Reachable) (hnd : l.v
       b.coverAvailable.toRat < 10 ^ 96 →
       (∀ action, loan.canManage action l.now = .ok .tesSUCCESS →
         ∃ l', (l.apply (.loanManage i action)).run = .ok (.ok l')) ∧
-      (loan.canDelete = .tesSUCCESS → ∃ l', (l.apply (.loanDelete i)).run = .ok (.ok l'))) := by
-  sorry
+      (loan.canDelete = .tesSUCCESS → ∃ l', (l.apply (.loanDelete i)).run = .ok (.ok l'))) :=
+  ⟨fun b loan pt pc td amount hb hw hc hlate hfull hpc htd hamt hover hpre htotal hparts hcredit hxrp hca hfit hfee =>
+      LendingLedger.payment_total_proof l hr hnd i e b loan pt pc td amount he hb hw hc hlate hfull hpc htd hamt hover
+        hpre htotal hparts hcredit hxrp hca hfit hfee,
+    LendingLedger.impair_total_proof l hr hnd hr.holdsAsset.maxValue_le i e he,
+    LendingLedger.accept_total_proof l hr hnd i e he,
+    fun b loan hb hw himp htotal hca =>
+      let h := LendingLedger.impaired_ops_total_proof l hr hnd i e b loan he hb hw himp htotal hca
+      ⟨h.2.1, h.2.2.1⟩⟩
 
 /-- Witness: a run on a coarsened vault where a payment that passes its checks fails. Loan C is late, and its late
 payment of exactly totalDue rounds to no credit. -/
@@ -142,8 +152,8 @@ theorem Lending.loan_ops_total_attained :
         (∀ p, (loan.payInstalments l.vault .late td l.now).run = .ok (.ok p) → 0 ≤ p.amounts.interestPaid.toRat) ∧
         (∀ p, (loan.payInstalments l.vault .late td l.now).run = .ok (.ok p) →
           0 < p.amounts.principalPaid.toRat + p.amounts.interestPaid.toRat ∨ p.loan.paymentRemaining = 0) ∧
-        (l.apply (.loanPay 2 .late td)).run = .ok (.error .tecPRECISION_LOSS) := by
-  sorry
+        (l.apply (.loanPay 2 .late td)).run = .ok (.error .tecPRECISION_LOSS) :=
+  LendingLedger.payment_total_witness
 
 /-- Witness: a run where a payment whose principal part is larger than its instalment fails. The third instalment of
 a loan at a tiny rate has a negative interest part, so paying exactly its amount due fails with tecLIMIT_EXCEEDED. -/
@@ -168,8 +178,8 @@ theorem Lending.loan_ops_total_negative_interest_attained :
         l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent ∧
         (∀ p, (loan.payInstalments l.vault .regular td l.now).run = .ok (.ok p) →
           0 < p.amounts.principalPaid.toRat + p.amounts.interestPaid.toRat ∨ p.loan.paymentRemaining = 0) ∧
-        (l.apply (.loanPay 0 .regular td)).run = .ok (.error .tecLIMIT_EXCEEDED) := by
-  sorry
+        (l.apply (.loanPay 0 .regular td)).run = .ok (.error .tecLIMIT_EXCEEDED) :=
+  LendingLedger.payment_total_negative_interest_witness
 
 /-- Witness: a run where a payment of an instalment that is only management fee fails. Instalment 9 of a loan of 2 at
 45.5% in twelve yearly payments with a 10% management fee is only fee, so AssetsAvailable does not move. -/
@@ -193,8 +203,8 @@ theorem Lending.loan_ops_total_fee_only_attained :
         (l.vault.numericType = .native → loan.totalValueOutstanding.toRat < 6 * 10 ^ 14) ∧
         l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent ∧
         (∀ p, (loan.payInstalments l.vault .regular td l.now).run = .ok (.ok p) → 0 ≤ p.amounts.interestPaid.toRat) ∧
-        (l.apply (.loanPay 0 .regular td)).run = .ok (.error .tecPRECISION_LOSS) := by
-  sorry
+        (l.apply (.loanPay 0 .regular td)).run = .ok (.error .tecPRECISION_LOSS) :=
+  LendingLedger.payment_total_fee_only_witness
 
 /-- Every active loan -> it can be paid off, and when now ≤ NextPaymentDueDate one payment pays it off. At one close
 time a late loan takes late payments and then regular ones, each of exactly the amount due of its next instalment. -/
@@ -231,8 +241,10 @@ theorem Lending.Reachable.payoff_reachable (l : LendingLedger) (hr : l.Reachable
             loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat) →
       ∃ (paymentType : LoanPaymentType) (amount : Number) (l' : LendingLedger) (loan' : Loan),
         (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l'.LoanAt i loan' ∧
-          loan'.paymentRemaining = 0) := by
-  sorry
+          loan'.paymentRemaining = 0) :=
+  ⟨fun e hnd he hp hterms hxrp hrun => LendingLedger.payoff_reachable_proof l hr hnd i e he hp hterms hxrp hrun,
+    fun loan hat hactive hnl hroom hsupply =>
+      LendingLedger.payoff_possible_proof l hr i loan hat hactive hnl hroom hsupply⟩
 
 /-- Witness: a run on a coarsened vault where a late loan can't be paid off. Active loan C is late, and every payment
 of any type and amount fails. -/
@@ -257,8 +269,8 @@ theorem Lending.Reachable.payoff_reachable_attained :
         ¬ ∃ (txs : List LendingTx) (l' : LendingLedger) (e' : LoanEntry), LendingLedger.Reaches l txs l' ∧
         (∀ tx ∈ txs, ∃ pt amount, tx = .loanPay i pt amount) ∧
         l'.loan? i = some e' ∧
-        e'.loan.paymentRemaining = 0 := by
-  sorry
+        e'.loan.paymentRemaining = 0 :=
+  LendingLedger.payoff_reachable_witness
 
 /-- Witness: a run where a late loan's principal part is larger than its instalment, and the loan can't be paid off.
 A tiny-rate loan is late on its third instalment, and every payment of any type and amount fails. -/
@@ -283,8 +295,8 @@ theorem Lending.Reachable.payoff_reachable_negative_interest_attained :
         ¬ ∃ (txs : List LendingTx) (l' : LendingLedger) (e' : LoanEntry), LendingLedger.Reaches l txs l' ∧
         (∀ tx ∈ txs, ∃ pt amount, tx = .loanPay i pt amount) ∧
         l'.loan? i = some e' ∧
-        e'.loan.paymentRemaining = 0 := by
-  sorry
+        e'.loan.paymentRemaining = 0 :=
+  LendingLedger.payoff_reachable_negative_interest_witness
 
 /-- Witness: a run where a late loan's instalment is only management fee, and the loan can't be paid off. The loan
 of 2 at 45.5% is late on instalment 9, and every payment of any type and amount fails. -/
@@ -308,7 +320,7 @@ theorem Lending.Reachable.payoff_reachable_fee_only_attained :
         ¬ ∃ (txs : List LendingTx) (l' : LendingLedger) (e' : LoanEntry), LendingLedger.Reaches l txs l' ∧
         (∀ tx ∈ txs, ∃ pt amount, tx = .loanPay i pt amount) ∧
         l'.loan? i = some e' ∧
-        e'.loan.paymentRemaining = 0 := by
-  sorry
+        e'.loan.paymentRemaining = 0 :=
+  LendingLedger.payoff_reachable_fee_only_witness
 
 end XRPL.Model
