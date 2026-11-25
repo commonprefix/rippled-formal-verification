@@ -43,7 +43,19 @@ theorem LoanBroker.coverDeposit_credit :
       ∃ (deltaCover : Number) (deltaAmount : STAmount),
         res.loanBroker'.coverAvailable.operator_sub lb.coverAvailable .to_nearest = .ok deltaCover ∧
         STAmount.ofNumber lb.numericType deltaCover .to_nearest = .ok deltaAmount ∧
-        deltaAmount.toRat = res.amount'.toRat := by
-  sorry
+        deltaAmount.toRat = res.amount'.toRat :=
+  ⟨fun base v amount res hr hvb hnt hc hat hpos hcan hok =>
+      LoanBroker.coverDeposit_amount_proof lb base hr (LoanBroker.maxValue_fits_of_canonical lb amount hc hat)
+        v hvb hnt amount hc hat hpos hcan res hok,
+    fun pool amount res hint hc hat hok =>
+      LoanBroker.coverDeposit_integral_amount_proof lb pool amount res hint hc hat hok,
+    fun base v amount res hr hvb hnt hc hpos hcan hok =>
+      LoanBroker.coverDeposit_credit_proof lb base hr v hvb hnt amount hc hpos hcan res hok,
+    fun base v amount res hr hvb hnt hc hpos hcan hok => by
+      rw [← LoanBroker.coverDeposit_credit_proof lb base hr v hvb hnt amount hc hpos hcan res hok]
+      exact LoanBroker.coverDeposit_credit_le_amount_proof lb base hr v hvb hnt amount hc hpos hcan res hok,
+    fun base v amount res hr hvb hnt hc hat hpos hcap hcan hok =>
+      LoanBroker.coverDeposit_applied_delta_proof lb base hr (LoanBroker.maxValue_fits_of_canonical lb amount hc hat)
+        v hvb hnt amount hc hat hpos hcap hcan res hok⟩
 
 end XRPL.Model.Lending
