@@ -1,3 +1,5 @@
+import Mathlib.Tactic
+
 /-! Named numeric literals for the Number proofs. They expand to plain numerals, so `omega`, `linarith`, `norm_num`
 and `decide` see through them in ℕ and ℚ, which an `abbrev` or `def` would block. -/
 

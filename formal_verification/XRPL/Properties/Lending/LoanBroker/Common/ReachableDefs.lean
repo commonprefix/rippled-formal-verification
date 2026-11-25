@@ -5,7 +5,7 @@ import XRPL.Model.Lending.LoanBroker.LoanBrokerCoverClawback
 import XRPL.Model.Lending1_1.AssetPool
 import XRPL.Properties.Lending.LoanBroker.Defs
 import XRPL.Properties.Vault.Common.CmpFaithfulCanonical
-import XRPL.Properties.Lending.Loan.Common.Grid
+import XRPL.Properties.Protocol.Common.Grid
 
 /-! # Loan broker reachability
 

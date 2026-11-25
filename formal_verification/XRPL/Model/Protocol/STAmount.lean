@@ -35,7 +35,7 @@ def STAmount.areComparable (lhs rhs : STAmount) : Bool :=
   lhs.mNumericType == rhs.mNumericType
 
 -- Short-circuits `mValue = 0`, mirroring `Number.toRat`'s guard.
-def STAmount.toRat (s : STAmount) : ℚ :=
+def STAmount.toRat (s : STAmount) : Rat :=
   if s.mValue = 0 then 0
   else
     let sign : Int := if s.mIsNegative then -1 else 1

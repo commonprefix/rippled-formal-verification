@@ -1,5 +1,5 @@
 import XRPL.Properties.Lending.LoanBroker.Common.CoverReduction
-import XRPL.Properties.Lending.Common.SumRounding
+import XRPL.Properties.Vault.Proofs.Support.SumRounding
 
 /-! # The credit of a cover deposit
 

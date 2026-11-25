@@ -11,7 +11,7 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault)
 
-open private add_downward_ge from XRPL.Properties.Lending.Common.SumRounding
+open private add_downward_ge from XRPL.Properties.Vault.Proofs.Support.SumRounding
 
 /-- A downward IOU conversion keeps a grid point of at most 16 digits that lies below its source. -/
 private lemma ofNumber_frac_downward_ge_units (n : Number) (st : STAmount) (k : ℕ) (e : ℤ) (hn : n.isNormalized)

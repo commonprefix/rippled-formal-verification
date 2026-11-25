@@ -8,6 +8,51 @@ import XRPL.Properties.Lending.Loan.Common.SetUpdates
 A LoanSet keeps every fee on the LoanScale grid, so while a payment's amounts stay below `10^16` LoanScale units
 every sum it computes is exact: each scheduled payment charges exactly its totalDue. -/
 
+namespace XRPL.Model.Protocol
+
+/-- `2 * 10^16` units of `10^s`, as a normalized number. -/
+private lemma Number.twoE16 (s : Int) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) :
+    ∃ m : Number, m.isNormalized ∧ m.toRat = 2 * 10 ^ 16 * 10 ^ s := by
+  obtain ⟨x, hx, -, -, hv, -⟩ := exists_normalized_of_int_mul_pow (2 * 10 ^ 15) (s + 1) (by norm_num) (by norm_num)
+    (by omega) (by omega)
+  refine ⟨x, hx, ?_⟩
+  rw [hv, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+  push_cast
+  ring
+
+/-- A to-nearest sum of two grid amounts is exact when it lands below `2 * 10^16` units, for a sum at least
+zero. -/
+private lemma Number.OnGrid.add_exact_of_le {s : Int} {x y d : Number} (hx : Number.OnGrid s x)
+    (hy : Number.OnGrid s y) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (h0 : 0 ≤ x.toRat + y.toRat)
+    (hd : d.toRat < 2 * 10 ^ 16 * 10 ^ s) (h : x.operator_add y .to_nearest = .ok d) :
+    d.toRat = x.toRat + y.toRat := by
+  obtain ⟨m, hm, hmv⟩ := Number.twoE16 s hs
+  have hp : (0 : ℚ) < 10 ^ s := zpow_pos (by norm_num) _
+  have hlt : x.toRat + y.toRat < 2 * 10 ^ 16 * 10 ^ s := by
+    by_contra hge
+    push Not at hge
+    have := Number.roundsToRepresentable_ge _ _ (Number.operator_add_rounded_to_nearest x y d hx.1 hy.1 h) _ hm
+      (by rw [hmv]; exact hge)
+    linarith
+  exact Number.OnGrid.add_toRat hx hy hs (by rw [abs_lt]; constructor <;> linarith) h
+
+/-- The same for a difference. -/
+private lemma Number.OnGrid.sub_exact_of_le {s : Int} {x y d : Number} (hx : Number.OnGrid s x)
+    (hy : Number.OnGrid s y) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (h0 : 0 ≤ x.toRat - y.toRat)
+    (hd : d.toRat < 2 * 10 ^ 16 * 10 ^ s) (h : x.operator_sub y .to_nearest = .ok d) :
+    d.toRat = x.toRat - y.toRat := by
+  obtain ⟨m, hm, hmv⟩ := Number.twoE16 s hs
+  have hp : (0 : ℚ) < 10 ^ s := zpow_pos (by norm_num) _
+  have hlt : x.toRat - y.toRat < 2 * 10 ^ 16 * 10 ^ s := by
+    by_contra hge
+    push Not at hge
+    have := Number.roundsToRepresentable_ge _ _ (Number.operator_sub_rounded_to_nearest x y d hx.1 hy.1 h) _ hm
+      (by rw [hmv]; exact hge)
+    linarith
+  exact Number.OnGrid.sub_toRat hx hy hs (by rw [abs_lt]; constructor <;> linarith) h
+
+end XRPL.Model.Protocol
+
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
@@ -50,47 +95,6 @@ lemma Loan.Reachable.fees_onGrid {loan : Loan} {t : UInt32} (hr : loan.Reachable
   refine ⟨hc.fee_onGrid _ (by simp [LoanFees.amountFields]) hw.serviceFee_norm he.serviceFee_nonneg,
     hc.fee_onGrid _ (by simp [LoanFees.amountFields]) hw.latePaymentFee_norm he.latePaymentFee_nonneg,
     hc.fee_onGrid _ (by simp [LoanFees.amountFields]) hw.closePaymentFee_norm he.closePaymentFee_nonneg⟩
-
-/-- `2 * 10^16` units of `10^s`, as a normalized number. -/
-private lemma Number.twoE16 (s : Int) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) :
-    ∃ m : Number, m.isNormalized ∧ m.toRat = 2 * 10 ^ 16 * 10 ^ s := by
-  obtain ⟨x, hx, -, -, hv, -⟩ := exists_normalized_of_int_mul_pow (2 * 10 ^ 15) (s + 1) (by norm_num) (by norm_num)
-    (by omega) (by omega)
-  refine ⟨x, hx, ?_⟩
-  rw [hv, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
-  push_cast
-  ring
-
-/-- A to-nearest sum of two grid amounts is exact when it lands below `2 * 10^16` units, for a sum at least
-zero. -/
-private lemma Number.OnGrid.add_exact_of_le {s : Int} {x y d : Number} (hx : Number.OnGrid s x)
-    (hy : Number.OnGrid s y) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (h0 : 0 ≤ x.toRat + y.toRat)
-    (hd : d.toRat < 2 * 10 ^ 16 * 10 ^ s) (h : x.operator_add y .to_nearest = .ok d) :
-    d.toRat = x.toRat + y.toRat := by
-  obtain ⟨m, hm, hmv⟩ := Number.twoE16 s hs
-  have hp : (0 : ℚ) < 10 ^ s := zpow_pos (by norm_num) _
-  have hlt : x.toRat + y.toRat < 2 * 10 ^ 16 * 10 ^ s := by
-    by_contra hge
-    push Not at hge
-    have := Number.roundsToRepresentable_ge _ _ (Number.operator_add_rounded_to_nearest x y d hx.1 hy.1 h) _ hm
-      (by rw [hmv]; exact hge)
-    linarith
-  exact Number.OnGrid.add_toRat hx hy hs (by rw [abs_lt]; constructor <;> linarith) h
-
-/-- The same for a difference. -/
-private lemma Number.OnGrid.sub_exact_of_le {s : Int} {x y d : Number} (hx : Number.OnGrid s x)
-    (hy : Number.OnGrid s y) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (h0 : 0 ≤ x.toRat - y.toRat)
-    (hd : d.toRat < 2 * 10 ^ 16 * 10 ^ s) (h : x.operator_sub y .to_nearest = .ok d) :
-    d.toRat = x.toRat - y.toRat := by
-  obtain ⟨m, hm, hmv⟩ := Number.twoE16 s hs
-  have hp : (0 : ℚ) < 10 ^ s := zpow_pos (by norm_num) _
-  have hlt : x.toRat - y.toRat < 2 * 10 ^ 16 * 10 ^ s := by
-    by_contra hge
-    push Not at hge
-    have := Number.roundsToRepresentable_ge _ _ (Number.operator_sub_rounded_to_nearest x y d hx.1 hy.1 h) _ hm
-      (by rw [hmv]; exact hge)
-    linarith
-  exact Number.OnGrid.sub_toRat hx hy hs (by rw [abs_lt]; constructor <;> linarith) h
 
 /-- The deltas of a scheduled instalment: on the LoanScale grid, each between zero and what the loan owes, the
 fee delta at most the value delta, and the value delta taken off TotalValueOutstanding exactly. -/

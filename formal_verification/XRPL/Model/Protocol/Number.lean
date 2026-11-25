@@ -1,7 +1,4 @@
-import Mathlib.Tactic
 import XRPL.Model.Protocol.FixedWidth
-
-set_option linter.style.native false
 
 namespace XRPL.Model.Protocol
 
@@ -65,7 +62,7 @@ instance Number.instDecidableIsnormal (n : Number) : Decidable n.isnormal := by
 
 -- For Number.zero we have `mantissa = 0`, whose exponent is `-2^31` that
 -- would build `10 ^ 2^31` in the denominator at runtime, so we early exit
-def Number.toRat (n : Number) : ℚ :=
+def Number.toRat (n : Number) : Rat :=
   if n.mantissa_ = 0 then 0
   else
     let sign : Int := if n.negative_ then -1 else 1

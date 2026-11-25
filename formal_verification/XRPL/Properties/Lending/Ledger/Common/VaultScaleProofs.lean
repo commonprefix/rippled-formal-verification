@@ -13,7 +13,7 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault RawVault VaultWithAmounts WithdrawAmount)
 
-open private add_downward_ge from XRPL.Properties.Lending.Common.SumRounding
+open private add_downward_ge from XRPL.Properties.Vault.Proofs.Support.SumRounding
 open private STAmount.roundToNumericType_le_stored from XRPL.Properties.Lending.Ledger.Common.VaultOutflow
 open private LendingTx.preflight_vaultDeposit from XRPL.Properties.Lending.Ledger.Common.VaultGrid
 open private Loan.create_principalOutstanding from XRPL.Properties.Lending.Loan.Common.AcceptProofs

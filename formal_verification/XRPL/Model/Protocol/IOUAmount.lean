@@ -13,7 +13,7 @@ def IOUAmount.zero : IOUAmount := { mantissa_ := 0, exponent_ := -100 }
 def IOUAmount.signum (x : IOUAmount) : Int :=
   if x.mantissa_ < 0 then -1 else if x.mantissa_ != 0 then 1 else 0
 
-def IOUAmount.toRat (a : IOUAmount) : ℚ :=
+def IOUAmount.toRat (a : IOUAmount) : Rat :=
   let sign : Int := if a.mantissa_ < 0 then -1 else 1
   let m : Int := a.mantissa_.toInt.natAbs
   if a.exponent_ ≥ 0 then

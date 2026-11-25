@@ -1,19 +1,16 @@
 import Batteries.Tactic.OpenPrivate
-import XRPL.Properties.Lending.Loan.Common.Grid
-import XRPL.Properties.Lending.Common.SumRounding
+import XRPL.Properties.Protocol.Common.Grid
+import XRPL.Properties.Vault.Proofs.Support.SumRounding
 import XRPL.Properties.Protocol.STAmount.Common.Representable
 
 /-! # Roundings that stay on a grid
 
 Rounding a whole number of `10^s` units, converting it to an `STAmount`, or flooring a sum onto a grid
-at or above `s` never leaves the grid of `10^s`. Shared by the loan, ledger and loan-broker proofs. -/
+at or above `s` never leaves the grid of `10^s`. Shared by the vault and lending proofs. -/
 
-namespace XRPL.Model.Lending
+namespace XRPL.Model.Protocol
 
-open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault (Vault)
-
-open private STAmount.ofNumber_integral_small from XRPL.Properties.Lending.Loan.Common.Grid
+open private STAmount.ofNumber_integral_small from XRPL.Properties.Protocol.Common.Grid
 
 /-- A point of a grid is a point of every finer grid. -/
 lemma Number.OnGrid.mono {s e : Int} {x : Number} (h : Number.OnGrid e x) (hse : s ≤ e) :
@@ -328,12 +325,6 @@ lemma sumRoundAndSubtract_onGrid (A c : Number) (b : Int) (nt : NumericType) (mo
       ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩ hd
     exact STAmount.ofNumber_onGrid nt d b .downward mode' st m h2 (by omega) (fun h' => absurd h' hi) h hm
 
-/-- The base exponent of an IOU vault is in the range of the grid lemmas. -/
-lemma Vault.baseExponent_grid (v : Vault) :
-    -10 ≤ v.baseExponent ∧ minExponent + 18 ≤ v.baseExponent ∧ v.baseExponent ≤ maxExponent - 1 := by
-  obtain ⟨hblo, hbhi, -⟩ := v.baseExponent_bounds
-  exact ⟨hblo, by unfold minExponent; omega, by unfold maxExponent; omega⟩
-
 /-- A grid point of `10^b` between zero and `9 * 10^15` units is a whole number of units within `9 * 10^15`. -/
 lemma Number.OnGrid.units_le (c : Number) (b : Int) (hg : Number.OnGrid b c) (h0 : 0 ≤ c.toRat)
     (hle : c.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ b) :
@@ -456,4 +447,16 @@ lemma min_add_min_sub (p q C : ℚ) (hq : 0 ≤ q) :
   simp only [min_def]
   split_ifs <;> linarith
 
-end XRPL.Model.Lending
+end XRPL.Model.Protocol
+
+namespace XRPL.Model.SingleAssetVault
+
+open XRPL.Model.Protocol
+
+/-- The base exponent of an IOU vault is in the range of the grid lemmas. -/
+lemma Vault.baseExponent_grid (v : Vault) :
+    -10 ≤ v.baseExponent ∧ minExponent + 18 ≤ v.baseExponent ∧ v.baseExponent ≤ maxExponent - 1 := by
+  obtain ⟨hblo, hbhi, -⟩ := v.baseExponent_bounds
+  exact ⟨hblo, by unfold minExponent; omega, by unfold maxExponent; omega⟩
+
+end XRPL.Model.SingleAssetVault

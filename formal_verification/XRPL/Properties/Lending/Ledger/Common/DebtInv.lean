@@ -122,21 +122,6 @@ lemma LendingLedger.ScaleInv.brokerPrincipal_grid {l : LendingLedger} (hinv : l.
     obtain ⟨n, hn⟩ := ih fun o' ho' => hslot o' (List.mem_cons_of_mem _ ho')
     exact ⟨m + n, by rw [List.map_cons, List.sum_cons, hm, hn]; push_cast; ring⟩
 
-/-- A whole number of units, at least zero, is a natural number of units. -/
-lemma Number.OnGrid.nat {s : Int} {x : Number} (hx : Number.OnGrid s x) (h0 : 0 ≤ x.toRat) :
-    ∃ a : ℕ, x.toRat = (a : ℚ) * 10 ^ s := by
-  obtain ⟨-, k, hk⟩ := hx
-  have hp : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
-  have hk0 : 0 ≤ k := by
-    have : (0 : ℚ) ≤ (k : ℚ) * 10 ^ s := hk ▸ h0
-    exact_mod_cast nonneg_of_mul_nonneg_left this hp
-  refine ⟨k.toNat, ?_⟩
-  rw [hk, show ((k.toNat : ℕ) : ℚ) = (k : ℚ) by exact_mod_cast Int.toNat_of_nonneg hk0]
-
-/-- A natural number of units is on the grid. -/
-lemma Number.OnGrid.of_nat {s : Int} {x : Number} (hx : x.isNormalized) (a : ℕ) (h : x.toRat = (a : ℚ) * 10 ^ s) :
-    Number.OnGrid s x := ⟨hx, a, by rw [h]; push_cast; rfl⟩
-
 /-- What every reachable ledger keeps about DebtTotal and AssetsDeployed: each stored broker's DebtTotal is
 the sum over its loans and AssetsDeployed the sum over all loans, beside the loss and count invariants. -/
 structure LendingLedger.DebtInv (l : LendingLedger) : Prop where

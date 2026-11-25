@@ -1,5 +1,5 @@
-import XRPL.Properties.Lending.Common.GridRounding
-import XRPL.Properties.Lending.Loan.Common.PayUnits
+import XRPL.Properties.Vault.Proofs.Support.GridRounding
+import XRPL.Properties.Vault.Proofs.Support.AdjustBalances
 
 /-! # Cash updates keep AssetsAvailable stored exactly and on the base grid
 

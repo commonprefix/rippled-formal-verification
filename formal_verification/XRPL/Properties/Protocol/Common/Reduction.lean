@@ -1,3 +1,5 @@
+import Mathlib.Tactic
+
 /-! # Stepping through `Except` pipelines
 
 The `Except` identities the exit proofs use to step through a `do` block, one

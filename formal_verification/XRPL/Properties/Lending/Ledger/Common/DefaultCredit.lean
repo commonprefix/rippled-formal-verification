@@ -13,7 +13,7 @@ open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault RawVault)
 
 open private add_downward_ge_any from XRPL.Properties.Lending.Ledger.Common.AssetsTotalSteps
-open private sub_exact from XRPL.Properties.Lending.Common.SumRounding
+open private sub_exact from XRPL.Properties.Vault.Proofs.Support.SumRounding
 open private STAmount.ofNumber_iou_downward_floor_value STAmount.ofNumber_frac_of_representable
   from XRPL.Properties.Lending.Loan.Common.SetValue
 

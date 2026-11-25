@@ -6,18 +6,7 @@ import XRPL.Properties.Lending.Loan.Common.PrincipalLeft
 The extra principal of an overpayment is a whole number of LoanScale units, so a re-amortization that passes charges
 a PeriodicPayment of at least `10^-40` on a loan whose LoanScale is at least `-10`. -/
 
-namespace XRPL.Model.Lending
-
-open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault (Vault RawVault)
-
-open private Loan.tryOverpayment from XRPL.Model.Lending.Loan.LoanPay
-open private Number.max_isNormalized' from XRPL.Properties.Lending.Loan.Common.PayMonotone
-open private Number.max_val from XRPL.Properties.Lending.Loan.Common.InterestDue
-open private LoanState.buildTheoretical_normalized from XRPL.Properties.Lending.Loan.Common.ReamortizationInterest
-open private computeLoanPropertiesFromPeriodicRate_pp from XRPL.Properties.Lending.Loan.Common.OverpaymentReduces
-
-local notation "ε" => Number.nearestError
+namespace XRPL.Model.Protocol
 
 /-- A positive amount on a grid is at least one unit of it. -/
 private lemma Number.OnGrid.unit_le {s : Int} {x : Number} (hx : Number.OnGrid s x) (h0 : 0 < x.toRat) :
@@ -34,6 +23,21 @@ private lemma Number.OnGrid.unit_le {s : Int} {x : Number} (hx : Number.OnGrid s
     exact_mod_cast this
   rw [hk]
   nlinarith
+
+end XRPL.Model.Protocol
+
+namespace XRPL.Model.Lending
+
+open XRPL.Model.Protocol
+open XRPL.Model.SingleAssetVault (Vault RawVault)
+
+open private Loan.tryOverpayment from XRPL.Model.Lending.Loan.LoanPay
+open private Number.max_isNormalized' from XRPL.Properties.Lending.Loan.Common.PayMonotone
+open private Number.max_val from XRPL.Properties.Lending.Loan.Common.InterestDue
+open private LoanState.buildTheoretical_normalized from XRPL.Properties.Lending.Loan.Common.ReamortizationInterest
+open private computeLoanPropertiesFromPeriodicRate_pp from XRPL.Properties.Lending.Loan.Common.OverpaymentReduces
+
+local notation "ε" => Number.nearestError
 
 /-- A re-amortization that passes charges a PeriodicPayment of at least `10^-40`, on a loan whose LoanScale is
 at least `-10`. The theoretical principal less the extra principal is a positive multiple of `10^-28`. -/

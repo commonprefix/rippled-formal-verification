@@ -1,6 +1,5 @@
 import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.AnyResult
 import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Proofs
-import XRPL.Properties.Lending.Common.Reduction
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
@@ -32,12 +31,6 @@ lemma STAmount.FracCanonZero.toNumber_val {s : STAmount} (h : s.FracCanonZero) (
   · have hfr : s.integral = false := by unfold STAmount.integral; rw [h.1]; rfl
     rw [STAmount.toNumber_zero_fractional s mode hfr hz, Except.ok.injEq] at hn
     rw [← hn, Number.toRat_zero, STAmount.toRat_eq_zero_of_mValue_zero s hz]
-
-end XRPL.Model.Protocol
-
-namespace XRPL.Model.Lending
-
-open XRPL.Model.Protocol
 
 /-- An `ofNumber` result converts back to a `Number` of the same value. A fractional result is
 stored canonically or is zero, an integral one is canonical when its source is not negative. -/
@@ -660,7 +653,7 @@ lemma numberExponent_at_base (n : Number) (b : Int) (nt : NumericType) (e : Int)
       exact h.symm
     · simp only [hz, Bool.false_eq_true, ite_false] at h
       cases ha : STAmount.ofNumber nt n .downward with
-      | error err => rw [ha] at h; simp [bind, Except.bind] at h
+      | error err => rw [ha] at h; simp [bind, Except.bind, pure, Except.pure] at h
       | ok st =>
         rw [ha] at h
         simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
@@ -668,4 +661,4 @@ lemma numberExponent_at_base (n : Number) (b : Int) (nt : NumericType) (e : Int)
         rw [← h, show st.exponent = st.mOffset from rfl, hoff]
         rfl
 
-end XRPL.Model.Lending
+end XRPL.Model.Protocol

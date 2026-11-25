@@ -8,7 +8,7 @@ structure IntAmount where
   value : Int64
   deriving DecidableEq, Repr
 
-def IntAmount.toRat (x : IntAmount) : ℚ := (x.value.toInt : ℚ)
+def IntAmount.toRat (x : IntAmount) : Rat := (x.value.toInt : Rat)
 
 def IntAmount.ofNumber (n : Number) (mode : rounding_mode) : Except Error IntAmount :=
   match n.to_rep mode with

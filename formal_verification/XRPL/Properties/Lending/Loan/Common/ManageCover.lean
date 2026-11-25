@@ -1,6 +1,6 @@
 import XRPL.Properties.Lending.Loan.Common.ManageProofs
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
-import XRPL.Properties.Lending.Common.SumRounding
+import XRPL.Properties.Vault.Proofs.Support.SumRounding
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Vault.Proofs.Support.IntegralFacts
 import XRPL.Properties.Vault.Proofs.Support.NumberFacts

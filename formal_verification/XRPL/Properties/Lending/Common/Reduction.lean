@@ -1,3 +1,4 @@
+import Mathlib.Tactic
 import XRPL.Model.Protocol.TER
 import XRPL.Properties.Protocol.Common.Reduction
 

@@ -9,6 +9,17 @@ import XRPL.Properties.Lending.Loan.Common.PayValues
 A reachable loan owes at most `10^16 + 1` LoanScale units, so the interest of an early payoff is at most
 `143·(10^16 + 1)` units. Every sum the payoff computes is exact while its fees stay below `2^63` units. -/
 
+namespace XRPL.Model.Protocol
+
+open XRPL.Model.Lending (UnitsAt) in
+/-- A value on a grid at least zero is a whole number of units, as `UnitsAt`. -/
+private lemma Number.OnGrid.unitsAt {s : Int} {x : Number} (h : Number.OnGrid s x) (h0 : 0 ≤ x.toRat) :
+    ∃ k : ℕ, UnitsAt x s k ∧ x.toRat = (k : ℚ) * 10 ^ s := by
+  obtain ⟨k, hk⟩ := h.units h0
+  exact ⟨k, ⟨h.1, by exact_mod_cast hk⟩, hk⟩
+
+end XRPL.Model.Protocol
+
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
@@ -107,12 +118,6 @@ lemma Loan.Reachable.loanScale_integral {loan : Loan} {t : UInt32} (hr : loan.Re
   intro hi
   rw [hLS]
   exact hint (by rw [← hNT]; exact hi)
-
-/-- A value on a grid at least zero is a whole number of units, as `UnitsAt`. -/
-private lemma Number.OnGrid.unitsAt {s : Int} {x : Number} (h : Number.OnGrid s x) (h0 : 0 ≤ x.toRat) :
-    ∃ k : ℕ, UnitsAt x s k ∧ x.toRat = (k : ℚ) * 10 ^ s := by
-  obtain ⟨k, hk⟩ := h.units h0
-  exact ⟨k, ⟨h.1, by exact_mod_cast hk⟩, hk⟩
 
 /-- Rounding down at a scale never raises a value at least zero. -/
 lemma STAmount.roundToNumericType_downward_le_of_nonneg (nt : NumericType) (x T : Number) (s : ℤ)

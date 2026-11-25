@@ -12,7 +12,7 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault)
 
-open private sub_exact from XRPL.Properties.Lending.Common.SumRounding
+open private sub_exact from XRPL.Properties.Vault.Proofs.Support.SumRounding
 
 /-- The amount a clawback asks for, in exact arithmetic: all cover above `minimumCover` when no amount
 or a zero amount is given, otherwise the amount, capped at that excess. -/

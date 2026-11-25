@@ -48,12 +48,6 @@ lemma Number.RoundsToRepresentable.le_of_ge {r : Number} {t : ℚ} {mode : round
   · obtain ⟨n, hn, hr⟩ := hR
     rw [hr]; exact (Number.lower_le t n hn).trans hwt
 
-end XRPL.Model.Protocol
-
-namespace XRPL.Model.Lending
-
-open XRPL.Model.Protocol
-
 /-- `x` is a normalized whole number of `10^s` units. -/
 def Number.OnGrid (s : Int) (x : Number) : Prop :=
   x.isNormalized ∧ ∃ k : ℤ, x.toRat = (k : ℚ) * 10 ^ s
@@ -336,4 +330,60 @@ lemma Number.OnGrid.units {s : Int} {x : Number} (hx : Number.OnGrid s x) (h0 : 
 lemma open_line_eq (b : Int) : (10 : ℚ) ^ (16 + b) = 10 ^ 16 * 10 ^ b := by
   rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num
 
-end XRPL.Model.Lending
+/-- A whole number of units, at least zero, is a natural number of units. -/
+lemma Number.OnGrid.nat {s : Int} {x : Number} (hx : Number.OnGrid s x) (h0 : 0 ≤ x.toRat) :
+    ∃ a : ℕ, x.toRat = (a : ℚ) * 10 ^ s := by
+  obtain ⟨-, k, hk⟩ := hx
+  have hp : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
+  have hk0 : 0 ≤ k := by
+    have : (0 : ℚ) ≤ (k : ℚ) * 10 ^ s := hk ▸ h0
+    exact_mod_cast nonneg_of_mul_nonneg_left this hp
+  refine ⟨k.toNat, ?_⟩
+  rw [hk, show ((k.toNat : ℕ) : ℚ) = (k : ℚ) by exact_mod_cast Int.toNat_of_nonneg hk0]
+
+/-- A natural number of units is on the grid. -/
+lemma Number.OnGrid.of_nat {s : Int} {x : Number} (hx : x.isNormalized) (a : ℕ) (h : x.toRat = (a : ℚ) * 10 ^ s) :
+    Number.OnGrid s x := ⟨hx, a, by rw [h]; push_cast; rfl⟩
+
+/-- Adding two amounts of at least zero units, whose sum stays below `2^63` units, is exact. -/
+lemma Number.OnGrid.add_exact {s : Int} {x y d : Number} (hx : Number.OnGrid s x) (hy : Number.OnGrid s y)
+    (hx0 : 0 ≤ x.toRat) (hy0 : 0 ≤ y.toRat) (hlt : x.toRat + y.toRat < 2 ^ 63 * (10 : ℚ) ^ s)
+    (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (hok : x.operator_add y .to_nearest = .ok d) :
+    d.toRat = x.toRat + y.toRat := by
+  obtain ⟨hxn, a, ha⟩ := hx
+  obtain ⟨hyn, b, hb⟩ := hy
+  have hp : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
+  have ha0 : 0 ≤ a := by
+    have : (0 : ℚ) ≤ (a : ℚ) * 10 ^ s := ha ▸ hx0
+    exact_mod_cast nonneg_of_mul_nonneg_left this hp
+  have hb0 : 0 ≤ b := by
+    have : (0 : ℚ) ≤ (b : ℚ) * 10 ^ s := hb ▸ hy0
+    exact_mod_cast nonneg_of_mul_nonneg_left this hp
+  have hab : a + b < 2 ^ 63 := by
+    have : ((a + b : ℤ) : ℚ) * 10 ^ s < ((2 ^ 63 : ℤ) : ℚ) * 10 ^ s := by
+      push_cast; rw [add_mul, ← ha, ← hb]; exact hlt
+    exact_mod_cast lt_of_mul_lt_mul_right this hp.le
+  rw [Number.operator_add_toRat_of_grid x y d a b s hxn hyn ha hb ⟨by omega, hab⟩ hs hok, ha, hb]
+  push_cast; ring
+
+/-- Taking an amount of at least zero units, at most the balance, off a balance below `2^63` units is exact. -/
+lemma Number.OnGrid.sub_exact {s : Int} {x y d : Number} (hx : Number.OnGrid s x) (hy : Number.OnGrid s y)
+    (hy0 : 0 ≤ y.toRat) (hle : y.toRat ≤ x.toRat) (hlt : x.toRat < 2 ^ 63 * (10 : ℚ) ^ s)
+    (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (hok : x.operator_sub y .to_nearest = .ok d) :
+    d.toRat = x.toRat - y.toRat := by
+  obtain ⟨hxn, a, ha⟩ := hx
+  obtain ⟨hyn, b, hb⟩ := hy
+  have hp : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
+  have hb0 : 0 ≤ b := by
+    have : (0 : ℚ) ≤ (b : ℚ) * 10 ^ s := hb ▸ hy0
+    exact_mod_cast nonneg_of_mul_nonneg_left this hp
+  have hba : b ≤ a := by
+    have : (b : ℚ) * 10 ^ s ≤ (a : ℚ) * 10 ^ s := by rw [← ha, ← hb]; exact hle
+    exact_mod_cast le_of_mul_le_mul_right this hp
+  have ha63 : a < 2 ^ 63 := by
+    have : (a : ℚ) * 10 ^ s < ((2 ^ 63 : ℤ) : ℚ) * 10 ^ s := by push_cast; rw [← ha]; exact hlt
+    exact_mod_cast lt_of_mul_lt_mul_right this hp.le
+  rw [Number.operator_sub_toRat_of_grid x y d a b s hxn hyn ha hb ⟨by omega, by omega⟩ hs hok, ha, hb]
+  push_cast; ring
+
+end XRPL.Model.Protocol

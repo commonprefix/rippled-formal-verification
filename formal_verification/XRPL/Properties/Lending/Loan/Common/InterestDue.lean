@@ -1,6 +1,6 @@
 import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.Outstanding
-import XRPL.Properties.Lending.Loan.Common.Grid
+import XRPL.Properties.Protocol.Common.Grid
 import XRPL.Properties.Lending.Loan.Common.ReamortizationInterest
 import XRPL.Properties.Lending.Loan.Common.SetInterest
 

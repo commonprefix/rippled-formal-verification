@@ -1,5 +1,5 @@
 import XRPL.Properties.Lending.LoanBroker.Common.CoverReduction
-import XRPL.Properties.Lending.Common.GridRounding
+import XRPL.Properties.Vault.Proofs.Support.GridRounding
 import XRPL.Model.Lending1_1.AssetPool
 import XRPL.Properties.Vault.Proofs.Support.WithdrawPayout
 

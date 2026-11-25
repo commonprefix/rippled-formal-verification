@@ -14,7 +14,7 @@ open XRPL.Model.SingleAssetVault (Vault RawVault)
 
 open private roundDown_shape ofNumber_frac_exact_of_units pow_add_nat
   from XRPL.Properties.Lending.Ledger.Common.DefaultCredit
-open private sub_exact from XRPL.Properties.Lending.Common.SumRounding
+open private sub_exact from XRPL.Properties.Vault.Proofs.Support.SumRounding
 open private add_downward_ge_any floor_mul_ge pow_grid STAmount.ofNumber_frac_downward_ge
   Loan.unimpairIfImpaired_balances from XRPL.Properties.Lending.Ledger.Common.AssetsTotalSteps
 

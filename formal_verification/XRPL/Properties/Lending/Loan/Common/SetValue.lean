@@ -1,6 +1,6 @@
 import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.SetMonotone
-import XRPL.Properties.Lending.Loan.Common.Grid
+import XRPL.Properties.Protocol.Common.Grid
 import XRPL.Properties.Protocol.Number.AtExponent
 import XRPL.Properties.Protocol.Number.Div.RoundsWithin
 import XRPL.Properties.Protocol.Number.Mul.RoundsWithin

@@ -1,6 +1,6 @@
 import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Loan.Common.PayPrincipal
-import XRPL.Properties.Lending.Common.GridRounding
+import XRPL.Properties.Vault.Proofs.Support.GridRounding
 import XRPL.Properties.Lending.Ledger.Common.LossInv
 import XRPL.Properties.Lending.Loan.Common.ManageCoverBase
 import XRPL.Properties.Lending.Loan.Common.AcceptProofs
@@ -18,7 +18,7 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault RawVault VaultWithAmounts WithdrawAmount)
 
-open private STAmount.ofNumber_integral_small from XRPL.Properties.Lending.Loan.Common.Grid
+open private STAmount.ofNumber_integral_small from XRPL.Properties.Protocol.Common.Grid
 open private Loan.create_principalOutstanding from XRPL.Properties.Lending.Loan.Common.AcceptProofs
 open private Loan.changeImpairment from XRPL.Model.Lending.Loan.LoanManage
 open private Vault.withdraw_payout_nonneg Vault.clawback_payout_nonneg

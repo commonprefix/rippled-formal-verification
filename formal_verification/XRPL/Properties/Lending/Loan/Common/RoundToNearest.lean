@@ -1,4 +1,4 @@
-import XRPL.Properties.Lending.Loan.Common.Grid
+import XRPL.Properties.Protocol.Common.Grid
 import XRPL.Properties.Lending.Loan.Common.SetValue
 import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 import XRPL.Properties.Protocol.STAmount.Add.Common.IOU

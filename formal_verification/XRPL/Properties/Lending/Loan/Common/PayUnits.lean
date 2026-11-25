@@ -14,20 +14,6 @@ open XRPL.Model.SingleAssetVault (Vault RawVault)
 
 open private Loan.fullComponents roundAndSplitInterest from XRPL.Model.Lending.Loan.LoanPay
 
-/-- A vault update that passes wrote the five sums. -/
-lemma Vault.adjustBalances_ok_inv (v : Vault) (c : PoolBalanceChange) (raw : RawVault)
-    (h : (v.adjustBalances c).run = .ok (.ok raw)) :
-    Vault.AdjustSums v c raw.assetsAvailable raw.assetsDeployed raw.lossUnrealized raw.assetsReserved
-      raw.yieldUnrealized ∧
-    raw = { v.toRawVault with
-      assetsAvailable := raw.assetsAvailable, assetsDeployed := raw.assetsDeployed,
-      assetsReserved := raw.assetsReserved, lossUnrealized := raw.lossUnrealized,
-      yieldUnrealized := raw.yieldUnrealized } := by
-  simp only [ExceptT.run, XRPL.Model.SingleAssetVault.Vault.adjustBalances] at h
-  unfold_ter at h
-  walk_ok
-  exact ⟨⟨⟨_, ‹_›, ‹_›⟩, ‹_›, ‹_›, ‹_›, ‹_›⟩, rfl⟩
-
 /-- The vault a successful pool update returns holds the five sums. -/
 lemma Vault.poolAdjust_sums (v v' : Vault) (c : PoolBalanceChange) (h : AssetPool.adjustBalances v c = .ok (.ok v')) :
     Vault.AdjustSums v c v'.assetsAvailable v'.assetsDeployed v'.lossUnrealized v'.assetsReserved

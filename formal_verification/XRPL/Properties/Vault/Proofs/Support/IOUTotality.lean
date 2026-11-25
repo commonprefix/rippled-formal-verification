@@ -10,7 +10,7 @@ import XRPL.Properties.Protocol.STAmount.Add.Common.IOU
 import XRPL.Properties.Protocol.Number.Add.Common.NormalizedSum
 import XRPL.Properties.Protocol.Number.Add.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.AtExponent
-import XRPL.Properties.Lending.Loan.Common.Grid
+import XRPL.Properties.Protocol.Common.Grid
 
 /-! # IOU conversions and roundings never fail within range
 

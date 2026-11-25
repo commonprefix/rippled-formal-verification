@@ -1,6 +1,6 @@
 import Batteries.Tactic.OpenPrivate
 import XRPL.Properties.Lending.Common.Walk
-import XRPL.Properties.Lending.Loan.Common.Grid
+import XRPL.Properties.Protocol.Common.Grid
 import XRPL.Properties.Lending.Loan.Common.Loss
 import XRPL.Properties.Lending.Loan.Common.PayMonotone
 
@@ -8,6 +8,12 @@ import XRPL.Properties.Lending.Loan.Common.PayMonotone
 
 Every amount an instalment computes is a whole number of LoanScale units, so the principal it takes off
 the loan comes off PrincipalOutstanding exactly, and the payment's principal sum is that drop. -/
+
+namespace XRPL.Model.Protocol
+
+private lemma Number.OnGrid.isNormalized_of {s : Int} {x : Number} (h : Number.OnGrid s x) : x.isNormalized := h.1
+
+end XRPL.Model.Protocol
 
 namespace XRPL.Model.Lending
 
@@ -24,8 +30,6 @@ open private Number.clamp_zero_nonneg Number.clamp_zero_le Loan.scheduledCompone
   from XRPL.Properties.Lending.Loan.Common.PayMonotone
 
 /-! ## Deltas on the grid -/
-
-private lemma Number.OnGrid.isNormalized_of {s : Int} {x : Number} (h : Number.OnGrid s x) : x.isNormalized := h.1
 
 lemma UnitsAt.onGrid {x : Number} {s : Int} {k : ℤ} (h : UnitsAt x s k) : Number.OnGrid s x := ⟨h.norm, k, h.val⟩
 
@@ -295,47 +299,6 @@ lemma Loan.principal_onGrid (l : Loan) :
   rw [hpv.val]
   have : (p : ℚ) < 2 ^ 63 := by exact_mod_cast lt_of_lt_of_le hp hB
   exact mul_lt_mul_of_pos_right (by exact_mod_cast this) hpos
-
-/-- Adding two amounts of at least zero units, whose sum stays below `2^63` units, is exact. -/
-lemma Number.OnGrid.add_exact {s : Int} {x y d : Number} (hx : Number.OnGrid s x) (hy : Number.OnGrid s y)
-    (hx0 : 0 ≤ x.toRat) (hy0 : 0 ≤ y.toRat) (hlt : x.toRat + y.toRat < 2 ^ 63 * (10 : ℚ) ^ s)
-    (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (hok : x.operator_add y .to_nearest = .ok d) :
-    d.toRat = x.toRat + y.toRat := by
-  obtain ⟨hxn, a, ha⟩ := hx
-  obtain ⟨hyn, b, hb⟩ := hy
-  have hp : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
-  have ha0 : 0 ≤ a := by
-    have : (0 : ℚ) ≤ (a : ℚ) * 10 ^ s := ha ▸ hx0
-    exact_mod_cast nonneg_of_mul_nonneg_left this hp
-  have hb0 : 0 ≤ b := by
-    have : (0 : ℚ) ≤ (b : ℚ) * 10 ^ s := hb ▸ hy0
-    exact_mod_cast nonneg_of_mul_nonneg_left this hp
-  have hab : a + b < 2 ^ 63 := by
-    have : ((a + b : ℤ) : ℚ) * 10 ^ s < ((2 ^ 63 : ℤ) : ℚ) * 10 ^ s := by
-      push_cast; rw [add_mul, ← ha, ← hb]; exact hlt
-    exact_mod_cast lt_of_mul_lt_mul_right this hp.le
-  rw [Number.operator_add_toRat_of_grid x y d a b s hxn hyn ha hb ⟨by omega, hab⟩ hs hok, ha, hb]
-  push_cast; ring
-
-/-- Taking an amount of at least zero units, at most the balance, off a balance below `2^63` units is exact. -/
-lemma Number.OnGrid.sub_exact {s : Int} {x y d : Number} (hx : Number.OnGrid s x) (hy : Number.OnGrid s y)
-    (hy0 : 0 ≤ y.toRat) (hle : y.toRat ≤ x.toRat) (hlt : x.toRat < 2 ^ 63 * (10 : ℚ) ^ s)
-    (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (hok : x.operator_sub y .to_nearest = .ok d) :
-    d.toRat = x.toRat - y.toRat := by
-  obtain ⟨hxn, a, ha⟩ := hx
-  obtain ⟨hyn, b, hb⟩ := hy
-  have hp : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
-  have hb0 : 0 ≤ b := by
-    have : (0 : ℚ) ≤ (b : ℚ) * 10 ^ s := hb ▸ hy0
-    exact_mod_cast nonneg_of_mul_nonneg_left this hp
-  have hba : b ≤ a := by
-    have : (b : ℚ) * 10 ^ s ≤ (a : ℚ) * 10 ^ s := by rw [← ha, ← hb]; exact hle
-    exact_mod_cast le_of_mul_le_mul_right this hp
-  have ha63 : a < 2 ^ 63 := by
-    have : (a : ℚ) * 10 ^ s < ((2 ^ 63 : ℤ) : ℚ) * 10 ^ s := by push_cast; rw [← ha]; exact hlt
-    exact_mod_cast lt_of_mul_lt_mul_right this hp.le
-  rw [Number.operator_sub_toRat_of_grid x y d a b s hxn hyn ha hb ⟨by omega, by omega⟩ hs hok, ha, hb]
-  push_cast; ring
 
 /-- An instalment takes its principal off PrincipalOutstanding, a final one clears it. -/
 private lemma Loan.doPayment_principal (l l' : Loan) (pc : PaymentComponents) (h : Loan.doPayment l pc = .ok l') :
