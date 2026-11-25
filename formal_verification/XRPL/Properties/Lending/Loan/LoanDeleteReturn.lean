@@ -15,18 +15,18 @@ variable (loan : Loan)
 /-- The exits of `canDelete`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem Loan.canDelete_exits :
     (loan.isPending = false → 0 < loan.paymentRemaining → loan.canDelete = .tecHAS_OBLIGATIONS) ∧
-    (loan.isPending = true ∨ loan.paymentRemaining = 0 → loan.canDelete = .tesSUCCESS) := by
-  sorry
+    (loan.isPending = true ∨ loan.paymentRemaining = 0 → loan.canDelete = .tesSUCCESS) :=
+  ⟨Loan.canDelete_has_obligations_proof loan, Loan.canDelete_success_proof loan⟩
 
 /-- Error codes: success or tecHAS_OBLIGATIONS. -/
 theorem Loan.canDelete_error_codes :
-    loan.canDelete = .tesSUCCESS ∨ loan.canDelete = .tecHAS_OBLIGATIONS := by
-  sorry
+    loan.canDelete = .tesSUCCESS ∨ loan.canDelete = .tecHAS_OBLIGATIONS :=
+  Loan.canDelete_error_codes_proof loan
 
 /-- Success ⟺ the loan is pending or PaymentRemaining = 0. -/
 theorem Loan.canDelete_lawful_iff :
-    loan.canDelete = .tesSUCCESS ↔ loan.isPending = true ∨ loan.paymentRemaining = 0 := by
-  sorry
+    loan.canDelete = .tesSUCCESS ↔ loan.isPending = true ∨ loan.paymentRemaining = 0 :=
+  Loan.canDelete_lawful_iff_proof loan
 
 /-! ## `Loan.delete` -/
 
@@ -61,12 +61,13 @@ theorem Loan.delete_exits :
       (loan.delete v).run = .ok (.ok { broker' := broker', pool' := v' })) ∧
     -- `broker'` - the broker with LoanCount − 1, and DebtTotal = 0 once it holds no loan
     (∀ broker' : LoanBroker, loan.isPending = false → loan.broker.releaseLoan loan.broker.debtTotal = .ok broker' →
-      (loan.delete v).run = .ok (.ok { broker' := broker', pool' := v })) := by
-  sorry
+      (loan.delete v).run = .ok (.ok { broker' := broker', pool' := v })) :=
+  ⟨Loan.delete_deployed_bad_ledger_proof loan v, Loan.delete_reserved_bad_ledger_proof loan v,
+    Loan.delete_limit_exceeded_proof loan v, Loan.delete_success_proof loan v, Loan.deleteActive_success_proof loan v⟩
 
 /-- The only delete rejections are tefBAD_LEDGER or tecLIMIT_EXCEEDED. -/
 theorem Loan.delete_error_codes (ter : TER) (hok : (loan.delete v).run = .ok (.error ter)) :
-    ter = .tefBAD_LEDGER ∨ ter = .tecLIMIT_EXCEEDED := by
-  sorry
+    ter = .tefBAD_LEDGER ∨ ter = .tecLIMIT_EXCEEDED :=
+  Loan.delete_error_codes_proof loan v ter hok
 
 end XRPL.Model.Lending
