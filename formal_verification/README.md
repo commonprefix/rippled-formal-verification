@@ -14,9 +14,9 @@ fit together, see
 ## Building
 
 Nothing here is built by hand for usual use. The C++ cross-validation tests
-compile this model in-tree and link it into `xrpld`, gated by the
-`formal_verification` option; the Lean toolchain comes from the one `lean4`
-Conan package, so it needs no separate Lean or elan install.
+compile this model and link it into `xrpld`, gated by the
+`formal_verification` option; the Lean toolchain and mathlib come from the
+`lean4` and `mathlib4` Conan packages, so it needs no separate Lean or elan install.
 
 ## Working on the proofs directly
 
@@ -27,8 +27,8 @@ version pinned in `lean-toolchain`):
 
 ```bash
 lake exe cache get
-lake build
+lake build --wfail
 ```
 
-`lake build` is the proof check: it passes only if every file elaborates with no
+`lake build --wfail` is the proof check: it passes only if every file elaborates with no
 `sorry` and standard axioms.

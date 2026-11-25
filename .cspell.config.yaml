@@ -4,7 +4,6 @@ ignorePaths:
   - CMakeUserPresets.json
   - Doxyfile
   - docs/**/*.puml
-  - formal_verification/**/*.py
   - formal_verification/**/*.lean
   - cmake/**
   - LICENSE.md
@@ -226,7 +225,6 @@ words:
   - nullptr
   - nunl
   - Nyffenegger
-  - olean
   - onlatest
   - ostr
   - otool
@@ -374,6 +372,7 @@ words:
   - vinnie
   - wasmi
   - wextra
+  - wfail
   - wptr
   - writeme
   - wsrch

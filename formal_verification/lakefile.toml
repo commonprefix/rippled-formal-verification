@@ -1,15 +1,10 @@
 name = "XRPL"
-version = "0.1.0"
-keywords = ["math"]
 defaultTargets = ["XRPL"]
 allowNonModules = true
 
 [leanOptions]
-# Keep the legacy `do` lowering: 4.32+ switched to `EarlyReturnT`/`EarlyReturn.runK`, which
-# changes the lowered body the Vault proofs walk. `weak.` = ignored on 4.28/4.29, where the
-# option does not exist (and legacy is the only behaviour anyway).
 weak.backward.do.legacy = true
-pp.unicode.fun = true # pretty-prints `fun a ↦ b`
+pp.unicode.fun = true
 relaxedAutoImplicit = false
 weak.linter.mathlibStandardSet = true
 weak.linter.style.longLine = false
@@ -23,11 +18,9 @@ name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.35.0"
 
+# Everything, proofs included: what `lake build` checks. The part linked into
+# xrpld is built from lakefile-model.toml, without mathlib.
 [[lean_lib]]
 name = "XRPL"
-
-# lake build XRPLModel:static
-[[lean_lib]]
-name = "XRPLModel"
-roots = ["XRPL.Model.Model", "XRPL.FFI.FFI"]
-globs = ["XRPL.Model.+", "XRPL.FFI.+"]
+# Every file under XRPL/, so a file is checked even if nothing imports it.
+globs = ["XRPL", "XRPL.+"]
