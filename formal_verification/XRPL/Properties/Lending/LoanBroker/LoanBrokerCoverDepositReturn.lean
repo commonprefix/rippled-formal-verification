@@ -22,14 +22,15 @@ theorem LoanBroker.roundedCoverAmount_exits (pool : α) (amount : STAmount) :
       r.signum ≤ 0 → (lb.roundedCoverAmount pool amount).run = .ok (.error .tecPRECISION_LOSS)) ∧
     (∀ (r : STAmount) (aN : Number), amount.toNumber .to_nearest = .ok aN →
       sumRoundAndSubtract lb.coverAvailable aN (AssetPool.baseExponent pool) lb.numericType .downward = .ok r →
-      0 < r.signum → (lb.roundedCoverAmount pool amount).run = .ok (.ok r)) := by
-  sorry
+      0 < r.signum → (lb.roundedCoverAmount pool amount).run = .ok (.ok r)) :=
+  ⟨LoanBroker.roundedCoverAmount_precision_loss_proof lb pool amount,
+    LoanBroker.roundedCoverAmount_rounded_proof lb pool amount⟩
 
 /-- The only rounding rejection is tecPRECISION_LOSS. -/
 theorem LoanBroker.roundedCoverAmount_error_codes (pool : α) (amount : STAmount) (ter : TER)
     (hok : (lb.roundedCoverAmount pool amount).run = .ok (.error ter)) :
-    ter = .tecPRECISION_LOSS := by
-  sorry
+    ter = .tecPRECISION_LOSS :=
+  LoanBroker.roundedCoverAmount_error_codes_proof lb pool amount ter hok
 
 /-- The exits of `canCoverDeposit`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem LoanBroker.canCoverDeposit_exits (pool : α) (amount : STAmount) :
@@ -50,14 +51,17 @@ theorem LoanBroker.canCoverDeposit_exits (pool : α) (amount : STAmount) :
       postSumExponent lb.coverAvailable rN (AssetPool.baseExponent pool) lb.numericType =
         .ok (AssetPool.baseExponent pool) →
       lb.coverAvailable.operator_add rN .towards_zero = .ok c' → AssetPool.openLimit pool = .ok limit →
-      c'.operator_gt limit = false → lb.canCoverDeposit pool amount = .ok .tesSUCCESS) := by
-  sorry
+      c'.operator_gt limit = false → lb.canCoverDeposit pool amount = .ok .tesSUCCESS) :=
+  ⟨LoanBroker.canCoverDeposit_precision_loss_proof lb pool amount,
+    LoanBroker.canCoverDeposit_scale_exceeded_proof lb pool amount,
+    LoanBroker.canCoverDeposit_open_limit_exceeded_proof lb pool amount,
+    LoanBroker.canCoverDeposit_success_proof lb pool amount⟩
 
 /-- Error codes: success, tecPRECISION_LOSS or tecLIMIT_EXCEEDED. -/
 theorem LoanBroker.canCoverDeposit_error_codes (pool : α) (amount : STAmount) (ter : TER)
     (hok : lb.canCoverDeposit pool amount = .ok ter) :
-    ter = .tesSUCCESS ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecLIMIT_EXCEEDED := by
-  sorry
+    ter = .tesSUCCESS ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecLIMIT_EXCEEDED :=
+  LoanBroker.canCoverDeposit_error_codes_proof lb pool amount ter hok
 
 /-- Witness for `canCoverDeposit_error_codes`: on a reachable XRP broker with 1 drop of cover, the check of a deposit
 of `10^17` drops ends in an error, not a result code. CoverAvailable + amount is above the largest XRP amount. -/
@@ -68,8 +72,8 @@ theorem LoanBroker.canCoverDeposit_error_codes_attained :
       amount.Canonical ∧
       amount.mNumericType = lb.numericType ∧
       0 < amount.toRat ∧
-      lb.canCoverDeposit v amount = .error .outOfRange := by
-  sorry
+      lb.canCoverDeposit v amount = .error .outOfRange :=
+  LoanBroker.canCoverDeposit_out_of_range_witness
 
 /-- The exits of `coverDeposit`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem LoanBroker.coverDeposit_exits (pool : α) (amount : STAmount) :
@@ -81,12 +85,12 @@ theorem LoanBroker.coverDeposit_exits (pool : α) (amount : STAmount) :
       0 ≤ amount.toRat → (-96 : ℤ) ≤ AssetPool.baseExponent pool ∧ AssetPool.baseExponent pool ≤ 80 →
       r.toNumber .to_nearest = .ok rN → lb.coverAvailable.operator_add rN .to_nearest = .ok c' →
       ∃ lb' : LoanBroker, (lb.coverDeposit pool amount).run = .ok (.ok ⟨r, lb'⟩) ∧
-        lb'.toRawLoanBroker = { lb.toRawLoanBroker with coverAvailable := c' }) := by
-  sorry
+        lb'.toRawLoanBroker = { lb.toRawLoanBroker with coverAvailable := c' }) :=
+  ⟨LoanBroker.coverDeposit_rejected_proof lb pool amount, LoanBroker.coverDeposit_success_proof lb pool amount⟩
 
 /-- The only deposit rejection is tecINTERNAL. -/
 theorem LoanBroker.coverDeposit_error_codes (pool : α) (amount : STAmount) (ter : TER)
-    (hok : (lb.coverDeposit pool amount).run = .ok (.error ter)) : ter = .tecINTERNAL := by
-  sorry
+    (hok : (lb.coverDeposit pool amount).run = .ok (.error ter)) : ter = .tecINTERNAL :=
+  LoanBroker.coverDeposit_error_codes_proof lb pool amount ter hok
 
 end XRPL.Model.Lending

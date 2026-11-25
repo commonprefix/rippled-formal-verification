@@ -24,8 +24,9 @@ theorem LoanBroker.create_success (nt : NumericType) :
     (∀ (tx : LoanBrokerSetCreate) (lb : LoanBroker), LoanBroker.create tx nt = .ok lb →
       lb.debtTotal = Number.zero ∧ lb.coverAvailable = Number.zero ∧ lb.loanCount = 0) ∧
     ∀ {α : Type} [AssetPool α] (pool : α) (dm : Number),
-      LoanBroker.canCreate pool (some dm) nt = .ok .tesSUCCESS → STAmount.isRounded nt dm = false := by
-  sorry
+      LoanBroker.canCreate pool (some dm) nt = .ok .tesSUCCESS → STAmount.isRounded nt dm = false :=
+  ⟨fun tx => LoanBroker.create_success_proof tx nt, fun tx => LoanBroker.create_no_exposure_proof tx nt,
+    fun pool dm hcan => LoanBroker.canCreate_debtMaximum_not_rounded_proof pool dm nt hcan⟩
 
 /-- Loan broker update with a new DebtMaximum that passes the lawfulness check -> it succeeds and only DebtMaximum
 changes, one that passes the checks is stored exactly, and no DebtMaximum changes nothing. -/
@@ -35,7 +36,9 @@ theorem LoanBroker.update_success :
       ∃ lb', lb.update (some dm) = .ok lb' ∧ lb'.toRawLoanBroker = { lb.toRawLoanBroker with debtMaximum := dm }) ∧
     (∀ {α : Type} [AssetPool α] (pool : α) (dm : Number), lb.canUpdate pool (some dm) = .ok .tesSUCCESS →
       STAmount.isRounded lb.numericType dm = false) ∧
-    lb.update none = .ok lb := by
-  sorry
+    lb.update none = .ok lb :=
+  ⟨LoanBroker.update_success_proof lb,
+    fun pool dm hcan => LoanBroker.canUpdate_debtMaximum_not_rounded_proof lb pool dm hcan,
+    LoanBroker.update_none_proof lb⟩
 
 end XRPL.Model.Lending

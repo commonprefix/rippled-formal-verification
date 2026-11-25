@@ -1,0 +1,292 @@
+import XRPL.Properties.Lending.LoanBroker.Common.CoverReduction
+import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
+import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
+import XRPL.Properties.Protocol.Common.TenthBips
+
+/-! # Minimum cover facts
+
+The minimum cover facts the cover operations share. -/
+
+namespace XRPL.Model.Lending
+
+open XRPL.Model.Protocol
+
+/-- The minimum cover is always a normalized `Number`. -/
+lemma minimumBrokerCover_isNormalized (nt : NumericType) (debtTotal : Number)
+    (coverRateMinimum : TenthBips32) (e : Int) (m : Number)
+    (hok : minimumBrokerCover nt debtTotal coverRateMinimum e = .ok m) : m.isNormalized := by
+  unfold minimumBrokerCover at hok
+  obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
+  exact STAmount.roundToNumericType_isNormalized _ _ _ _ m hok
+
+/-- With no debt the minimum cover is zero at every vault scale. -/
+lemma minimumBrokerCover_zero_debt (nt : NumericType) (rate : TenthBips32) (e : Int) :
+    minimumBrokerCover nt Number.zero rate e = .ok Number.zero := by
+  unfold minimumBrokerCover
+  rw [tenthBipsOfValue_zero, ok_bind]
+  exact STAmount.roundToNumericType_zero nt e
+
+/-- On a lawful broker, the cover floor holds exactly when `coverAvailable` is
+at least the minimum cover. -/
+private lemma LoanBroker.hasMinimumCover_iff (lb : LoanBroker) (e : Int) (m : Number)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok m) :
+    lb.HasMinimumCover e ↔ m.toRat ≤ lb.toExact.coverAvailable := by
+  unfold LoanBroker.HasMinimumCover RawLoanBroker.hasMinimumCover
+  simp only [hmin, ok_bind, pure_eq, Except.ok.injEq]
+  exact Number.operator_le_iff m lb.coverAvailable (minimumBrokerCover_isNormalized _ _ _ _ _ hmin)
+    lb.wf.coverAvailable_norm
+
+/-- The cover floor reads only the numeric type, `debtTotal`, `coverRateMinimum` and `coverAvailable`, so a
+broker matching on the first three with at least as much cover keeps it. -/
+lemma LoanBroker.hasMinimumCover_of_cover_le (lb lb' : LoanBroker) (e : Int)
+    (hnt : lb'.numericType = lb.numericType) (hdebt : lb'.debtTotal = lb.debtTotal)
+    (hrate : lb'.coverRateMinimum = lb.coverRateMinimum)
+    (hle : lb.toExact.coverAvailable ≤ lb'.toExact.coverAvailable)
+    (h : lb.HasMinimumCover e) : lb'.HasMinimumCover e := by
+  have h' := h
+  unfold LoanBroker.HasMinimumCover RawLoanBroker.hasMinimumCover at h'
+  obtain ⟨m, hm, _⟩ := bind_ok_peel _ _ _ h'
+  have hm' : minimumBrokerCover lb'.numericType lb'.debtTotal lb'.coverRateMinimum e = .ok m := by
+    rw [hnt, hdebt, hrate]; exact hm
+  rw [LoanBroker.hasMinimumCover_iff lb e m hm] at h
+  rw [LoanBroker.hasMinimumCover_iff lb' e m hm']
+  exact le_trans h hle
+
+/-- A scaled debt that converts to a non-integral amount gives an IOU amount, canonical or zero. -/
+private lemma ofNumber_upward_fczr (nt : NumericType) (raw : Number) (ret : STAmount)
+    (hret : STAmount.ofNumber nt raw .upward = .ok ret) (hint : ¬ ret.integral = true) : ret.FracCanonZero := by
+  cases nt with
+  | integral mv mo ms msh =>
+    exact absurd (STAmount.ofNumber_integral_canonical _ _ _ ret rfl hret).1.is_integral hint
+  | fractional => exact STAmount.ofNumber_fractional_fczr raw .upward ret hret
+
+/-- A zero amount passes through rounding unchanged. -/
+private lemma roundToExponent_upward_of_zero (q : STAmount) (s : Int) (h0 : q.mValue = 0) :
+    q.roundToExponent s .upward = .ok q :=
+  STAmount.roundToExponent_eq_self q s .upward (Or.inr (Or.inl (by unfold STAmount.isZero; rw [h0]; rfl)))
+
+/-- At one vault scale, a larger debt times rate never gives a smaller minimum
+cover, when the larger minimum cover is nonzero. -/
+private lemma minimumBrokerCover_le_of_prod_le (nt : NumericType) (d d' : Number)
+    (rate rate' : TenthBips32) (e : Int) (m m' : Number)
+    (hd : d.isNormalized) (hd' : d'.isNormalized) (h0 : 0 ≤ d.toRat) (h0' : 0 ≤ d'.toRat)
+    (hprod : d.toRat * (rate.toNumber .upward).toRat ≤ d'.toRat * (rate'.toNumber .upward).toRat)
+    (he : -96 ≤ e) (he' : e ≤ 80)
+    (hm : minimumBrokerCover nt d rate e = .ok m)
+    (hm' : minimumBrokerCover nt d' rate' e = .ok m')
+    (hnz' : m' ≠ Number.zero) :
+    m.toRat ≤ m'.toRat := by
+  unfold minimumBrokerCover at hm hm'
+  obtain ⟨raw, hraw, hk⟩ := bind_ok_peel _ _ _ hm
+  obtain ⟨raw', hraw', hk'⟩ := bind_ok_peel _ _ _ hm'
+  clear hm hm'
+  obtain ⟨hrn, hr0⟩ := tenthBipsOfValue_upward_facts d _ raw hd h0 hraw
+  obtain ⟨hrn', hr0'⟩ := tenthBipsOfValue_upward_facts d' _ raw' hd' h0' hraw'
+  unfold STAmount.roundToNumericType at hk hk'
+  cases hret : STAmount.ofNumber nt raw .upward with
+  | error err => rw [hret] at hk; exact absurd hk (by simp)
+  | ok ret =>
+    cases hret' : STAmount.ofNumber nt raw' .upward with
+    | error err => rw [hret'] at hk'; exact absurd hk' (by simp)
+    | ok ret' =>
+      rw [hret] at hk
+      rw [hret'] at hk'
+      dsimp only at hk hk'
+      cases nt with
+      | integral mv mo ms msh =>
+        -- an XRP or MPT minimum cover is the scaled debt rounded up to a whole number
+        have hnt : (NumericType.integral mv mo ms msh).isIntegral = true := rfl
+        have hint (q : STAmount) (x : Number)
+            (hq : STAmount.ofNumber (.integral mv mo ms msh) x .upward = .ok q) :
+            q.integral = true :=
+          (STAmount.ofNumber_integral_canonical _ _ _ q hnt hq).1.is_integral
+        rw [ite_eq_left (hint ret raw hret)] at hk
+        rw [ite_eq_left (hint ret' raw' hret')] at hk'
+        have hceil (x : Number) (q : STAmount) (n : Number) (hxn : x.isNormalized)
+            (hx0 : 0 ≤ x.toRat)
+            (hq : STAmount.ofNumber (.integral mv mo ms msh) x .upward = .ok q)
+            (hn : q.toNumber .upward = .ok n) :
+            ∃ z : ℤ, n.toRat = z ∧ x.toRat ≤ z ∧ (z : ℚ) < x.toRat + 1 ∧ n.isNormalized := by
+          have hneg := Number.negative_false_of_nonneg x hxn hx0
+          obtain ⟨iv, hr, hres⟩ := STAmount.ofNumber_integral_toRat _ x .upward q hnt hneg hq
+          obtain ⟨hlo, hhi⟩ := Number.to_rep_upward_ceil x iv hxn hneg hr
+          have hic := (STAmount.ofNumber_integral_canonical _ _ _ q hnt hq).1
+          have hsz : q.mValue.toNat ≤ 2 ^ 63 - 1 := by
+            by_cases hq0 : q.mValue = 0
+            · rw [hq0]
+              decide
+            · rcases STAmount.ofNumber_exactCanonical _ x .upward q hxn hx0 hq hq0 with
+                hiou | ⟨_, hs⟩
+              · have hf := hiou.is_fractional
+                rw [STAmount.ofNumber_mNumericType _ _ _ _ hq] at hf
+                exact absurd hf (by simp)
+              · exact hs
+          obtain ⟨sn, hsn, hsv, hsnn⟩ := STAmount.toNumber_integral_small_exact q .upward hic hsz
+          rw [hn, Except.ok.injEq] at hsn
+          subst hsn
+          exact ⟨iv.toInt, by rw [hsv, hres], hlo, hhi, hsnn⟩
+        obtain ⟨z, hz, _, hzhi, _⟩ := hceil raw ret m hrn hr0 hret hk
+        obtain ⟨z', hz', hzlo', hzhi', hmn'⟩ := hceil raw' ret' m' hrn' hr0' hret' hk'
+        -- the larger minimum cover is nonzero, so its scaled debt is too
+        have hraw0' : raw'.mantissa_ ≠ 0 := by
+          intro h0r
+          apply hnz'
+          apply (Number.toRat_eq_zero_iff_eq_zero hmn').mp
+          rw [Number.toRat_eq_zero_of_mantissa_zero raw' h0r] at hzlo' hzhi'
+          have h1 : 0 ≤ z' := by exact_mod_cast hzlo'
+          have h2 : z' < 1 := by
+            have : (z' : ℚ) < 1 := by linarith
+            exact_mod_cast this
+          rw [hz', show z' = 0 by omega]
+          simp
+        have hmono := tenthBipsOfValue_upward_le d d' _ _ raw raw' hd hd' h0 hprod hraw hraw' hraw0'
+        rw [hz, hz']
+        have hlt : (z : ℚ) < z' + 1 := by linarith
+        have hlt' : z < z' + 1 := by exact_mod_cast hlt
+        exact_mod_cast (show z ≤ z' by omega)
+      | fractional =>
+        -- an IOU minimum cover is the scaled debt rounded up to 16 digits, then up to the
+        -- vault scale
+        have hfr (q : STAmount) (x : Number)
+            (hq : STAmount.ofNumber .fractional x .upward = .ok q) : q.integral = false := by
+          unfold STAmount.integral
+          rw [STAmount.ofNumber_mNumericType _ _ _ _ hq]
+          rfl
+        rw [ite_eq_right (by rw [hfr ret raw hret]; decide)] at hk
+        rw [ite_eq_right (by rw [hfr ret' raw' hret']; decide)] at hk'
+        obtain ⟨hfra, hcza⟩ := STAmount.ofNumber_fractional_fczr raw .upward ret hret
+        obtain ⟨hfrb, hczb⟩ := STAmount.ofNumber_fractional_fczr raw' .upward ret' hret'
+        cases hr : ret.roundToExponent e .upward with
+        | error err => rw [hr] at hk; exact absurd hk (by simp)
+        | ok r =>
+          cases hr' : ret'.roundToExponent e .upward with
+          | error err => rw [hr'] at hk'; exact absurd hk' (by simp)
+          | ok r' =>
+            rw [hr] at hk
+            rw [hr'] at hk'
+            dsimp only at hk hk'
+            -- the larger side is nonzero all the way back
+            obtain ⟨hrfr', hrcz'⟩ :=
+              STAmount.roundToExponent_fczr ret' r' e .upward ⟨hfrb, hczb⟩ hr'
+            have hr'0 : r'.mValue ≠ 0 := by
+              intro h0r
+              apply hnz'
+              rw [STAmount.toNumber_zero_fractional r' .upward
+                (by unfold STAmount.integral; rw [hrfr']; rfl) h0r, Except.ok.injEq] at hk'
+              exact hk'.symm
+            have hret'0 : ret'.mValue ≠ 0 := by
+              intro h0q
+              apply hr'0
+              rw [roundToExponent_upward_of_zero ret' e h0q, Except.ok.injEq] at hr'
+              rw [← hr']
+              exact h0q
+            have hraw0' : raw'.mantissa_ ≠ 0 :=
+              STAmount.ofNumber_iou_mantissa_ne_zero .fractional raw' .upward ret' rfl hret' hret'0
+            have hmono :=
+              tenthBipsOfValue_upward_le d d' _ _ raw raw' hd hd' h0 hprod hraw hraw' hraw0'
+            obtain ⟨n', hn', hv', _⟩ := STAmount.toNumber_exact_canonical r' .upward
+              (Or.inl (hrcz'.resolve_right hr'0))
+            rw [hk', Except.ok.injEq] at hn'
+            subst hn'
+            have hu' : r'.toRat = (⌈ret'.toRat / 10 ^ e⌉ : ℚ) * 10 ^ e :=
+              STAmount.roundToExponent_rounded ret' r' e .upward (hczb.resolve_right hret'0) he he'
+                hr'0 hr'
+            have hc' : ret'.toRat =
+                (⌈raw'.toRat / 10 ^ (raw'.exponent_ + 3)⌉ : ℚ) * 10 ^ (raw'.exponent_ + 3) :=
+              STAmount.ofNumber_iou_upward_ceil raw' ret' hrn' hraw0' hr0' hret' hret'0
+            rw [hv']
+            by_cases hr0m : r.mValue = 0
+            · -- the smaller minimum cover is zero, and the larger one is not negative
+              obtain ⟨hrfr, _⟩ := STAmount.roundToExponent_fczr ret r e .upward ⟨hfra, hcza⟩ hr
+              rw [STAmount.toNumber_zero_fractional r .upward
+                (by unfold STAmount.integral; rw [hrfr]; rfl) hr0m, Except.ok.injEq] at hk
+              rw [← hk, Number.toRat_zero, hu']
+              have h1 := le_ceil_grid ret'.toRat e
+              have h2 := le_ceil_grid raw'.toRat (raw'.exponent_ + 3)
+              rw [← hc'] at h2
+              linarith
+            · -- both sides are nonzero: two ceilings, each keeping the order
+              obtain ⟨_, hrcz⟩ := STAmount.roundToExponent_fczr ret r e .upward ⟨hfra, hcza⟩ hr
+              have hret0 : ret.mValue ≠ 0 := by
+                intro h0q
+                apply hr0m
+                rw [roundToExponent_upward_of_zero ret e h0q, Except.ok.injEq] at hr
+                rw [← hr]
+                exact h0q
+              have hraw0 : raw.mantissa_ ≠ 0 :=
+                STAmount.ofNumber_iou_mantissa_ne_zero .fractional raw .upward ret rfl hret hret0
+              obtain ⟨n, hn, hv, _⟩ := STAmount.toNumber_exact_canonical r .upward
+                (Or.inl (hrcz.resolve_right hr0m))
+              rw [hk, Except.ok.injEq] at hn
+              subst hn
+              have hu : r.toRat = (⌈ret.toRat / 10 ^ e⌉ : ℚ) * 10 ^ e :=
+                STAmount.roundToExponent_rounded ret r e .upward (hcza.resolve_right hret0) he he'
+                  hr0m hr
+              have hc : ret.toRat =
+                  (⌈raw.toRat / 10 ^ (raw.exponent_ + 3)⌉ : ℚ) * 10 ^ (raw.exponent_ + 3) :=
+                STAmount.ofNumber_iou_upward_ceil raw ret hrn hraw0 hr0 hret hret0
+              have hpos : 0 < raw.toRat := lt_of_le_of_ne hr0
+                (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero raw hraw0))
+              have hs := Number.exponent_le_of_le raw raw' hrn hrn' hraw0 hpos hmono
+              -- the 16-digit roundings keep the order, even when the larger one is coarser
+              have hretle : ret.toRat ≤ ret'.toRat := by
+                rw [hc, hc']
+                exact le_trans (ceil_grid_le_of_le _ _ _ hmono)
+                  (ceil_grid_le_of_scale_le _ _ _ (by omega))
+              rw [hv, hu, hu']
+              exact ceil_grid_le_of_le _ _ e hretle
+
+/-- Below the finest IOU scale the vault scale no longer matters: every canonical
+IOU amount already sits on the grid. -/
+private lemma minimumBrokerCover_below_min (nt : NumericType) (debtTotal : Number)
+    (rate : TenthBips32) (e : Int) (he : e ≤ -96) :
+    minimumBrokerCover nt debtTotal rate e = minimumBrokerCover nt debtTotal rate (-96) := by
+  unfold minimumBrokerCover
+  cases hraw : tenthBipsOfValue debtTotal rate .upward with
+  | error err => rfl
+  | ok raw =>
+    rw [ok_bind, ok_bind]
+    unfold STAmount.roundToNumericType
+    cases hret : STAmount.ofNumber nt raw .upward with
+    | error err => rfl
+    | ok ret =>
+      dsimp only
+      by_cases hint : ret.integral = true
+      · rw [ite_eq_left hint, ite_eq_left hint]
+      rw [ite_eq_right hint, ite_eq_right hint]
+      -- the converted amount is canonical or zero, so both scales leave it alone
+      have hfc := ofNumber_upward_fczr nt raw ret hret hint
+      have hpass (s : Int) (hs : s ≤ -96) : ret.roundToExponent s .upward = .ok ret := by
+        apply STAmount.roundToExponent_eq_self
+        rcases hfc.2 with hc | h0
+        · exact Or.inr (Or.inr (by have := hc.exp_lo; show s ≤ ret.mOffset; omega))
+        · exact Or.inr (Or.inl (by unfold STAmount.isZero; rw [h0]; rfl))
+      rw [hpass e he, hpass (-96) le_rfl]
+
+/-- The minimum cover of a nonnegative debt is not negative, at every vault scale up
+to `10^80`. -/
+private lemma minimumBrokerCover_nonneg (nt : NumericType) (debtTotal : Number) (rate : TenthBips32)
+    (e : Int) (m : Number) (hd : debtTotal.isNormalized) (h0 : 0 ≤ debtTotal.toRat)
+    (he : e ≤ 80) (hm : minimumBrokerCover nt debtTotal rate e = .ok m) : 0 ≤ m.toRat := by
+  -- in the IOU range it is at least the zero minimum cover of no debt
+  have key (e' : Int) (m' : Number) (hlo : -96 ≤ e') (hhi : e' ≤ 80)
+      (hm' : minimumBrokerCover nt debtTotal rate e' = .ok m') : 0 ≤ m'.toRat := by
+    by_cases hz : m' = Number.zero
+    · rw [hz, Number.toRat_zero]
+    have h := minimumBrokerCover_le_of_prod_le nt Number.zero debtTotal rate rate e' Number.zero
+      m' Number.zero_isNormalized hd (by rw [Number.toRat_zero]) h0
+      (by rw [Number.toRat_zero, zero_mul]; exact mul_nonneg h0 (TenthBips32.toNumber_nonneg rate .upward))
+      hlo hhi (minimumBrokerCover_zero_debt nt rate e') hm' hz
+    rwa [Number.toRat_zero] at h
+  by_cases hlo : -96 ≤ e
+  · exact key e m hlo he hm
+  · exact key (-96) m le_rfl (by norm_num)
+      (by rw [← minimumBrokerCover_below_min nt debtTotal rate e (by omega)]; exact hm)
+
+/-- A broker's minimum cover at an exponent of the IOU range is not negative. -/
+lemma LoanBroker.minimumCover_nonneg (lb : LoanBroker) (e : Int) (m : Number) (he : e ≤ 80)
+    (hm : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok m) :
+    0 ≤ m.toRat :=
+  minimumBrokerCover_nonneg _ _ _ e m lb.wf.debtTotal_norm lb.exact.debtTotal_nonneg he hm
+
+end XRPL.Model.Lending

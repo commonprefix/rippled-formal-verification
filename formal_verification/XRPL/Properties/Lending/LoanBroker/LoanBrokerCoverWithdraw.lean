@@ -38,7 +38,18 @@ theorem LoanBroker.coverWithdraw_debit (amount : STAmount) :
       ∃ (deltaCover : Number) (deltaAmount : STAmount),
         lb.coverAvailable.operator_sub res.loanBroker'.coverAvailable .to_nearest = .ok deltaCover ∧
         STAmount.ofNumber lb.numericType deltaCover .to_nearest = .ok deltaAmount ∧
-        deltaAmount.toRat = res.amount'.toRat) := by
-  sorry
+        deltaAmount.toRat = res.amount'.toRat) :=
+  ⟨fun base v res hr hvb hnt hc hat hpos hcan hok =>
+      have hmax := LoanBroker.maxValue_fits_of_canonical lb amount hc hat
+      LoanBroker.coverWithdraw_amount_proof lb base hr hmax v hvb hnt amount hc hat hpos hcan res hok,
+    fun pool res hint hc hat hpos hok =>
+      LoanBroker.coverWithdraw_integral_amount_proof lb pool amount res hok hint hc hat hpos.le,
+    fun base v res hr hvb hc hpos hcan hok =>
+      LoanBroker.coverWithdraw_debit_proof lb base hr v hvb amount hc hpos hcan res hok,
+    fun base v res hr hvb hc hpos hcan hok => by
+      rw [← LoanBroker.coverWithdraw_debit_proof lb base hr v hvb amount hc hpos hcan res hok]
+      exact LoanBroker.coverWithdraw_debit_le_amount_proof lb base hr v hvb amount hc hpos hcan res hok,
+    fun base v res hr hvb hnt hc hpos hcan hok =>
+      LoanBroker.coverWithdraw_applied_delta_proof lb base hr v hvb hnt amount hc hpos hcan res hok⟩
 
 end XRPL.Model.Lending

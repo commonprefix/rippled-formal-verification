@@ -34,22 +34,24 @@ theorem LoanBroker.roundedCoverClawback_exits (pool : α) (amount : Option STAmo
       lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw → 0 < maxClaw.signum →
       LoanBroker.clawRequest maxClaw amount = .ok claw → STAmount.ofNumber lb.numericType claw .to_nearest = .ok claw' →
       clampToSumExponent lb.coverAvailable claw'.operator_neg (AssetPool.baseExponent pool) = .ok c →
-      c.isZero = false → (lb.roundedCoverClawback pool amount).run = .ok (.ok c)) := by
-  sorry
+      c.isZero = false → (lb.roundedCoverClawback pool amount).run = .ok (.ok c)) :=
+  ⟨LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount,
+    LoanBroker.roundedCoverClawback_precision_loss_proof lb pool amount,
+    LoanBroker.roundedCoverClawback_rounded_proof lb pool amount⟩
 
 /-- A zero amount is the same clawback as no amount: both take all cover above the
 minimum. -/
 theorem LoanBroker.roundedCoverClawback_zero_eq_none (pool : α) (a : STAmount)
     (hzero : a.isZero = true) :
-    lb.roundedCoverClawback pool (some a) = lb.roundedCoverClawback pool none := by
-  sorry
+    lb.roundedCoverClawback pool (some a) = lb.roundedCoverClawback pool none :=
+  LoanBroker.roundedCoverClawback_zero_eq_none_proof lb pool a hzero
 
 /-- The only clawAmount rejections are tecINSUFFICIENT_FUNDS or tecPRECISION_LOSS. -/
 theorem LoanBroker.roundedCoverClawback_error_codes (pool : α)
     (amount : Option STAmount) (ter : TER)
     (hok : (lb.roundedCoverClawback pool amount).run = .ok (.error ter)) :
-    ter = .tecINSUFFICIENT_FUNDS ∨ ter = .tecPRECISION_LOSS := by
-  sorry
+    ter = .tecINSUFFICIENT_FUNDS ∨ ter = .tecPRECISION_LOSS :=
+  LoanBroker.roundedCoverClawback_error_codes_proof lb pool amount ter hok
 
 /-- The exits of `canCoverClawback`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem LoanBroker.canCoverClawback_exits (pool : α) (amount : Option STAmount) :
@@ -67,20 +69,27 @@ theorem LoanBroker.canCoverClawback_exits (pool : α) (amount : Option STAmount)
       clampToSumExponent lb.coverAvailable claw'.operator_neg (AssetPool.baseExponent pool) = .ok c →
       c.isZero = true → lb.canCoverClawback pool amount = .ok .tecPRECISION_LOSS) ∧
     (∀ c : STAmount, lb.numericType ≠ .native → (lb.roundedCoverClawback pool amount).run = .ok (.ok c) →
-      lb.canCoverClawback pool amount = .ok .tesSUCCESS) := by
-  sorry
+      lb.canCoverClawback pool amount = .ok .tesSUCCESS) :=
+  ⟨LoanBroker.canCoverClawback_no_permission_proof lb pool amount,
+    fun minimumCover maxClaw hxrp hmin hsub hle => LoanBroker.canCoverClawback_rejected_proof lb pool amount hxrp _
+      (LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount minimumCover maxClaw hmin hsub hle),
+    fun minimumCover maxClaw claw claw' c hxrp hmin hsub hpos hreq hof hcl hzero =>
+      LoanBroker.canCoverClawback_rejected_proof lb pool amount hxrp _
+        (LoanBroker.roundedCoverClawback_precision_loss_proof lb pool amount minimumCover maxClaw claw claw' c hmin
+          hsub hpos hreq hof hcl hzero),
+    fun c hxrp hrounded => LoanBroker.canCoverClawback_success_proof lb pool amount hxrp c hrounded⟩
 
 /-- A zero amount passes or fails the checks exactly as no amount does. -/
 theorem LoanBroker.canCoverClawback_zero_eq_none (pool : α) (a : STAmount)
     (hzero : a.isZero = true) :
-    lb.canCoverClawback pool (some a) = lb.canCoverClawback pool none := by
-  sorry
+    lb.canCoverClawback pool (some a) = lb.canCoverClawback pool none :=
+  LoanBroker.canCoverClawback_zero_eq_none_proof lb pool a hzero
 
 /-- Error codes: success, tecNO_PERMISSION, tecINSUFFICIENT_FUNDS or tecPRECISION_LOSS. -/
 theorem LoanBroker.canCoverClawback_error_codes (pool : α)
     (amount : Option STAmount) (ter : TER) (hok : lb.canCoverClawback pool amount = .ok ter) :
-    ter = .tesSUCCESS ∨ ter = .tecNO_PERMISSION ∨ ter = .tecINSUFFICIENT_FUNDS ∨ ter = .tecPRECISION_LOSS := by
-  sorry
+    ter = .tesSUCCESS ∨ ter = .tecNO_PERMISSION ∨ ter = .tecINSUFFICIENT_FUNDS ∨ ter = .tecPRECISION_LOSS :=
+  LoanBroker.canCoverClawback_error_codes_proof lb pool amount ter hok
 
 /-- The exits of `coverClawback`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem LoanBroker.coverClawback_exits (pool : α) (amount : Option STAmount) :
@@ -104,19 +113,25 @@ theorem LoanBroker.coverClawback_exits (pool : α) (amount : Option STAmount) :
       c.toNumber .to_nearest = .ok cN → lb.coverAvailable.operator_lt cN = false →
       lb.coverAvailable.operator_sub cN .to_nearest = .ok c' →
       ∃ lb' : LoanBroker, (lb.coverClawback pool amount).run = .ok (.ok ⟨c, lb'⟩) ∧
-        lb'.toRawLoanBroker = { lb.toRawLoanBroker with coverAvailable := c' }) := by
-  sorry
+        lb'.toRawLoanBroker = { lb.toRawLoanBroker with coverAvailable := c' }) :=
+  ⟨fun minimumCover maxClaw hmin hsub hle => LoanBroker.coverClawback_rejected_proof lb pool amount _
+      (LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount minimumCover maxClaw hmin hsub hle),
+    fun minimumCover maxClaw claw claw' c hmin hsub hpos hreq hof hcl hzero =>
+      LoanBroker.coverClawback_rejected_proof lb pool amount _
+        (LoanBroker.roundedCoverClawback_precision_loss_proof lb pool amount minimumCover maxClaw claw claw' c hmin
+          hsub hpos hreq hof hcl hzero),
+    LoanBroker.coverClawback_negative_cover_proof lb pool amount, LoanBroker.coverClawback_success_proof lb pool amount⟩
 
 /-- A zero amount claws exactly what no amount claws. -/
 theorem LoanBroker.coverClawback_zero_eq_none (pool : α) (a : STAmount)
     (hzero : a.isZero = true) :
-    lb.coverClawback pool (some a) = lb.coverClawback pool none := by
-  sorry
+    lb.coverClawback pool (some a) = lb.coverClawback pool none :=
+  LoanBroker.coverClawback_zero_eq_none_proof lb pool a hzero
 
 /-- The only clawback rejection is tecINTERNAL. -/
 theorem LoanBroker.coverClawback_error_codes (pool : α)
     (amount : Option STAmount) (ter : TER)
-    (hok : (lb.coverClawback pool amount).run = .ok (.error ter)) : ter = .tecINTERNAL := by
-  sorry
+    (hok : (lb.coverClawback pool amount).run = .ok (.error ter)) : ter = .tecINTERNAL :=
+  LoanBroker.coverClawback_error_codes_proof lb pool amount ter hok
 
 end XRPL.Model.Lending

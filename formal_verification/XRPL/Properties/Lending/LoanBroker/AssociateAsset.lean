@@ -14,13 +14,16 @@ open XRPL.Model.SingleAssetVault (Vault)
 /-- `associateAsset` changes nothing on a reachable broker: the asset stores every amount the broker records
 exactly. -/
 theorem LoanBroker.Reachable.associateAsset_noop (lb : LoanBroker) (base : Int) (hr : lb.Reachable base) :
-    ¬ lb.assetsRounded := by
-  sorry
+    ¬ lb.assetsRounded :=
+  LoanBroker.OpenZone.not_assetsRounded lb base (LoanBroker.Reachable.openZone lb base hr)
+    (LoanBroker.Reachable.debtTotal_zero_proof lb base hr)
 
 /-- A broker that keeps the fixed fields, with `associateAsset` a no-op, stores CoverAvailable exactly. -/
 private lemma LoanBroker.coverAvailable_stored (lb lb' : LoanBroker) (hf : LoanBroker.SameFixedFields lb lb')
     (h : ¬ lb'.assetsRounded) : STAmount.isRounded lb.numericType lb'.coverAvailable = false := by
-  sorry
+  rw [← hf.numericType]
+  by_contra hne
+  exact h (Or.inr (Or.inr (by simpa using hne)))
 
 /-- A cover deposit stores its new CoverAvailable exactly and leaves DebtTotal and DebtMaximum as they were. -/
 theorem LoanBroker.coverDeposit_associateAsset_noop (lb : LoanBroker) (base : Int) (v : Vault)
@@ -33,8 +36,11 @@ theorem LoanBroker.coverDeposit_associateAsset_noop (lb : LoanBroker) (base : In
     (hcan : lb.canCoverDeposit v amount = .ok .tesSUCCESS)
     (hok : (lb.coverDeposit v amount).run = .ok (.ok res)) :
     STAmount.isRounded lb.numericType res.loanBroker'.coverAvailable = false ∧
-      res.loanBroker'.debtTotal = lb.debtTotal ∧ res.loanBroker'.debtMaximum = lb.debtMaximum := by
-  sorry
+      res.loanBroker'.debtTotal = lb.debtTotal ∧ res.loanBroker'.debtMaximum = lb.debtMaximum :=
+  have hf := LoanBroker.coverDeposit_fixed_fields lb v amount res hok
+  ⟨LoanBroker.coverAvailable_stored lb _ hf (LoanBroker.Reachable.associateAsset_noop res.loanBroker' base
+      (LoanBroker.Reachable.coverDeposit_step lb base hr v amount res hvb hnt hc hat hpos hcap hcan hok)),
+    hf.debtTotal, LoanBroker.coverDeposit_debtMaximum lb v amount res hok⟩
 
 /-- A cover withdrawal stores its new CoverAvailable exactly and leaves DebtTotal and DebtMaximum as they were. -/
 theorem LoanBroker.coverWithdraw_associateAsset_noop (lb : LoanBroker) (base : Int) (v : Vault)
@@ -44,8 +50,11 @@ theorem LoanBroker.coverWithdraw_associateAsset_noop (lb : LoanBroker) (base : I
     (hcan : lb.canCoverWithdraw v amount = .ok .tesSUCCESS)
     (hok : (lb.coverWithdraw v amount).run = .ok (.ok res)) :
     STAmount.isRounded lb.numericType res.loanBroker'.coverAvailable = false ∧
-      res.loanBroker'.debtTotal = lb.debtTotal ∧ res.loanBroker'.debtMaximum = lb.debtMaximum := by
-  sorry
+      res.loanBroker'.debtTotal = lb.debtTotal ∧ res.loanBroker'.debtMaximum = lb.debtMaximum :=
+  have hf := LoanBroker.coverWithdraw_fixed_fields lb v amount res hok
+  ⟨LoanBroker.coverAvailable_stored lb _ hf (LoanBroker.Reachable.associateAsset_noop res.loanBroker' base
+      (LoanBroker.Reachable.coverWithdraw_step lb base hr v amount res hvb hnt hc hat hpos hcan hok)),
+    hf.debtTotal, LoanBroker.coverWithdraw_debtMaximum lb v amount res hok⟩
 
 /-- A cover clawback stores its new CoverAvailable exactly and leaves DebtTotal and DebtMaximum as they were. -/
 theorem LoanBroker.coverClawback_associateAsset_noop (lb : LoanBroker) (base : Int) (v : Vault)
@@ -55,7 +64,10 @@ theorem LoanBroker.coverClawback_associateAsset_noop (lb : LoanBroker) (base : I
     (hcan : lb.canCoverClawback v amount = .ok .tesSUCCESS)
     (hok : (lb.coverClawback v amount).run = .ok (.ok res)) :
     STAmount.isRounded lb.numericType res.loanBroker'.coverAvailable = false ∧
-      res.loanBroker'.debtTotal = lb.debtTotal ∧ res.loanBroker'.debtMaximum = lb.debtMaximum := by
-  sorry
+      res.loanBroker'.debtTotal = lb.debtTotal ∧ res.loanBroker'.debtMaximum = lb.debtMaximum :=
+  have hf := LoanBroker.coverClawback_fixed_fields lb v amount res hok
+  ⟨LoanBroker.coverAvailable_stored lb _ hf (LoanBroker.Reachable.associateAsset_noop res.loanBroker' base
+      (LoanBroker.Reachable.coverClawback_step lb base hr v amount res hvb hnt hreq hcan hok)),
+    hf.debtTotal, LoanBroker.coverClawback_debtMaximum lb v amount res hok⟩
 
 end XRPL.Model.Lending
