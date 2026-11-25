@@ -7,6 +7,7 @@ import XRPL.Properties.Protocol.Number.Add.Common.Rounded
 import XRPL.Properties.Protocol.Number.Add.RoundsWithin
 import XRPL.Properties.Protocol.Number.Add.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.Common.Closest.Bounds
+import XRPL.Properties.Protocol.Number.Common.Closest.DecadeBridge
 import XRPL.Properties.Protocol.Number.Common.Closest.Defs
 import XRPL.Properties.Protocol.Number.Common.Closest.Existence
 import XRPL.Properties.Protocol.Number.Common.Closest.Gap
@@ -15,6 +16,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.Helpers
 import XRPL.Properties.Protocol.Number.Common.Closest.Identify
 import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 import XRPL.Properties.Protocol.Number.Common.Closest.Normalize
+import XRPL.Properties.Protocol.Number.Common.Closest.OpExact
 import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 import XRPL.Properties.Protocol.Number.Common.ClosestRepresentable
 import XRPL.Properties.Protocol.Number.Common.Constants

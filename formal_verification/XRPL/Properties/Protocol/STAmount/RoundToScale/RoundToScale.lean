@@ -16,8 +16,8 @@ theorem STAmount.roundToExponent_rounded (value result : STAmount) (s : ℤ)
     (h_s : (-96 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
     (hnz : result.mValue ≠ 0)
     (hok : STAmount.roundToExponent value s mode = .ok result) :
-    RoundsToRepresentableAt result value.toRat s mode := by
-  sorry
+    RoundsToRepresentableAt result value.toRat s mode :=
+  STAmount.roundToExponent_rounded_proof value result s mode hc h_s h_s_hi hnz hok
 
 /-- At a scale of at least `-81` the rounded value never flushes to zero, so `STAmount.roundToExponent` rounds onto
 the `10^s` grid with no assumption on the result. -/
@@ -26,8 +26,8 @@ theorem STAmount.roundToExponent_rounded_any (value result : STAmount) (s : ℤ)
     (hc : value.IOUCanonical)
     (h_s : (-81 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
     (hok : STAmount.roundToExponent value s mode = .ok result) :
-    RoundsToRepresentableAt result value.toRat s mode := by
-  sorry
+    RoundsToRepresentableAt result value.toRat s mode :=
+  STAmount.roundToExponent_rounded_any_proof value result s mode hc h_s h_s_hi hok
 
 /-- Witness that ToNearest can end more than half a step away: `1.499999999999999` at exponent 0 gives `2`. -/
 theorem STAmount.roundToExponent_nearest_up_attained :
@@ -35,8 +35,10 @@ theorem STAmount.roundToExponent_nearest_up_attained :
       value.IOUCanonical ∧
       -81 ≤ s ∧ s ≤ 80 ∧
       STAmount.roundToExponent value s .to_nearest = .ok result ∧
-      (10 : ℚ) ^ s / 2 < |result.toRat - value.toRat| := by
-  sorry
+      (10 : ℚ) ^ s / 2 < |result.toRat - value.toRat| :=
+  ⟨_, _, 0, STAmount.roundToExponent_nearest_witness_canonical 1499999999999999 (by decide) (by decide),
+    by norm_num, by norm_num, STAmount.roundToExponent_nearest_up_witness,
+    STAmount.roundToExponent_nearest_up_witness_gap⟩
 
 /-- Witness that ToNearest can end more than half a step away: `2.500000000000001` at exponent 0 gives `2`. -/
 theorem STAmount.roundToExponent_nearest_down_attained :
@@ -44,7 +46,9 @@ theorem STAmount.roundToExponent_nearest_down_attained :
       value.IOUCanonical ∧
       -81 ≤ s ∧ s ≤ 80 ∧
       STAmount.roundToExponent value s .to_nearest = .ok result ∧
-      (10 : ℚ) ^ s / 2 < |result.toRat - value.toRat| := by
-  sorry
+      (10 : ℚ) ^ s / 2 < |result.toRat - value.toRat| :=
+  ⟨_, _, 0, STAmount.roundToExponent_nearest_witness_canonical 2500000000000001 (by decide) (by decide),
+    by norm_num, by norm_num, STAmount.roundToExponent_nearest_down_witness,
+    STAmount.roundToExponent_nearest_down_witness_gap⟩
 
 end XRPL.Model.Protocol

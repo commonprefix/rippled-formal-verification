@@ -1,0 +1,24 @@
+import Mathlib.Tactic
+import XRPL.Model.Protocol.IntAmount
+import XRPL.Properties.Protocol.Number.ToRep.ToRep
+
+/-! # Proofs of the `IntAmount` constructor theorems
+
+`ofNumber` rounds a `Number` to a whole number within one, using `Number.to_rep`. -/
+
+namespace XRPL.Model.Protocol
+
+/-- `ofNumber` rounds to within one (it delegates to `Number.to_rep`). -/
+theorem IntAmount.ofNumber_within_one_proof (n : Number) (mode : rounding_mode)
+    (result : IntAmount) (hn : n.isNormalized)
+    (hok : IntAmount.ofNumber n mode = .ok result) :
+    |result.toRat - n.toRat| < 1 := by
+  unfold IntAmount.ofNumber at hok
+  split at hok
+  · rename_i rep heq
+    have hr : result.toRat = (rep.toInt : ℚ) := by
+      rw [← (Except.ok.inj hok)]; rfl
+    rw [hr]; exact Number.to_rep_within_one n mode rep hn heq
+  · exact absurd hok (by simp)
+
+end XRPL.Model.Protocol
