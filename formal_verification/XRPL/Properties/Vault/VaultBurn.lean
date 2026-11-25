@@ -18,7 +18,7 @@ theorem Vault.burnShares_sharesTotal_exact (v : Vault) (sharesDestroyed : STAmou
     (hcanon : sharesDestroyed.IntegralCanonical)
     (hnn : sharesDestroyed.negative = false)
     (hle : sharesDestroyed.toRat ≤ (v.toExact.sharesTotal : ℚ)) :
-    (v'.toExact.sharesTotal : ℚ) = (v.toExact.sharesTotal : ℚ) - sharesDestroyed.toRat := by
-  sorry
+    (v'.toExact.sharesTotal : ℚ) = (v.toExact.sharesTotal : ℚ) - sharesDestroyed.toRat :=
+  Vault.burnShares_sharesTotal_exact_proof v sharesDestroyed v' hok hcanon hnn hle
 
 end XRPL.Model.SingleAssetVault

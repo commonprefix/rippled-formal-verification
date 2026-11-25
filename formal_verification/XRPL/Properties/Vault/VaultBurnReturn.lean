@@ -12,8 +12,8 @@ variable (v : Vault)
 return. -/
 theorem Vault.canBurnShares_error_codes (amount holderShares : STAmount) (ter : TER)
     (hok : (v.canBurnShares amount holderShares).run = .ok (.error ter)) :
-    ter = .tecNO_PERMISSION ∨ ter = .tecLIMIT_EXCEEDED := by
-  sorry
+    ter = .tecNO_PERMISSION ∨ ter = .tecLIMIT_EXCEEDED :=
+  Vault.canBurnShares_error_codes_proof v amount holderShares ter hok
 
 /-- The exits of `canBurnShares`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem Vault.canBurnShares_exits (amount holderShares : STAmount) :
@@ -23,8 +23,9 @@ theorem Vault.canBurnShares_exits (amount holderShares : STAmount) :
     ∀ sharesTotalAmount : STAmount, v.isInsolvent = true →
       (!amount.isZero && !(amount.operator_eq holderShares)) = false →
       STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount →
-      (v.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) := by
-  sorry
+      (v.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) :=
+  ⟨Vault.canBurnShares_no_permission_proof v amount holderShares,
+    Vault.canBurnShares_limit_exceeded_proof v amount holderShares, Vault.canBurnShares_ok_proof v amount holderShares⟩
 
 /-- The exits of `burnShares`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem Vault.burnShares_exits (sharesDestroyed : STAmount) :
@@ -37,13 +38,15 @@ theorem Vault.burnShares_exits (sharesDestroyed : STAmount) :
       sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber →
       v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st' →
       ∃ v' : Vault, (v.burnShares sharesDestroyed).run = .ok (.ok v') ∧
-        v'.toRawVault = { v.toRawVault with sharesTotal := st' } := by
-  sorry
+        v'.toRawVault = { v.toRawVault with sharesTotal := st' } :=
+  ⟨Vault.burnShares_zero_shares_proof v sharesDestroyed,
+    fun amount holderShares sharesTotalAmount =>
+      Vault.burnShares_ok_proof v amount holderShares sharesDestroyed sharesTotalAmount⟩
 
 /-- `tecPRECISION_LOSS` is the only rejection `burnShares` can return. -/
 theorem Vault.burnShares_error_codes (sharesDestroyed : STAmount) (ter : TER)
     (hok : (v.burnShares sharesDestroyed).run = .ok (.error ter)) :
-    ter = .tecPRECISION_LOSS := by
-  sorry
+    ter = .tecPRECISION_LOSS :=
+  Vault.burnShares_error_codes_proof v sharesDestroyed ter hok
 
 end XRPL.Model.SingleAssetVault

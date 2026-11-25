@@ -16,8 +16,8 @@ open XRPL.Model.Protocol
 
 /-- Every vault reachable by vault transactions is lawful. -/
 theorem Vault.Reachable.lawful (v : Vault) (t : UInt32) (_hr : Vault.Reachable v t) :
-    v.toRawVault.WF ∧ v.toRawVault.Valid := by
-  sorry
+    v.toRawVault.WF ∧ v.toRawVault.Valid :=
+  ⟨v.wf, v.valid⟩
 
 /-- Every reachable vault -> AssetsDeployed = AssetsReserved = LossUnrealized = YieldUnrealized = 0, AssetsTotal =
 AssetsAvailable ≤ the Open limit (9·10^15 base units), and every share is worth at least one base unit of cash. -/
@@ -26,8 +26,9 @@ theorem Vault.Reachable.vault_fields (v : Vault) (t : UInt32) (hr : Vault.Reacha
       v.toExact.yieldUnrealized = 0) ∧
     v.assetsTotal = .ok v.assetsAvailable ∧
     v.assetsAvailable.toRat ≤ 9 * (10 : ℚ) ^ (15 + v.baseExponent) ∧
-    (v.toExact.sharesTotal : ℚ) * 10 ^ v.baseExponent ≤ v.assetsAvailable.toRat := by
-  sorry
+    (v.toExact.sharesTotal : ℚ) * 10 ^ v.baseExponent ≤ v.assetsAvailable.toRat :=
+  ⟨Vault.Reachable.lendingFields_zero_proof v t hr, Vault.Reachable.asset_parity_proof v t hr,
+    Vault.Reachable.assetsAvailable_le_openLimit_proof v t hr, Vault.Reachable.sharesTotal_le_cash_proof v t hr⟩
 
 /-- On a reachable vault -> a deposit adds exactly its charge and minted shares, a withdrawal or clawback subtracts
 exactly its payout and burned shares. A deposit never decreases the cash, withdrawal and clawback never increase it. -/
@@ -53,6 +54,28 @@ theorem Vault.vault_updates_exact (v : Vault) (t0 : UInt32) (hr : Vault.Reachabl
         r.vault'.assetsAvailable.toRat = v.assetsAvailable.toRat - r.assets.toRat ∧
           (r.vault'.toExact.sharesTotal : ℚ) = v.toExact.sharesTotal - r.shares.toRat ∧
           r.vault'.assetsAvailable.toRat ≤ v.assetsAvailable.toRat := by
-  sorry
+  refine ⟨fun amount isDonation t hpos hc hty r hok => ?_, fun amount waive t hpos hc hty r hok => ?_,
+    fun assets holderShares waive hnn hc hhs r hok => ?_⟩
+  · have hmax := Vault.maxValue_fits_of_canonical v amount hc hty
+    obtain ⟨hA, hS⟩ := Vault.deposit_vault_updates_exact_proof v amount isDonation t t0 hpos hr hc hty hmax r hok
+    -- the charge is nonnegative
+    obtain ⟨ra, amounts, -, hra, hcomp, -, -, -, hras, -⟩ := Vault.deposit_ok_reduces v amount isDonation t hpos r hok
+    obtain ⟨hra1, hra2, -⟩ := v.roundedDepositAmount_form amount ra hc hty hra
+    have h0 := (computeDeposit_assets_form v ra isDonation amounts hra1 hra2 hmax hcomp).2.2
+    rw [← hras] at h0
+    exact ⟨hA, hS, by linarith⟩
+  · have hmax := Vault.Reachable.maxValue_fits v t0 hr
+      (Vault.withdraw_sharesTotal_pos v amount waive t hpos hc hty r hok)
+    obtain ⟨hA, hS⟩ := Vault.withdraw_vault_updates_exact_proof v amount waive t t0 hpos hr hc hty hmax r hok
+    -- the payout is whole base units
+    obtain ⟨-, ⟨j, hj⟩, -⟩ :=
+      Vault.withdraw_payout_units v amount waive t hpos (Vault.Reachable.openZone_proof v t0 hr hmax) hmax r hok
+    have h0 : 0 ≤ r.assets.toRat := by rw [hj]; positivity
+    exact ⟨hA, hS, by linarith⟩
+  · have hmax := Vault.Reachable.maxValue_fits v t0 hr
+      (Vault.Reachable.clawback_sharesTotal_pos v t0 hr assets holderShares waive hhs hnn r hok)
+    obtain ⟨hA, hS⟩ := Vault.clawback_vault_updates_exact_proof v assets holderShares waive t0 hnn hr hc hhs hmax r hok
+    have h0 := Vault.clawback_assets_nonneg v assets holderShares waive hnn hc hhs hmax r hok
+    exact ⟨hA, hS, by linarith⟩
 
 end XRPL.Model.SingleAssetVault

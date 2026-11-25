@@ -56,15 +56,29 @@ theorem Vault.no_dilution (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0) 
       -- the recovery stays at or below the destroyed shares' worth only when that worth is a whole number of base
       -- units
       (∃ k : ℤ, v.idealAssetsWithdraw waiveUnrealizedLoss r.shares.toRat = k * 10 ^ v.baseExponent) →
-      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
-  sorry
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+  ⟨fun amountDeposit t hpos hcanon hty r hok hworth =>
+    Vault.Reachable.deposit_no_dilution_intended_proof v amountDeposit t t0 hpos hr hcanon hty r hok hworth,
+    fun amountDeposit t hpos hcanon hty r hok =>
+      have h := Vault.deposit_donation_no_dilution_proof v amountDeposit t t0 hpos hr hcanon hty
+        (Vault.maxValue_fits_of_canonical v amountDeposit hcanon hty) r hok
+      ⟨h.1, h.2, Vault.deposit_donation_sharesTotal_pos v amountDeposit t hpos r hok⟩,
+    fun amount waiveUnrealizedLoss t hpos hc hty r hok hworth =>
+      Vault.Reachable.withdraw_no_dilution_intended_proof v amount waiveUnrealizedLoss t t0 hpos hr hc hty
+        (Vault.Reachable.maxValue_fits v t0 hr
+          (Vault.withdraw_sharesTotal_pos v amount waiveUnrealizedLoss t hpos hc hty r hok)) r hok hworth,
+    fun assets holderShares waiveUnrealizedLoss hnn hc hhs r hok hworth =>
+      Vault.Reachable.clawback_no_dilution_intended_proof v assets holderShares waiveUnrealizedLoss t0 hnn hr hc hhs
+        (Vault.Reachable.maxValue_fits v t0 hr
+          (Vault.Reachable.clawback_sharesTotal_pos v t0 hr assets holderShares waiveUnrealizedLoss hhs hnn r hok))
+        r hok hworth⟩
 
 /-- From a reachable vault, over any operations while SharesTotal > 0, the per-share value never falls.
 `h` - `whole` gives each step the one-step `hworth`. -/
 theorem Vault.ReachableFromIn.no_dilution (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
     (t : UInt32) (n : ℕ) (w : Vault) (h : Vault.ReachableFromIn true v t w n) :
-    w.withdrawNav / (w.toExact.sharesTotal : ℚ) ≥ v.withdrawNav / (v.toExact.sharesTotal : ℚ) := by
-  sorry
+    w.withdrawNav / (w.toExact.sharesTotal : ℚ) ≥ v.withdrawNav / (v.toExact.sharesTotal : ℚ) :=
+  Vault.ReachableFromIn.no_dilution_intended_proof v t0 hr t n w h
 
 /-- Witness for `no_dilution` on a deposit: on a reachable IOU vault a deposit charged the worth rounded down lowers
 per-share value. -/
@@ -76,7 +90,9 @@ theorem Vault.no_dilution_deposit_grid_attained :
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
       v.numericType.isIntegral = false ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
-  sorry
+  obtain ⟨v, amountDeposit, t, t0, hpos, r, hr, hcanon, hty, -, hok, hiou, heq⟩ :=
+    Vault.deposit_no_dilution_grid_witness
+  exact ⟨v, amountDeposit, t, t0, hpos, r, hr, hcanon, hty, hok, hiou, heq⟩
 
 /-- Witness for `no_dilution` on a deposit: on a reachable integral vault a deposit charged half a unit below the issued
 share's worth (`2` for `2.5`) lowers per-share value. -/
@@ -87,8 +103,8 @@ theorem Vault.no_dilution_deposit_integral_attained :
       amountDeposit.mNumericType = v.numericType ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
       v.numericType.isIntegral = true ∧
-      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
-  sorry
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+  Vault.deposit_no_dilution_integral_witness
 
 /-- Witness for `no_dilution` on a withdrawal: on a reachable vault a withdrawal of one of 2 shares, worth `1.5`,
 for `2` lowers per-share value by half a unit. -/
@@ -100,7 +116,9 @@ theorem Vault.no_dilution_withdraw_half_ulp_attained :
       amount.InAsset v.numericType ∧
       (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
-  sorry
+  obtain ⟨v, amount, waiveUnrealizedLoss, t, t0, hpos, r, hr, hc, hty, -, hok, heq⟩ :=
+    Vault.withdraw_no_dilution_half_ulp_witness
+  exact ⟨v, amount, waiveUnrealizedLoss, t, t0, hpos, r, hr, hc, hty, hok, heq⟩
 
 /-- Witness for `no_dilution` on a clawback: on a reachable vault a clawback of one of 2 shares, worth `1.5`,
 recovering `2` lowers per-share value by half a unit. -/
@@ -112,7 +130,9 @@ theorem Vault.no_dilution_clawback_half_ulp_attained :
       holderShares.ShareBalance ∧
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
-  sorry
+  obtain ⟨v, assets, holderShares, waiveUnrealizedLoss, t0, hnn, r, hr, hc, hhs, -, hok, heq⟩ :=
+    Vault.clawback_no_dilution_half_ulp_witness
+  exact ⟨v, assets, holderShares, waiveUnrealizedLoss, t0, hnn, r, hr, hc, hhs, hok, heq⟩
 
 /-- Witness for `no_dilution` on a clawback with a zero amount: a zero amount claws a one-share holding, worth
 `1.5`, recovering `2`, and per-share value falls. -/
@@ -126,7 +146,9 @@ theorem Vault.no_dilution_clawback_zero_half_ulp_attained :
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
       r.shares.toRat = holderShares.toRat ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) < v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
-  sorry
+  obtain ⟨v, assets, holderShares, waiveUnrealizedLoss, t0, hnn, r, hr, hc, hhs, -, hz, hok, hrs, heq⟩ :=
+    Vault.clawback_no_dilution_zero_half_ulp_witness
+  exact ⟨v, assets, holderShares, waiveUnrealizedLoss, t0, hnn, r, hr, hc, hhs, hz, hok, hrs, heq⟩
 
 /-- Witness for `ReachableFromIn.no_dilution`: from 7 assets and 4 shares, two withdrawals that each overpay by half
 a unit, worths `3.5` and `1.5` not whole, lower per-share value `7/4 → 3/2 → 1`. -/
@@ -135,8 +157,8 @@ theorem Vault.ReachableFromIn.dilution_attained :
       Vault.Reachable v t0 ∧
       Vault.ReachableFromIn false v t w n ∧
       1 < n ∧
-      w.withdrawNav / (w.toExact.sharesTotal : ℚ) < v.withdrawNav / (v.toExact.sharesTotal : ℚ) := by
-  sorry
+      w.withdrawNav / (w.toExact.sharesTotal : ℚ) < v.withdrawNav / (v.toExact.sharesTotal : ℚ) :=
+  Vault.ReachableFromIn.dilution_witness
 
 /-- Witness for `ReachableFromIn.no_dilution`: on an IOU vault at Scale 2, 100 deposits of 0.03, each charge rounded
 down to the vault scale, lower per-share value `1/70 → 17/1200`. -/
@@ -146,7 +168,7 @@ theorem Vault.ReachableFromIn.dilution_deposit_attained :
       Vault.DepositRun v t w charged shares n ∧
       Vault.ReachableFromIn false v t w n ∧
       1 < n ∧
-      w.withdrawNav / (w.toExact.sharesTotal : ℚ) < v.withdrawNav / (v.toExact.sharesTotal : ℚ) := by
-  sorry
+      w.withdrawNav / (w.toExact.sharesTotal : ℚ) < v.withdrawNav / (v.toExact.sharesTotal : ℚ) :=
+  Vault.ReachableFromIn.dilution_deposit_witness
 
 end XRPL.Model.SingleAssetVault

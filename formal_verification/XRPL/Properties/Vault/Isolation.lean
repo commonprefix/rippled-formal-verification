@@ -60,8 +60,22 @@ theorem Vault.Reachable.isolation (v : Vault) (t0 t : UInt32) (hr : Vault.Reacha
       (v.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) →
       (v.burnShares holderShares).run = .ok (.ok v') →
       ∀ waive' : Bool, ∃ r' : VaultWithAmounts,
-        (v'.withdraw (.vaultShares shares) waive' t hpos).run = .ok (.ok r') := by
-  sorry
+        (v'.withdraw (.vaultShares shares) waive' t hpos).run = .ok (.ok r') :=
+  ⟨fun amount isDonation hposX r hcX htyX hok waive' =>
+    Vault.Reachable.isolation_deposit_proof v t0 t hr ht shares waive hpos hc hty rW hW amount isDonation hposX hcX
+      htyX r hok waive',
+    fun amount holderShares waiveX hposX r hcX htyX hhs hsole hok hheld hother hwhole waive' =>
+    Vault.Reachable.isolation_withdraw_proof v t0 t hr ht shares waive hpos hc hty rW hW amount holderShares waiveX
+      hposX hcX htyX hhs hsole r hok hheld hother hwhole waive',
+    fun assets holderShares waiveX hnn r hcX htyX hhs hsole hok hother hwhole waive' =>
+    Vault.Reachable.isolation_clawback_proof v t0 t hr ht shares waive hpos hc hty rW hW assets holderShares waiveX
+      hnn hcX htyX hhs hsole r hok hother hwhole waive',
+    fun assetsMaximum blockDeposit v' hcan hok waive' =>
+    Vault.Reachable.isolation_update_proof v t0 t hr ht shares waive hpos hc hty rW hW assetsMaximum blockDeposit
+      v' hcan hok waive',
+    fun amount holderShares sharesTotalAmount _ hcan _ _ =>
+    (Vault.Reachable.isolation_burn_proof v t0 t hr shares waive hpos hc hty rW hW amount holderShares
+      sharesTotalAmount hcan).elim⟩
 
 /-- Witness for `Reachable.isolation` on a clawback: under a 75% fee, clawing back IOU shares worth a fraction of a
 base unit lowers the per-share value, and a withdrawal of shares worth exactly 4 then pays nothing. -/
@@ -84,8 +98,8 @@ theorem Vault.Reachable.isolation_clawback_attained :
       v.earlyExitFeeRateAt t ≠ 0 ∧
       v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate ∧
       (∃ k : ℤ, v.idealAssetsWithdraw waive shares.toRat = k * 10 ^ v.baseExponent) ∧
-      (r.vault'.withdraw (.vaultShares shares) waive t hpos).run = .ok (.error .tecPRECISION_LOSS) := by
-  sorry
+      (r.vault'.withdraw (.vaultShares shares) waive t hpos).run = .ok (.error .tecPRECISION_LOSS) :=
+  Vault.Reachable.isolation_clawback_witness
 
 /-- Witness for `Reachable.isolation` on a clawback worth whole base units: the per-share value stays, but 9089 MPT
 shares worth `9090.5` price at 9091 before and at 9090 after, which a 99.989% fee leaves at nothing. -/
@@ -109,7 +123,7 @@ theorem Vault.Reachable.isolation_clawback_tie_attained :
       v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate ∧
       (∃ k : ℤ, v.idealAssetsWithdraw waiveX r.shares.toRat = k * 10 ^ v.baseExponent) ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) = v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) ∧
-      (r.vault'.withdraw (.vaultShares shares) waive t hpos).run = .ok (.error .tecPRECISION_LOSS) := by
-  sorry
+      (r.vault'.withdraw (.vaultShares shares) waive t hpos).run = .ok (.error .tecPRECISION_LOSS) :=
+  Vault.Reachable.isolation_clawback_tie_witness
 
 end XRPL.Model.SingleAssetVault

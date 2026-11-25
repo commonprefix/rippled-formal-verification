@@ -57,8 +57,20 @@ theorem Vault.clawback_sharesDestroyed (v : Vault) :
       -- the 19-digit price can cross a whole number within `sharesε` of the ideal
       (∀ n : ℤ, v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat * sharesε <
         |v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat - n|) →
-      r.shares.toRat = ⌊v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat⌋ := by
-  sorry
+      r.shares.toRat = ⌊v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat⌋ :=
+  ⟨fun assets holderShares sharesDestroyed assetsRecovered waiveUnrealizedLoss assetsRecoveredNumber netAssetValue
+      hc hnav hshares hassets hnum hle hznz hnn r hok hgap =>
+    let h := shares_floor_of_gap _ _ _ _ le_rfl sharesε_nonneg le_rfl
+      (Vault.clawback_sharesDestroyed_total_proof v assets holderShares sharesDestroyed assetsRecovered
+        waiveUnrealizedLoss assetsRecoveredNumber netAssetValue hnav hc hshares hassets hnum hle hznz hnn r hok) hgap
+    shares_eq_floor _ _ h.1 h.2.2.1 h.2.2.2,
+    fun assets holderShares sharesDestroyed assetsRecovered assetsRecovered' waiveUnrealizedLoss assetsRecoveredNumber
+      netAssetValue hnav hmax hshares hassets hnum hgt hclamped hznz hnn r hok hgap =>
+    let h := shares_floor_of_gap _ _ _ _ le_rfl sharesε_nonneg le_rfl
+      (Vault.clawback_sharesDestroyed_clamped_total_proof v assets holderShares sharesDestroyed assetsRecovered
+        assetsRecovered' waiveUnrealizedLoss assetsRecoveredNumber netAssetValue hnav hmax hshares hassets hnum
+        hgt hclamped hznz hnn r hok) hgap
+    shares_eq_floor _ _ h.1 h.2.2.1 h.2.2.2⟩
 
 /-- Clawback on any lawful vault, with amount = 0 -> sharesDestroyed = the holder's whole balance ≠ 0, and
 assetsRecovered − sharesWorth ≤ 0. -/
@@ -83,8 +95,12 @@ theorem Vault.clawback_zero_all_shares (v : Vault)
       ∀ netAssetValue : Number, v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue →
         (∃ k : ℤ, v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat = k * 10 ^ v.baseExponent) →
         v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent →
-        r.assets.toRat ≤ v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat) := by
-  sorry
+        r.assets.toRat ≤ v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat) :=
+  have h := Vault.clawback_zero_all_shares_proof v assets holderShares assetsRecovered reported waiveUnrealizedLoss
+    assetsRecoveredNumber hhs hsole hz hassets hnum hle hclamp hnn r hok
+  ⟨h.1, h.2.1, h.2.2, fun hmax netAssetValue hnav hk hlim =>
+    (Vault.clawback_assetsRecovered_intended_total_proof v assets holderShares waiveUnrealizedLoss netAssetValue hnav
+      (Or.inr hz) hhs hnn hmax r hok).2.2 hk hlim⟩
 
 /-- Witness: a run where a clawback with amount = 0 recovers more than sharesWorth. A one-share holding worth `1.5`
 recovers `2`. -/
@@ -98,8 +114,8 @@ theorem Vault.clawback_zero_all_shares_attained :
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
       r.shares.toRat = holderShares.toRat ∧
       v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
-      v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat < r.assets.toRat := by
-  sorry
+      v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat < r.assets.toRat :=
+  Vault.clawback_zero_overshoot_witness
 
 /-- Clawback -> the recovery never exceeds the cash nor the destroyed shares' worth, and for a nonzero clawed amount on
 a reachable vault falls short of it by less than one base unit. -/
@@ -130,8 +146,15 @@ theorem Vault.clawback_assetsRecovered (v : Vault) (assets holderShares : STAmou
       0 ≤ r.assets.toRat ∧
       ((∃ k : ℤ, v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat = k * 10 ^ v.baseExponent) →
         v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent →
-        r.assets.toRat ≤ v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat) := by
-  sorry
+        r.assets.toRat ≤ v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat) :=
+  ⟨fun t0 hr hc hznz => Vault.clawback_assetsRecovered_intended_proof v assets holderShares waiveUnrealizedLoss t0 hr
+      hc hznz hnn
+      (Vault.Reachable.maxValue_fits v t0 hr
+        (Vault.Reachable.clawback_sharesTotal_pos_of_nonzero v t0 hr assets holderShares waiveUnrealizedLoss hznz
+          hnn r hok))
+      r hok,
+    fun netAssetValue hnav hc hhs hmax => Vault.clawback_assetsRecovered_intended_total_proof v assets holderShares
+      waiveUnrealizedLoss netAssetValue hnav hc hhs hnn hmax r hok⟩
 
 /-- Witness for `clawback_sharesDestroyed`: on a reachable vault a clawback destroys fewer shares than the ideal rounded
 down. -/
@@ -149,8 +172,8 @@ theorem Vault.clawback_sharesDestroyed_truncation_attained :
       assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧
       assets.isZero = false ∧
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
-      r.shares.toRat < ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ := by
-  sorry
+      r.shares.toRat < ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ :=
+  Vault.clawback_sharesDestroyed_witness
 
 /-- Witness for `clawback_sharesDestroyed`: on a reachable vault a clawback destroys more shares than the ideal rounded
 down, the ideal sitting just below a whole share. -/
@@ -168,8 +191,8 @@ theorem Vault.clawback_sharesDestroyed_relative_attained :
       assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧
       assets.isZero = false ∧
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
-      ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ < r.shares.toRat := by
-  sorry
+      ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ < r.shares.toRat :=
+  Vault.clawback_sharesDestroyed_upper_witness
 
 /-- Witness for `clawback_assetsRecovered`: on a reachable vault a run recovers more than the destroyed shares'
 worth, half a unit above it (`2` for `1.5`). -/
@@ -182,6 +205,8 @@ theorem Vault.clawback_assetsRecovered_overshoot_attained :
       assets.isZero = false ∧
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
       v.idealAssetsClawback waiveUnrealizedLoss r.shares.toRat < r.assets.toRat := by
-  sorry
+  obtain ⟨v, t0, assets, holderShares, waiveUnrealizedLoss, hnn, r, hr, hhold, hc, hznz, -, hok, heq⟩ :=
+    Vault.clawback_assetsRecovered_upper_witness
+  exact ⟨v, t0, assets, holderShares, waiveUnrealizedLoss, hnn, r, hr, hhold, hc, hznz, hok, heq⟩
 
 end XRPL.Model.SingleAssetVault
