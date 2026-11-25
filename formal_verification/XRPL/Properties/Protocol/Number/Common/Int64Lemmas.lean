@@ -1,0 +1,111 @@
+import XRPL.Properties.Protocol.Number.Common.Rounding.DoRoundUp
+import Mathlib.Tactic
+
+/-! # Int64 ↔ ℤ bridges
+
+`Int64` arithmetic wraps modulo `2^64`. The lemmas below take a bound that keeps every value under `2^63` in
+magnitude, so the operations match integer arithmetic. -/
+
+namespace XRPL.Model.Protocol
+
+/-- Int64←UInt64 cast bridge: when a `UInt64` value fits in the non-negative
+`Int64` range (`< 2^63`), `UInt64.toInt64` preserves the value. -/
+lemma UInt64.toInt64_toInt_of_lt (u : UInt64) (h : u.toNat < 2 ^ 63) :
+    u.toInt64.toInt = (u.toNat : ℤ) := by
+  unfold Int64.toInt UInt64.toInt64
+  change u.toBitVec.toInt = (u.toNat : ℤ)
+  have hb : u.toBitVec.toNat = u.toNat := rfl
+  rw [BitVec.toInt_eq_toNat_of_lt (by rw [hb]; omega), hb]
+
+/-- When a `UInt64` value is below `2^63`, negating its `Int64` view negates its integer value, since the `bmod`
+wraparound has no effect in that range. -/
+lemma UInt64.neg_toInt64_toInt_of_lt (u : UInt64) (h : u.toNat < 2 ^ 63) :
+    (-u.toInt64).toInt = -(u.toNat : ℤ) := by
+  rw [Int64.toInt_neg, UInt64.toInt64_toInt_of_lt u h, Int.bmod_eq_iff (by norm_num)]
+  omega
+
+/-- `10` as an `Int64` has integer value `10`. -/
+lemma int64_ten_toInt : (10 : Int64).toInt = 10 := by decide
+
+/-- `1` as an `Int64` has integer value `1`. -/
+lemma int64_one_toInt : (1 : Int64).toInt = 1 := by decide
+
+/-- Multiplying by `10` is exact while the value stays in the `Int64` range. -/
+lemma toInt_mul_ten_of_le (a : Int64) (h0 : 0 ≤ a.toInt)
+    (hle : a.toInt ≤ maxRep.toNat / 10) :
+    (a * 10).toInt = a.toInt * 10 := by
+  have hmax : (maxRep.toNat : ℤ) / 10 * 10 < 2 ^ 63 := by rw [maxRep_val]; norm_num
+  have h0' : (0 : ℤ) ≤ a.toInt * 10 := by positivity
+  rw [Int64.toInt_mul, int64_ten_toInt, Int.bmod_eq_iff (by norm_num)]
+  have hub : a.toInt * 10 ≤ (maxRep.toNat : ℤ) / 10 * 10 := by
+    have : a.toInt ≤ (maxRep.toNat : ℤ) / 10 := by exact_mod_cast hle
+    nlinarith
+  push_cast
+  omega
+
+/-- Negating a non-negative `Int64` is exact (the value is in `[0, 2^63)`, so its
+negation is in `(-2^63, 0]`, within range). -/
+lemma toInt_neg_of_nonneg (a : Int64) (h0 : 0 ≤ a.toInt) :
+    (-a).toInt = -a.toInt := by
+  have ha2 := Int64.toInt_lt a
+  rw [Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
+  refine ⟨?_, ?_⟩ <;> push_cast <;> omega
+
+/-- Dividing a non-negative `Int64` by `10` is exact (floor division). -/
+lemma toInt_div_ten_of_nonneg (a : Int64) (h0 : 0 ≤ a.toInt) :
+    (a / 10).toInt = a.toInt / 10 := by
+  have ha2 := Int64.toInt_lt a
+  have hdiv_nonneg : 0 ≤ a.toInt / 10 := Int.ediv_nonneg h0 (by norm_num)
+  have hdiv_le : a.toInt / 10 ≤ a.toInt := Int.ediv_le_self _ h0
+  rw [Int64.toInt_div, int64_ten_toInt, Int.bmod_eq_iff (by norm_num)]
+  rw [Int.tdiv_eq_ediv_of_nonneg h0]
+  omega
+
+/-- `Int64`-mod by `10` of a non-negative value is exact. -/
+lemma toInt_mod_ten_of_nonneg (a : Int64) (h0 : 0 ≤ a.toInt) :
+    (a % 10).toInt = a.toInt % 10 := by
+  rw [Int64.toInt_mod, int64_ten_toInt, Int.tmod_eq_emod_of_nonneg h0]
+
+/-- The `UInt64` view of a non-negative `Int64` bounded by `maxRep` is at most `maxRep`. -/
+lemma toUInt64_toNat_le_maxRep (a : Int64) (h0 : 0 ≤ a.toInt)
+    (hle : a.toInt ≤ (maxRep.toNat : ℤ)) :
+    a.toUInt64.toNat ≤ maxRep.toNat := by
+  have hbr := toUInt64_toNat_of_nonneg a h0
+  omega
+
+/-- Integer value of the signed mantissa `±m`. -/
+lemma signed_mantissa_toInt (neg : Bool) (m : UInt64) (h : m.toNat < 2 ^ 63) :
+    (if neg then -m.toInt64 else m.toInt64).toInt
+      = (if neg then -1 else 1) * (m.toNat : ℤ) := by
+  cases neg with
+  | false =>
+    simp only [Bool.false_eq_true, ite_false, one_mul]
+    exact UInt64.toInt64_toInt_of_lt m h
+  | true =>
+    simp only [ite_true]
+    rw [UInt64.neg_toInt64_toInt_of_lt m h]; ring
+
+/-- Magnitude of the signed mantissa `±m` is `m`. -/
+lemma signed_mantissa_natAbs (neg : Bool) (m : UInt64) (h : m.toNat < 2 ^ 63) :
+    (if neg then -m.toInt64 else m.toInt64).toInt.natAbs = m.toNat := by
+  rw [signed_mantissa_toInt neg m h]
+  cases neg <;> simp
+
+/-- The sign decision recovers `neg` for a nonzero signed mantissa `±m`. -/
+lemma signed_mantissa_decide_neg (neg : Bool) (m : UInt64)
+    (h : m.toNat < 2 ^ 63) (hpos : 0 < m.toNat) :
+    decide ((if neg then -m.toInt64 else m.toInt64) < 0) = neg := by
+  have h0 : (0 : Int64).toInt = 0 := by decide
+  cases neg with
+  | false =>
+    apply decide_eq_false
+    rw [Int64.lt_iff_toInt_lt, signed_mantissa_toInt false m h, h0]
+    simp only [Bool.false_eq_true, ite_false, one_mul]
+    omega
+  | true =>
+    apply decide_eq_true
+    rw [Int64.lt_iff_toInt_lt, signed_mantissa_toInt true m h, h0]
+    simp only [ite_true]
+    omega
+
+end XRPL.Model.Protocol

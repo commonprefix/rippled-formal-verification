@@ -14,26 +14,26 @@ theorem Number.operator_div_rounded_downward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y .downward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
-    Number.RoundsToRepresentable result (x.toRat / y.toRat) .downward := by
-  sorry
+    Number.RoundsToRepresentable result (x.toRat / y.toRat) .downward :=
+  Number.operator_div_rounded_downward_proof x y result hx hy hok hresult
 
 theorem Number.operator_div_rounded_upward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y .upward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
-    Number.RoundsToRepresentable result (x.toRat / y.toRat) .upward := by
-  sorry
+    Number.RoundsToRepresentable result (x.toRat / y.toRat) .upward :=
+  Number.operator_div_rounded_upward_proof x y result hx hy hok hresult
 
 theorem Number.operator_div_rounded_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y .towards_zero = .ok result) :
-    Number.RoundsToRepresentable result (x.toRat / y.toRat) .towards_zero := by
-  sorry
+    Number.RoundsToRepresentable result (x.toRat / y.toRat) .towards_zero :=
+  Number.operator_div_rounded_towards_zero_proof x y result hx hy hok
 
 theorem Number.operator_div_rounded_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y .to_nearest = .ok result) :
-    Number.RoundsToRepresentable result (x.toRat / y.toRat) .to_nearest := by
-  sorry
+    Number.RoundsToRepresentable result (x.toRat / y.toRat) .to_nearest :=
+  Number.operator_div_rounded_to_nearest_proof x y result hx hy hok
 
 end XRPL.Model.Protocol

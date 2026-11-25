@@ -5,12 +5,12 @@ namespace XRPL.Model.Protocol
 
 /-- The public `mantissa()` and `exponent()` accessors give back the value: `mantissa · 10^exponent = toRat`. -/
 theorem Number.mantissa_mul_exponent_eq_toRat (n : Number) (hn : n.isNormalized) :
-    (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent = n.toRat := by
-  sorry
+    (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent = n.toRat :=
+  Number.mantissa_mul_exponent_eq_toRat_proof n hn
 
 /-- The public mantissa fits the signed rep: `|mantissa| ≤ maxRep = 2^63 - 1` -/
 theorem Number.mantissa_natAbs_le_maxRep (n : Number) (_hn : n.isNormalized) :
-    (n.mantissa).toInt.natAbs ≤ maxRep.toNat := by
-  sorry
+    (n.mantissa).toInt.natAbs ≤ maxRep.toNat :=
+  Number.mantissa_natAbs_le_maxRep_proof n _hn
 
 end XRPL.Model.Protocol

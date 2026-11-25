@@ -2,6 +2,17 @@ name = "XRPL"
 defaultTargets = ["XRPL"]
 allowNonModules = true
 
+[leanOptions]
+weak.backward.do.legacy = true
+pp.unicode.fun = true
+relaxedAutoImplicit = false
+weak.linter.mathlibStandardSet = true
+weak.linter.style.longLine = false
+weak.linter.style.emptyLine = false
+weak.linter.style.show = false
+weak.linter.style.header = false
+maxSynthPendingDepth = 3
+
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
