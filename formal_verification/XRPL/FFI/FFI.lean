@@ -4,3 +4,11 @@ import XRPL.FFI.Protocol.IntAmountFFI
 import XRPL.FFI.Protocol.NumberFFI
 import XRPL.FFI.Protocol.NumericTypeFFI
 import XRPL.FFI.Protocol.STAmountFFI
+import XRPL.FFI.Vault.Vault
+import XRPL.FFI.Vault.VaultBurn
+import XRPL.FFI.Vault.VaultClawback
+import XRPL.FFI.Vault.VaultCreate
+import XRPL.FFI.Vault.VaultDelete
+import XRPL.FFI.Vault.VaultDeposit
+import XRPL.FFI.Vault.VaultSet
+import XRPL.FFI.Vault.VaultWithdraw
