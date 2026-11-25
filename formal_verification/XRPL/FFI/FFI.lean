@@ -12,3 +12,5 @@ import XRPL.FFI.Vault.VaultDelete
 import XRPL.FFI.Vault.VaultDeposit
 import XRPL.FFI.Vault.VaultSet
 import XRPL.FFI.Vault.VaultWithdraw
+import XRPL.FFI.Lending.LoanBroker
+import XRPL.FFI.Lending.Loan
