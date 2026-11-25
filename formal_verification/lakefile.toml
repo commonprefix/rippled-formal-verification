@@ -22,5 +22,5 @@ rev = "v4.35.0"
 # xrpld is built from lakefile-model.toml, without mathlib.
 [[lean_lib]]
 name = "XRPL"
-# XRPL.lean with what it imports, and every file under XRPL/Model/ and XRPL/FFI/.
-globs = ["XRPL", "XRPL.Model.+", "XRPL.FFI.+"]
+# Every file under XRPL/, so a file is checked even if nothing imports it.
+globs = ["XRPL", "XRPL.+"]
