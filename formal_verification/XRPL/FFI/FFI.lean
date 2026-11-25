@@ -1,2 +1,6 @@
--- Every FFI module. Its initializer, `initialize_XRPL_XRPL_FFI_FFI`, is the one
--- the C++ tests call.
+import XRPL.FFI.CommonFFI
+import XRPL.FFI.Protocol.IOUAmountFFI
+import XRPL.FFI.Protocol.IntAmountFFI
+import XRPL.FFI.Protocol.NumberFFI
+import XRPL.FFI.Protocol.NumericTypeFFI
+import XRPL.FFI.Protocol.STAmountFFI
