@@ -22,21 +22,22 @@ theorem Loan.canPay_exits :
       loan.canPay paymentType = .tecKILLED) ∧
     (loan.isPending = false → (paymentType = .overpayment → loan.allowsOverpayment = true) →
       loan.paymentRemaining ≠ 0 → loan.principalOutstanding ≠ Number.zero →
-      loan.canPay paymentType = .tesSUCCESS) := by
-  sorry
+      loan.canPay paymentType = .tesSUCCESS) :=
+  ⟨Loan.canPay_pending_proof loan paymentType, Loan.canPay_overpayment_not_allowed_proof loan,
+    Loan.canPay_paid_off_proof loan paymentType, Loan.canPay_success_proof loan paymentType⟩
 
 /-- Error codes: success, tecNO_PERMISSION or tecKILLED. -/
 theorem Loan.canPay_error_codes :
     loan.canPay paymentType = .tesSUCCESS ∨ loan.canPay paymentType = .tecNO_PERMISSION ∨
-      loan.canPay paymentType = .tecKILLED := by
-  sorry
+      loan.canPay paymentType = .tecKILLED :=
+  Loan.canPay_error_codes_proof loan paymentType
 
 /-- Success ⟺ the loan is active, not paid off, and allows overpayment when one is requested. -/
 theorem Loan.canPay_lawful_iff :
     loan.canPay paymentType = .tesSUCCESS ↔
       loan.isPending = false ∧ (paymentType = .overpayment → loan.allowsOverpayment = true) ∧
-        loan.paymentRemaining ≠ 0 ∧ loan.principalOutstanding ≠ Number.zero := by
-  sorry
+        loan.paymentRemaining ≠ 0 ∧ loan.principalOutstanding ≠ Number.zero :=
+  Loan.canPay_lawful_iff_proof loan paymentType
 
 /-! ## The exits of the four payments -/
 
@@ -134,8 +135,21 @@ theorem Loan.payment_exits (t : UInt32) (hreach : loan.Reachable t) :
       v'.assetsTotal = .ok assetsTotal' →
       (v'.assetsAvailable ≠ payment.pool.assetsAvailable ∨ payment.loan.paymentRemaining = 0) →
       (loan.pay v paymentType amount now).run =
-        .ok (.ok { loan' := loan', pool' := v', amountToPool := toPool, amountToBroker := toBroker }) := by
-  sorry
+        .ok (.ok { loan' := loan', pool' := v', amountToPool := toPool, amountToBroker := toBroker }) :=
+  have hdue := Loan.Reachable.nextPaymentDueDate_ne_zero loan t hreach
+  ⟨⟨fun hr hpo hlate => Loan.regularPayment_late_proof loan v amount now hr hpo hdue hlate,
+      fun hr hpo hlate => Loan.fullPayment_late_proof loan v amount now hr hpo hdue hlate,
+      fun hr hpo hlate => Loan.overpayment_late_proof loan v amount now hr hpo hdue hlate,
+      fun hr hpo hsoon => Loan.latePayment_too_soon_proof loan v amount now hr hpo hdue hsoon,
+      fun hpo hone hsoon => Loan.fullPayment_last_proof loan v amount now hpo hdue hone hsoon,
+      Loan.payment_impaired_bad_ledger_proof loan v amount now, Loan.payment_insufficient_proof loan v amount now⟩,
+    ⟨Loan.payment_negative_part_proof loan v amount now paymentType,
+      Loan.payment_deployed_bad_ledger_proof loan v amount now paymentType,
+      Loan.payment_yield_bad_ledger_proof loan v amount now paymentType,
+      Loan.payment_limit_exceeded_proof loan v amount now paymentType,
+      Loan.payment_precision_loss_proof loan v amount now paymentType,
+      Loan.finalPayment_zero_credit_proof loan v amount now paymentType,
+      Loan.payment_success_proof loan v amount now paymentType⟩⟩
 
 /-- The only rejections of the four payments: a regular payment or an overpayment and a late payment on a loan that
 isn't paid off, and a full payment on any loan. -/
@@ -151,8 +165,12 @@ theorem Loan.payment_error_codes (ter : TER) (t : UInt32) (hreach : loan.Reachab
         ter = .tefBAD_LEDGER) ∧
     ((loan.fullPayment v amount now).run = .ok (.error ter) →
       ter = .tecEXPIRED ∨ ter = .tecKILLED ∨ ter = .tecINSUFFICIENT_PAYMENT ∨ ter = .tecLIMIT_EXCEEDED ∨
-        ter = .tefBAD_LEDGER) := by
-  sorry
+        ter = .tefBAD_LEDGER) :=
+  have hdue := Loan.Reachable.nextPaymentDueDate_ne_zero loan t hreach
+  ⟨fun hr hpo h => h.elim (Loan.regularPayment_error_codes_proof loan v amount now ter hr hpo hdue)
+      (Loan.overpayment_error_codes_proof loan v amount now ter hr hpo hdue),
+    fun hr hpo => Loan.latePayment_error_codes_proof loan v amount now ter hr hpo hdue,
+    Loan.fullPayment_error_codes_proof loan v amount now ter hdue⟩
 
 end Payments
 
