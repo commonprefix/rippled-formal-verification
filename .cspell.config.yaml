@@ -371,6 +371,7 @@ words:
   - vinnie
   - wasmi
   - wextra
+  - wfail
   - wptr
   - writeme
   - wsrch

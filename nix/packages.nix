@@ -111,6 +111,18 @@ let
     version = llvmVersion;
     tools = [ "run-clang-tidy" ];
   };
+
+  # nixpkgs builds lean4 with USE_GITHASH=OFF, and lake keys its traces on the
+  # githash, so it would treat the official-release mathlib oleans (lake exe
+  # cache get, the mathlib4 Conan package) as stale. LEAN_GITHASH overrides
+  # the githash lake uses. Values are `lean --githash` of the official releases.
+  leanReleaseGithashes = {
+    "4.34.1" = "5045d0056413266e57c625dcd7c365b10e377c52";
+    "4.35.0" = "eb6cafb7290e8bd5f2937522d8d804f58f02bafc";
+  };
+  leanGithash =
+    leanReleaseGithashes.${pkgs.lean4.version}
+      or (pkgs.lib.warn "nix/packages.nix: no official githash for lean4 ${pkgs.lean4.version}; add it to leanReleaseGithashes" null);
 in
 {
   inherit
@@ -120,6 +132,7 @@ in
     llvmPackages
     mkVersionedToolLinks
     mkGcov
+    leanGithash
     ;
 
   commonPackages =
