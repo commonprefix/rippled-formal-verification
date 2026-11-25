@@ -28,8 +28,8 @@ theorem Lending.Reachable.associateAsset_noop (hr : l.Reachable) :
         STAmount.isRounded l.vault.numericType e.loan.principalOutstanding = false ∧
           STAmount.isRounded l.vault.numericType e.loan.totalValueOutstanding = false ∧
           STAmount.isRounded l.vault.numericType e.loan.managementFeeOutstanding = false) ∧
-      ∀ m ∈ l.vault.assetsMaximum, STAmount.isRounded l.vault.numericType m = false := by
-  sorry
+      ∀ m ∈ l.vault.assetsMaximum, STAmount.isRounded l.vault.numericType m = false :=
+  LendingLedger.associateAsset_exact_proof l hr
 
 /-- Witness: a run where associateAsset rounds CoverAvailable. A default on a reachable ledger leaves a CoverAvailable
 of 17 digits. -/
@@ -40,8 +40,9 @@ theorem Lending.Reachable.associateAsset_noop_attained :
       l.broker? 0 = some b ∧
       l'.broker? 0 = some b' ∧
       STAmount.isRounded l.vault.numericType b.coverAvailable = false ∧
-      STAmount.isRounded l'.vault.numericType b'.coverAvailable = true := by
-  sorry
+      STAmount.isRounded l'.vault.numericType b'.coverAvailable = true :=
+  let ⟨l, l', b, b', hr, h, hb, hb', h0, h1, _⟩ := LendingLedger.cover_rounded_reachable
+  ⟨l, l', b, b', hr, h, hb, hb', h0, h1⟩
 
 /-- associateAsset is a no-op after every loan transaction for integral types: on an XRP or MPT vault the amounts of
 `associateAsset_noop` and every broker's CoverAvailable are exact. -/
@@ -62,7 +63,7 @@ theorem Lending.Reachable.associateAsset_integral (hr : l.Reachable) (hint : l.v
           STAmount.isRounded l.vault.numericType e.loan.managementFeeOutstanding = false) ∧
       ∀ m ∈ l.vault.assetsMaximum, STAmount.isRounded l.vault.numericType m = false) ∧
     ∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
-      STAmount.isRounded l.vault.numericType b.coverAvailable = false := by
-  sorry
+      STAmount.isRounded l.vault.numericType b.coverAvailable = false :=
+  LendingLedger.associateAsset_integral_proof l hr hint hcap
 
 end XRPL.Model

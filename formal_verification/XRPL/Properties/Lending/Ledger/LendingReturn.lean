@@ -47,8 +47,20 @@ theorem Lending.vault_exits :
       shares.operator_eq sharesTotalAmount = true →
       (l.apply (.vaultClawback h assets)).run = .ok (.error .tecHAS_OBLIGATIONS)) ∧
     (∀ (j : Nat) (b : LoanBroker), l.vaultDeleted = false → l.vault.canVaultDelete = .ok .tesSUCCESS →
-      l.broker? j = some b → (l.apply .vaultDelete).run = .ok (.error .tecHAS_OBLIGATIONS)) := by
-  sorry
+      l.broker? j = some b → (l.apply .vaultDelete).run = .ok (.error .tecHAS_OBLIGATIONS)) :=
+  ⟨fun h amount isDonation roundedAmount amounts assetsTotal amountNum e hpre hnd hopen hrounded hcomp hat hnum hexp
+        hexceeds =>
+      LendingLedger.vaultDeposit_open_zone_proof l h amount isDonation hpre hnd
+        (LendingTx.preflight_vaultDeposit_pos l h amount isDonation hpre) roundedAmount amounts assetsTotal amountNum e
+        hopen hrounded hcomp hat hnum hexp hexceeds,
+    fun j e h amount amounts sharesTotalAmount hr he hpo hpre hnd hsoon hcomp hst hfinal =>
+      LendingLedger.loans_lock_withdraw_proof l hr j e he hpo h amount hpre hnd
+        (LendingTx.preflight_vaultWithdraw_pos l h amount hpre) amounts sharesTotalAmount hsoon hcomp hst hfinal,
+    fun j e h assets holderShares shares recovered sharesTotalAmount hr he hpo hpre hnd hheld hpr hst hfinal =>
+      LendingLedger.loans_lock_clawback_proof l hr j e he hpo h assets hpre hnd
+        (LendingTx.preflight_vaultClawback_nonneg l h assets hpre) holderShares shares recovered sharesTotalAmount
+        hheld hpr hst hfinal,
+    fun j b hnd hcan hb => LendingLedger.vaultDelete_has_broker_proof l hnd hcan j b hb⟩
 
 /-- Witness for the first line of `vault_exits`: on a reachable XRP ledger a donation that takes AssetsTotal above the
 largest XRP amount ends in an error, not `tecLIMIT_EXCEEDED`. -/
@@ -58,7 +70,7 @@ theorem Lending.vault_exits_attained :
       (LendingTx.vaultDeposit h amount true).preflight l = .tesSUCCESS ∧
       l.vault.assetsTotal = .ok assetsTotal ∧
       (10 : ℚ) ^ 17 < assetsTotal.toRat + amount.toRat ∧
-      (l.apply (.vaultDeposit h amount true)).run = .error .outOfRange := by
-  sorry
+      (l.apply (.vaultDeposit h amount true)).run = .error .outOfRange :=
+  LendingLedger.vaultDonate_out_of_range_witness
 
 end XRPL.Model

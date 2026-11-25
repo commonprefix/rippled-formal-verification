@@ -43,8 +43,8 @@ theorem Lending.payments_comm (l la lb lab lba : LendingLedger) (hr : l.Reachabl
       (∀ k, lab.broker? k = lba.broker? k ∨ ∃ b b', lab.broker? k = some b ∧ lba.broker? k = some b' ∧
         b'.toRawLoanBroker = { b.toRawLoanBroker with coverAvailable := b'.coverAvailable }) ∧
       (∀ k, lab.loan? k = lba.loan? k ∨ ∃ e e', lab.loan? k = some e ∧ lba.loan? k = some e' ∧
-        e'.brokerIndex = e.brokerIndex ∧ e'.loan.toRawLoan = { e.loan.toRawLoan with broker := e'.loan.broker }) := by
-  sorry
+        e'.brokerIndex = e.brokerIndex ∧ e'.loan.toRawLoan = { e.loan.toRawLoan with broker := e'.loan.broker }) :=
+  LendingLedger.payments_comm_proof l la lb lab lba hr i j hij pt pt' a a' ha hab hb hba htotal
 
 /-- Witness: a run where the two orders leave different vaults. Loan A's late payment takes AssetsAvailable past
 `10^16` base units, and loan D's instalment of 1.9 then credits 1, while paid first it leaves one unit more. -/
@@ -56,8 +56,8 @@ theorem Lending.payments_comm_attained :
       (la.apply (.loanPay j pt' a')).run = .ok (.ok lab) ∧
       (l.apply (.loanPay j pt' a')).run = .ok (.ok lb) ∧
       (lb.apply (.loanPay i pt a)).run = .ok (.ok lba) ∧
-      lab.vault ≠ lba.vault := by
-  sorry
+      lab.vault ≠ lba.vault :=
+  LendingLedger.payments_comm_coarsened_witness
 
 /-- Two defaults -> the same vault and brokers in either order. Every loan reads the same too, only the broker copy
 stored with a defaulted loan differs. -/
@@ -74,8 +74,9 @@ theorem Lending.defaults_comm (l la lb lab lba : LendingLedger) (hr : l.Reachabl
     -- CoverAvailable is below 10^16 base units, so its 16 stored digits take each cover off it exactly
     (hcover : ∀ loan, l.LoanAt i loan →
       loan.broker.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) :
-    lab.vault = lba.vault ∧ lab.brokers = lba.brokers ∧ ∀ k loan, lab.LoanAt k loan ↔ lba.LoanAt k loan := by
-  sorry
+    lab.vault = lba.vault ∧ lab.brokers = lba.brokers ∧ ∀ k loan, lab.LoanAt k loan ↔ lba.LoanAt k loan :=
+  LendingLedger.defaults_comm_proof l la lb lab lba hr i j ha hab hb hba hliq htotal fun loan hat =>
+    (hcover loan hat).trans_le (mul_le_mul_of_nonneg_right (by norm_num) (by positivity))
 
 /-- Witness: a run where the liquidation amount caps the defaults and the two orders give a different vault. Loans
 of 800 and 150 on a broker with DebtTotal 950: the larger first gets 935 of cover, the other order only 870. -/
@@ -88,8 +89,8 @@ theorem Lending.defaults_comm_attained :
       (lb.apply (.loanManage i .default)).run = .ok (.ok lba) ∧
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent ∧
       (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) ∧
-      lab.vault ≠ lba.vault := by
-  sorry
+      lab.vault ≠ lba.vault :=
+  LendingLedger.defaults_comm_liquidation_witness
 
 /-- Witness: a run on a coarsened vault where the two orders give a different vault. AssetsAvailable is
 999999999999999.9, and each cover is floored at the scale of AssetsAvailable'. -/
@@ -102,8 +103,8 @@ theorem Lending.defaults_comm_coarsened_attained :
       (lb.apply (.loanManage i .default)).run = .ok (.ok lba) ∧
       (l.DefaultUncapped i ∧ la.DefaultUncapped j ∧ l.DefaultUncapped j ∧ lb.DefaultUncapped i) ∧
       (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) ∧
-      lab.vault ≠ lba.vault := by
-  sorry
+      lab.vault ≠ lba.vault :=
+  LendingLedger.defaults_comm_coarsened_witness
 
 /-- Witness: a run where the two orders give a different broker. The cover of 1000000000001 on a vault at Scale 10 is
 about 10^22 base units, above 10^16, and a Number rounds each cover taken off it to whole millionths. -/
@@ -116,8 +117,8 @@ theorem Lending.defaults_comm_cover_attained :
       (lb.apply (.loanManage i .default)).run = .ok (.ok lba) ∧
       (l.DefaultUncapped i ∧ la.DefaultUncapped j ∧ l.DefaultUncapped j ∧ lb.DefaultUncapped i) ∧
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent ∧
-      lab.brokers ≠ lba.brokers := by
-  sorry
+      lab.brokers ≠ lba.brokers :=
+  LendingLedger.defaults_comm_cover_witness
 
 /-- Transaction on one loan, or on one broker or its loans -> every loan transaction on another loan of the same broker,
 or on another broker's loan, that would have succeeded still succeeds. -/
@@ -147,8 +148,11 @@ theorem Lending.isolation (l la lb : LendingLedger) (hr : l.Reachable) (j : Nat)
       (∀ b, la.broker? e'.brokerIndex = some b → b.coverAvailable.toRat < 10 ^ 96) →
       -- a payment's credit fits the XRP or MPT supply, which the model does not track
       (∀ pt amount, tx' = .loanPay j pt amount → la.CreditFits j pt amount) →
-      ∃ lab, (la.apply tx').run = .ok (.ok lab)) := by
-  sorry
+      ∃ lab, (la.apply tx').run = .ok (.ok lab)) :=
+  ⟨fun hon hj hopen htotal hca hcredit hfee => LendingLedger.payment_isolation_proof l la lb hr j e' tx tx' he' hon hj
+      htx' ha hb hopen htotal hca hcredit hfee,
+    fun k hon hkj hopen htotal hca hcredit => LendingLedger.broker_isolation_proof l la lb hr j k e' tx tx' he' hon hkj
+      htx' ha hb hopen htotal hca hcredit⟩
 
 /-- Witness: a run where accepting another loan is then rejected. Two pending loans on one broker each fit the
 Open limit, and once one is accepted and books its interest the other one exceeds it. -/
@@ -165,8 +169,8 @@ theorem Lending.isolation_loan_attained :
       (∀ b, la.broker? e'.brokerIndex = some b → b.coverAvailable.toRat < 10 ^ 96) ∧
       (∀ pt amount, tx' = .loanPay j pt amount → la.CreditFits j pt amount) ∧
       (∀ pt amount, tx' = .loanPay j pt amount → la.FeeFits j pt amount) ∧
-      (la.apply tx').run = .ok (.error .tecLIMIT_EXCEEDED) := by
-  sorry
+      (la.apply tx').run = .ok (.error .tecLIMIT_EXCEEDED) :=
+  LendingLedger.payment_isolation_open_witness
 
 /-- Witness: a run where a payment on another loan is then rejected. A late payment of 7000000000000000 on loan A
 coarsens the vault, and a payment of 0.1 on loan C of the same broker rounds to no credit. -/
@@ -183,8 +187,8 @@ theorem Lending.isolation_loan_coarsened_attained :
       (∀ b, la.broker? e'.brokerIndex = some b → b.coverAvailable.toRat < 10 ^ 96) ∧
       (∀ pt amount, tx' = .loanPay j pt amount → la.CreditFits j pt amount) ∧
       (∀ pt amount, tx' = .loanPay j pt amount → la.FeeFits j pt amount) ∧
-      (la.apply tx').run = .ok (.error .tecPRECISION_LOSS) := by
-  sorry
+      (la.apply tx').run = .ok (.error .tecPRECISION_LOSS) :=
+  LendingLedger.payment_isolation_coarsened_witness
 
 /-- Witness: a run where accepting another broker's loan is then rejected. Two pending loans on two brokers each
 fit the Open limit, and once one is accepted and books its interest the other one exceeds it. -/
@@ -200,8 +204,8 @@ theorem Lending.isolation_broker_attained :
       la.vault.assetsAvailable.toRat + la.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ la.vault.baseExponent ∧
       (∀ b, la.broker? e'.brokerIndex = some b → b.coverAvailable.toRat < 10 ^ 96) ∧
       (∀ pt amount, tx' = .loanPay j pt amount → la.CreditFits j pt amount) ∧
-      (la.apply tx').run = .ok (.error .tecLIMIT_EXCEEDED) := by
-  sorry
+      (la.apply tx').run = .ok (.error .tecLIMIT_EXCEEDED) :=
+  LendingLedger.broker_isolation_open_witness
 
 /-- Witness: a run where a payment on another broker's loan is then rejected. A late payment of 7000000000000000
 on loan A of one broker coarsens the vault, and a payment of 0.1 on loan C of another broker rounds to no credit. -/
@@ -217,8 +221,8 @@ theorem Lending.isolation_broker_coarsened_attained :
       (∀ x, tx' = .loanAccept j → e'.loan.interestDue = .ok x → la.vault.exceedsOpenLimit x = .ok false) ∧
       (∀ b, la.broker? e'.brokerIndex = some b → b.coverAvailable.toRat < 10 ^ 96) ∧
       (∀ pt amount, tx' = .loanPay j pt amount → la.CreditFits j pt amount) ∧
-      (la.apply tx').run = .ok (.error .tecPRECISION_LOSS) := by
-  sorry
+      (la.apply tx').run = .ok (.error .tecPRECISION_LOSS) :=
+  LendingLedger.broker_isolation_coarsened_witness
 
 /-- A sequence and its subsequence of one loan's transactions, each at the same time -> once the loan is active,
 every later transaction on it succeeds and the loan's fields end with the same values in both. -/
@@ -234,8 +238,9 @@ theorem Lending.Reachable.loan_subsequence (start l : LendingLedger) (txs : List
     -- the loan's fields end with the same values in both
     ∀ (m : LendingLedger) (loan loan' : Loan), LendingLedger.Reaches start (start.loanSubsequence i txs) m →
       l.LoanAt i loan → m.LoanAt (start.aloneIndex i) loan' →
-      loan'.toRawLoan = { loan.toRawLoan with broker := loan'.toRawLoan.broker } := by
-  sorry
+      loan'.toRawLoan = { loan.toRawLoan with broker := loan'.toRawLoan.broker } :=
+  ⟨LendingLedger.loan_subsequence_success_of_replay LendingLedger.loanTx_replay_twin hr hrun,
+    fun _ _ _ hsub hat hat' => LendingLedger.loan_subsequence_fields_proof hr hrun hsub hat hat'⟩
 
 /-- Witness: a subsequence where a payment fails. A VaultWithdraw un-coarsens the vault so loan C's late payment of
 0.1 passes. Without it AssetsAvailable 1874246907153726 sits on the grid of 1 and the payment fails. -/
@@ -249,8 +254,8 @@ theorem Lending.Reachable.loan_subsequence_attained :
       m.LoanAt (start.aloneIndex i) loan ∧
       loan.isPending = false ∧
       start.UntrackedFitsAlong (start.aloneIndex i) (start.loanSubsequence i txs) ∧
-      ¬ ∃ m', LendingLedger.Reaches start (start.loanSubsequence i txs) m' := by
-  sorry
+      ¬ ∃ m', LendingLedger.Reaches start (start.loanSubsequence i txs) m' :=
+  LendingLedger.loan_subsequence_witness
 
 /-- A sequence and its subsequence of one broker's and its loans' transactions, each at the same time -> when the
 broker and its loans are created and accepted, the rest succeeds and the broker's fields end the same in both. -/
@@ -267,8 +272,11 @@ theorem Lending.Reachable.broker_subsequence (start l : LendingLedger) (txs : Li
       l.broker? k = some b → m.broker? (start.aloneBrokerIndex k) = some b' →
       b'.toRawLoanBroker = { b.toRawLoanBroker with coverAvailable := b'.coverAvailable } ∧
       (start.NotCoarsenedAlong txs → start.NotCoarsenedAlong (start.brokerSubsequence k txs) →
-        b'.coverAvailable.toRat = b.coverAvailable.toRat) := by
-  sorry
+        b'.coverAvailable.toRat = b.coverAvailable.toRat) :=
+  ⟨LendingLedger.broker_subsequence_success_of_replay LendingLedger.loanTx_replay_twin_at
+      LendingLedger.brokerTx_replay_same hr hrun,
+    fun _ _ _ hsub hb hb' =>
+      LendingLedger.broker_subsequence_fields_proof LendingLedger.brokerTx_result_same hr hrun hsub hb hb'⟩
 
 /-- Witness: a subsequence where a payment fails. A VaultWithdraw un-coarsens the vault so a late payment of 0.1 on
 a loan of broker 0 passes. Without it AssetsAvailable 1874246907153726 sits on the grid of 1 and the payment fails. -/
@@ -278,8 +286,8 @@ theorem Lending.Reachable.broker_subsequence_attained :
       LendingLedger.Reaches start txs l ∧
       start.OpeningsSucceedAlong (start.brokerSubsequence k txs) ∧
       start.BrokerUntrackedFitsAlong (start.aloneBrokerIndex k) (start.brokerSubsequence k txs) ∧
-      ¬ ∃ m, LendingLedger.Reaches start (start.brokerSubsequence k txs) m := by
-  sorry
+      ¬ ∃ m, LendingLedger.Reaches start (start.brokerSubsequence k txs) m :=
+  LendingLedger.broker_subsequence_witness
 
 /-- Witness: a sequence where CoverAvailable differs. A default of 15 with 1.5 of cover moves only 1 after a late
 payment on another broker's loan coarsens the vault, and 1.5 without it, so the cover ends at 1 and at 0.5. -/
@@ -290,8 +298,8 @@ theorem Lending.Reachable.broker_subsequence_cover_attained :
       LendingLedger.Reaches start (start.brokerSubsequence k txs) m ∧
       l.broker? k = some b ∧
       m.broker? (start.aloneBrokerIndex k) = some b' ∧
-      b'.coverAvailable.toRat ≠ b.coverAvailable.toRat := by
-  sorry
+      b'.coverAvailable.toRat ≠ b.coverAvailable.toRat :=
+  LendingLedger.broker_subsequence_cover_witness
 
 /-- Two loans with the same fields, but on different brokers and vaults with the same ManagementFeeRate, asset type and
 base scale -> the same totalDue for every instalment at the same time. -/
@@ -306,8 +314,10 @@ theorem Lending.same_terms_same_payments (b b' : LoanBroker) (v v' : Vault) (pri
         l'.paymentComponents pt now = l.paymentComponents pt now) ∧
       -- `doPayment` is the loan's update for one instalment, so paying the same instalments keeps the two loans alike
       ∀ (l l' n n' : Loan) (pc : PaymentComponents), Loan.Twin l l' → Lending.Loan.doPayment l pc = .ok n →
-        Lending.Loan.doPayment l' pc = .ok n' → Loan.Twin n n' := by
-  sorry
+        Lending.Loan.doPayment l' pc = .ok n' → Loan.Twin n n' :=
+  ⟨Loan.create_twin b b' v v' principal rates fees schedule allowsOverpayment pending r r' hnt hm hbe h h',
+    fun _ _ ht pt now => Loan.paymentComponents_twin ht pt now,
+    fun _ _ _ _ pc ht hn hn' => Loan.doPayment_twin ht pc hn hn'⟩
 
 /-- Two new loans -> the same vault and brokers in either order. -/
 theorem Lending.creates_comm (l lA lB lAB lBA : LendingLedger) (i j : Nat) (pa pb : Number) (ra rb : LoanRates)
@@ -317,8 +327,9 @@ theorem Lending.creates_comm (l lA lB lAB lBA : LendingLedger) (i j : Nat) (pa p
     (hAB : (lA.apply (.loanSet j pb rb fb pib ptb gpb sdb tsb aob)).run = .ok (.ok lAB))
     (hB : (l.apply (.loanSet j pb rb fb pib ptb gpb sdb tsb aob)).run = .ok (.ok lB))
     (hBA : (lB.apply (.loanSet i pa ra fa pia pta gpa sda tsa aoa)).run = .ok (.ok lBA)) :
-    lAB.vault = lBA.vault ∧ lAB.brokers = lBA.brokers := by
-  sorry
+    lAB.vault = lBA.vault ∧ lAB.brokers = lBA.brokers :=
+  LendingLedger.creates_comm_proof l lA lB lAB lBA i j pa pb ra rb fa fb pia pta gpa pib ptb gpb sda sdb tsa aoa
+    tsb aob hr hA hAB hB hBA
 
 /-- Impair then default -> the same vault and broker as a direct default. -/
 theorem Lending.impair_default_same (l : LendingLedger) (hr : l.Reachable) (i : Nat) (loan : Loan)
@@ -327,15 +338,15 @@ theorem Lending.impair_default_same (l : LendingLedger) (hr : l.Reachable) (i : 
     (h₁ : (loan.manageImpair l.vault l.now).run = .ok (.ok r₁))
     (h₂ : (r₁.loan'.manageDefault r₁.pool').run = .ok (.ok r₂))
     (h : (loan.manageDefault l.vault).run = .ok (.ok r)) :
-    r₂.pool' = r.pool' ∧ r₂.loan'.broker = r.loan'.broker := by
-  sorry
+    r₂.pool' = r.pool' ∧ r₂.loan'.broker = r.loan'.broker :=
+  Loan.impair_default_same_proof loan l.vault l.now r₁ r₂ r himp h₁ h₂ h hr.availableStored (hr.impair_fits hat)
 
 /-- LoanBrokerCoverWithdraw then default -> the same vault as a direct default. -/
 theorem Lending.coverWithdraw_default_same (l la lab lb : LendingLedger) (hr : l.Reachable) (k i : Nat)
     (amount : STAmount) (ha : (l.apply (.loanBrokerCoverWithdraw k amount)).run = .ok (.ok la))
     (hab : (la.apply (.loanManage i .default)).run = .ok (.ok lab))
     (hb : (l.apply (.loanManage i .default)).run = .ok (.ok lb)) :
-    lab.vault = lb.vault := by
-  sorry
+    lab.vault = lb.vault :=
+  LendingLedger.coverWithdraw_default_same_proof l la lab lb hr k i amount ha hab hb
 
 end XRPL.Model

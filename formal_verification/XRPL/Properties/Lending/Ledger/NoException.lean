@@ -31,8 +31,8 @@ result code, never an exception. -/
 theorem Lending.vaultDeposit_no_exception (hr : l.Reachable) (h : Nat) (amount : STAmount) (isDonation : Bool)
     -- the Open limit check builds AssetsTotal + amount as an amount of the asset (FV_M4_52)
     (hrange : l.vault.toExact.assetsTotal + amount.toRat ≤ l.vault.numericType.maxAmount) :
-    ∃ r, (l.apply (.vaultDeposit h amount isDonation)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.vaultDeposit h amount isDonation)).run = .ok r :=
+  LendingLedger.vaultDeposit_no_exception_proof l hr h amount isDonation hrange
 
 /-- Witness for `vaultDeposit_no_exception`: on a reachable XRP ledger a deposit that takes AssetsTotal above the
 largest XRP amount ends in an error. -/
@@ -42,8 +42,8 @@ theorem Lending.vaultDeposit_no_exception_attained :
       l.vault.numericType = NumericType.native ∧
       (LendingTx.vaultDeposit h amount isDonation).preflight l = .tesSUCCESS ∧
       l.vault.numericType.maxAmount < l.vault.toExact.assetsTotal + amount.toRat ∧
-      (l.apply (.vaultDeposit h amount isDonation)).run = .error .outOfRange := by
-  sorry
+      (l.apply (.vaultDeposit h amount isDonation)).run = .error .outOfRange :=
+  LendingLedger.vaultDeposit_exception_xrp_witness
 
 /-- Witness for `vaultDeposit_no_exception`: the same on a reachable MPT ledger. -/
 theorem Lending.vaultDeposit_no_exception_mpt_attained :
@@ -52,8 +52,8 @@ theorem Lending.vaultDeposit_no_exception_mpt_attained :
       l.vault.numericType = NumericType.int64 ∧
       (LendingTx.vaultDeposit h amount isDonation).preflight l = .tesSUCCESS ∧
       l.vault.numericType.maxAmount < l.vault.toExact.assetsTotal + amount.toRat ∧
-      (l.apply (.vaultDeposit h amount isDonation)).run = .error .overflow := by
-  sorry
+      (l.apply (.vaultDeposit h amount isDonation)).run = .error .overflow :=
+  LendingLedger.vaultDeposit_exception_mpt_witness
 
 /-- VaultWithdraw on a reachable ledger, on XRP the shares redeemed worth at most `10^17` drops -> a result code,
 never an exception. -/
@@ -61,8 +61,9 @@ theorem Lending.vaultWithdraw_no_exception (hr : l.Reachable) (h : Nat) (amount 
     -- the shares are priced as an XRP amount before the holder's shares are checked (FV_M2_25)
     (hxrp : l.vault.numericType = NumericType.native → ∀ shares : STAmount, amount = .vaultShares shares →
       l.vault.idealAssetsWithdraw (l.isSoleShareholder h) shares.toRat ≤ 10 ^ 17) :
-    ∃ r, (l.apply (.vaultWithdraw h amount)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.vaultWithdraw h amount)).run = .ok r :=
+  LendingLedger.vaultWithdraw_no_exception_proof l hr h amount
+    ((VaultDepositNoException.reachable_sharesSum hr).sharesOf_le hr.sharesNonneg h) hxrp
 
 /-- Witness for `vaultWithdraw_no_exception`: on a reachable XRP ledger an account without shares redeems shares
 worth more than `10^17` drops and the withdrawal ends in an error. -/
@@ -73,7 +74,8 @@ theorem Lending.vaultWithdraw_no_exception_attained :
       (LendingTx.vaultWithdraw h (.vaultShares shares)).preflight l = .tesSUCCESS ∧
       (10 : ℚ) ^ 17 < l.vault.idealAssetsWithdraw (l.isSoleShareholder h) shares.toRat ∧
       (l.apply (.vaultWithdraw h (.vaultShares shares))).run = .error .outOfRange := by
-  sorry
+  obtain ⟨l, h, shares, hr, hnt, -, hpre, hworth, herr⟩ := LendingLedger.vaultWithdraw_out_of_range_witness
+  exact ⟨l, h, shares, hr, hnt, hpre, hworth, herr⟩
 
 /-- VaultClawback of assets on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.vaultClawback_no_exception (hr : l.Reachable) (h : Nat) (assets : STAmount)
@@ -85,8 +87,10 @@ theorem Lending.vaultClawback_no_exception (hr : l.Reachable) (h : Nat) (assets 
     -- an MPT vault holds less than `10^16` units: above it a full clawback fails its re-check (FV_M4_36, FV_M4_38)
     (htotal : l.vault.numericType = NumericType.int64 →
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) :
-    ∃ r, (l.apply (.vaultClawback h assets)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.vaultClawback h assets)).run = .ok r :=
+  LendingLedger.vaultClawback_no_exception_proof l hr h assets
+    ⟨(VaultDepositNoException.reachable_sharesSum hr).sharesOf_whole h, (hr.sharesNonneg.sharesOf h).2,
+      (VaultDepositNoException.reachable_sharesSum hr).sharesOf_le hr.sharesNonneg h⟩ hheld htotal
 
 /-- Witness for `vaultClawback_no_exception`: on a reachable ledger a clawback from a holder that owns the shares
 destroyed ends in an error, the failed re-check of FV_M4_36 and FV_M4_38. -/
@@ -97,31 +101,34 @@ theorem Lending.vaultClawback_no_exception_attained :
         (computeClawback l.vault assets hs (l.isSoleShareholder h)).run = .ok (.ok amounts) →
         amounts.shares.toRat ≤ (l.sharesOf h).toRat) ∧
       (l.apply (.vaultClawback h assets)).run = .error .notLawful := by
-  sorry
+  obtain ⟨l, h, assets, hr, -, hheld, herr⟩ := Lending.transactions_lawful_attained
+  exact ⟨l, h, assets, hr, hheld, herr⟩
 
 /-- VaultClawback of shares on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.vaultBurnShares_no_exception (hr : l.Reachable) (h : Nat) (amount : STAmount) :
-    ∃ r, (l.apply (.vaultBurnShares h amount)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.vaultBurnShares h amount)).run = .ok r :=
+  LendingLedger.vaultBurnShares_no_exception_proof l hr h amount
+    ⟨(VaultDepositNoException.reachable_sharesSum hr).sharesOf_whole h, (hr.sharesNonneg.sharesOf h).2,
+      (VaultDepositNoException.reachable_sharesSum hr).sharesOf_le hr.sharesNonneg h⟩
 
 /-- VaultSet on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.vaultSet_no_exception (hr : l.Reachable) (assetsMaximum : Option Number)
-    (blockDeposit : Option Bool) : ∃ r, (l.apply (.vaultSet assetsMaximum blockDeposit)).run = .ok r := by
-  sorry
+    (blockDeposit : Option Bool) : ∃ r, (l.apply (.vaultSet assetsMaximum blockDeposit)).run = .ok r :=
+  LendingLedger.vaultSet_no_exception_proof l hr assetsMaximum blockDeposit
 
 /-- VaultDelete -> a result code, never an exception. -/
-theorem Lending.vaultDelete_no_exception : ∃ r, (l.apply .vaultDelete).run = .ok r := by
-  sorry
+theorem Lending.vaultDelete_no_exception : ∃ r, (l.apply .vaultDelete).run = .ok r :=
+  LendingLedger.vaultDelete_no_exception_proof l
 
 /-- LoanBrokerSet that creates a broker on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.loanBrokerCreate_no_exception (hr : l.Reachable) (tx : LoanBrokerSetCreate) :
-    ∃ r, (l.apply (.loanBrokerCreate tx)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanBrokerCreate tx)).run = .ok r :=
+  LendingLedger.loanBrokerCreate_no_exception_proof l hr tx
 
 /-- LoanBrokerSet that updates a broker on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.loanBrokerUpdate_no_exception (hr : l.Reachable) (i : Nat) (debtMaximum : Option Number) :
-    ∃ r, (l.apply (.loanBrokerUpdate i debtMaximum)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanBrokerUpdate i debtMaximum)).run = .ok r :=
+  LendingLedger.loanBrokerUpdate_no_exception_proof l hr i debtMaximum
 
 /-- LoanBrokerCoverDeposit on a reachable ledger, CoverAvailable plus the amount within the largest amount of the
 asset -> a result code, never an exception. -/
@@ -132,8 +139,8 @@ theorem Lending.loanBrokerCoverDeposit_no_exception (hr : l.Reachable) (i : Nat)
     -- an IOU: proven up to `10^89`
     (hiou : l.vault.numericType.isIntegral = false → ∀ b, l.broker? i = some b →
       b.coverAvailable.toRat + amount.toRat ≤ iouProofCap) :
-    ∃ r, (l.apply (.loanBrokerCoverDeposit i amount)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanBrokerCoverDeposit i amount)).run = .ok r :=
+  LendingLedger.loanBrokerCoverDeposit_no_exception_proof l hr i amount hrange hiou
 
 /-- Witness for `loanBrokerCoverDeposit_no_exception`: on a reachable XRP ledger a deposit that takes CoverAvailable
 above the largest XRP amount ends in an error. -/
@@ -144,8 +151,8 @@ theorem Lending.loanBrokerCoverDeposit_no_exception_attained :
       l.broker? i = some b ∧
       (LendingTx.loanBrokerCoverDeposit i amount).preflight l = .tesSUCCESS ∧
       l.vault.numericType.maxAmount < b.coverAvailable.toRat + amount.toRat ∧
-      (l.apply (.loanBrokerCoverDeposit i amount)).run = .error .outOfRange := by
-  sorry
+      (l.apply (.loanBrokerCoverDeposit i amount)).run = .error .outOfRange :=
+  LendingLedger.loanBrokerCoverDeposit_exception_witness
 
 /-- Witness for `loanBrokerCoverDeposit_no_exception`: the same on a reachable MPT ledger. -/
 theorem Lending.loanBrokerCoverDeposit_no_exception_mpt_attained :
@@ -155,8 +162,8 @@ theorem Lending.loanBrokerCoverDeposit_no_exception_mpt_attained :
       l.broker? i = some b ∧
       (LendingTx.loanBrokerCoverDeposit i amount).preflight l = .tesSUCCESS ∧
       l.vault.numericType.maxAmount < b.coverAvailable.toRat + amount.toRat ∧
-      (l.apply (.loanBrokerCoverDeposit i amount)).run = .error .overflow := by
-  sorry
+      (l.apply (.loanBrokerCoverDeposit i amount)).run = .error .overflow :=
+  LendingLedger.loanBrokerCoverDeposit_exception_witness_mpt
 
 /-- LoanBrokerCoverWithdraw on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.loanBrokerCoverWithdraw_no_exception (hr : l.Reachable) (i : Nat) (amount : STAmount)
@@ -165,8 +172,8 @@ theorem Lending.loanBrokerCoverWithdraw_no_exception (hr : l.Reachable) (i : Nat
     -- an IOU: proven up to `10^89`
     (hiou : l.vault.numericType.isIntegral = false → amount.toRat ≤ iouProofCap ∧
       ∀ b, l.broker? i = some b → b.coverAvailable.toRat ≤ iouProofCap) :
-    ∃ r, (l.apply (.loanBrokerCoverWithdraw i amount)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanBrokerCoverWithdraw i amount)).run = .ok r :=
+  LendingLedger.loanBrokerCoverWithdraw_no_exception_proof l hr i amount hcover hiou
 
 /-- LoanBrokerCoverClawback on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.loanBrokerCoverClawback_no_exception (hr : l.Reachable) (i : Nat) (amount : Option STAmount)
@@ -175,15 +182,15 @@ theorem Lending.loanBrokerCoverClawback_no_exception (hr : l.Reachable) (i : Nat
     -- an IOU: proven up to `10^89`
     (hiou : l.vault.numericType.isIntegral = false →
       ∀ b, l.broker? i = some b → b.coverAvailable.toRat ≤ iouProofCap) :
-    ∃ r, (l.apply (.loanBrokerCoverClawback i amount)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanBrokerCoverClawback i amount)).run = .ok r :=
+  LendingLedger.loanBrokerCoverClawback_no_exception_proof l hr i amount hrep hiou
 
 /-- LoanBrokerDelete on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.loanBrokerDelete_no_exception (hr : l.Reachable) (i : Nat)
     -- CoverAvailable is a balance of the asset
     (hcover : ∀ b, l.broker? i = some b → b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) :
-    ∃ r, (l.apply (.loanBrokerDelete i)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanBrokerDelete i)).run = .ok r :=
+  LendingLedger.loanBrokerDelete_no_exception_proof l hr i hcover
 
 /-- LoanSet on a reachable ledger, on XRP or an MPT the total value of the loan within the largest amount of the
 asset, on an MPT also the vault total -> a result code, never an exception. -/
@@ -201,8 +208,9 @@ theorem Lending.loanSet_no_exception (hr : l.Reachable) (i : Nat) (principal : N
       loanPeriodicPayment principal rate (paymentTotal.getD defaultPaymentTotal) = .ok periodicPayment →
       periodicPayment.toRat * (paymentTotal.getD defaultPaymentTotal).toNat ≤ l.vault.numericType.maxValue.toNat) :
     ∃ r, (l.apply (.loanSet i principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
-      allowsOverpayment)).run = .ok r := by
-  sorry
+      allowsOverpayment)).run = .ok r :=
+  LendingLedger.loanSet_no_exception_proof l hr i principal rates fees paymentInterval paymentTotal gracePeriod
+    startDate twoStep allowsOverpayment hcount htotal hvalue
 
 /-- Witness for `loanSet_no_exception`: on a reachable XRP ledger a LoanSet whose PeriodicPayment × PaymentTotal is
 above the largest XRP amount ends in an error. -/
@@ -218,8 +226,8 @@ theorem Lending.loanSet_no_exception_attained :
       loanPeriodicPayment principal rate (paymentTotal.getD defaultPaymentTotal) = .ok periodicPayment ∧
       (l.vault.numericType.maxValue.toNat : ℚ) < periodicPayment.toRat * (paymentTotal.getD defaultPaymentTotal).toNat ∧
       (l.apply (.loanSet i principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
-        allowsOverpayment)).run = .error .outOfRange := by
-  sorry
+        allowsOverpayment)).run = .error .outOfRange :=
+  LendingLedger.loanSet_value_exception_witness
 
 /-- Witness for `loanSet_no_exception`: the same on a reachable MPT ledger. -/
 theorem Lending.loanSet_no_exception_mpt_attained :
@@ -234,13 +242,13 @@ theorem Lending.loanSet_no_exception_mpt_attained :
       loanPeriodicPayment principal rate (paymentTotal.getD defaultPaymentTotal) = .ok periodicPayment ∧
       (l.vault.numericType.maxValue.toNat : ℚ) < periodicPayment.toRat * (paymentTotal.getD defaultPaymentTotal).toNat ∧
       (l.apply (.loanSet i principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
-        allowsOverpayment)).run = .error .overflow := by
-  sorry
+        allowsOverpayment)).run = .error .overflow :=
+  LendingLedger.loanSet_value_exception_mpt_witness
 
 /-- LoanAccept on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.loanAccept_no_exception (hr : l.Reachable) (i : Nat) :
-    ∃ r, (l.apply (.loanAccept i)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanAccept i)).run = .ok r :=
+  LendingLedger.loanAccept_no_exception_proof l hr i
 
 /-- LoanDelete on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.loanDelete_no_exception (hr : l.Reachable) (i : Nat)
@@ -248,8 +256,8 @@ theorem Lending.loanDelete_no_exception (hr : l.Reachable) (i : Nat)
     -- their sum is an amount of the asset. On XRP the total the vault stored bounds the sum
     (hroom : l.vault.numericType ≠ NumericType.native → ∀ e, l.loan? i = some e → e.loan.isPending = true →
       l.vault.assetsAvailable.toRat + e.loan.principalOutstanding.toRat ≤ l.vault.numericType.maxAmount) :
-    ∃ r, (l.apply (.loanDelete i)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanDelete i)).run = .ok r :=
+  LendingLedger.loanDelete_no_exception_proof l hr i hroom
 
 /-- LoanManage on a reachable ledger -> a result code, never an exception. -/
 theorem Lending.loanManage_no_exception (hr : l.Reachable) (i : Nat) (action : LoanManageAction)
@@ -263,8 +271,8 @@ theorem Lending.loanManage_no_exception (hr : l.Reachable) (i : Nat) (action : L
     -- default on an IOU: proven while the vault holds less than `10^16` base units
     (hiou : action = .default → l.vault.numericType = .fractional →
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) :
-    ∃ r, (l.apply (.loanManage i action)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanManage i action)).run = .ok r :=
+  LendingLedger.loanManage_no_exception_proof l hr i action hcover hiou
 
 /-- LoanPay on a reachable ledger, on XRP the late interest within the largest XRP amount, on XRP or an MPT the
 vault total after the payment within the largest amount -> a result code, never an exception. -/
@@ -286,8 +294,8 @@ theorem Lending.loanPay_no_exception (hr : l.Reachable) (i : Nat) (pt : LoanPaym
     (hxrp : l.vault.numericType = .native → pt = .overpayment → ∀ loan, l.LoanAt i loan →
       20 * ((loan.paymentRemaining.toNat : ℚ) * loan.periodicPayment.toRat) +
         16 * loan.totalValueOutstanding.toRat + 100 ≤ 10 ^ 17) :
-    ∃ r, (l.apply (.loanPay i pt amount)).run = .ok r := by
-  sorry
+    ∃ r, (l.apply (.loanPay i pt amount)).run = .ok r :=
+  LendingLedger.loanPay_no_exception_full_proof l hr i pt amount hlate hcfi hca hfit hfee hAA hxrp
 
 /-- Witness for `loanPay_no_exception`: on a reachable XRP ledger a late payment whose late interest is above the
 largest XRP amount ends in an error, while every other condition holds. -/
@@ -303,8 +311,8 @@ theorem Lending.loanPay_no_exception_attained :
       l.CreditFits i .late amount ∧
       l.FeeFits i .late amount ∧
       (10 : ℚ) ^ 17 < loan.lateInterestExact l.now ∧
-      (l.apply (.loanPay i .late amount)).run = .error .outOfRange := by
-  sorry
+      (l.apply (.loanPay i .late amount)).run = .error .outOfRange :=
+  LendingLedger.loanPay_late_out_of_range_witness
 
 /-- Witness for `loanPay_no_exception`: on a reachable XRP ledger a late payment that takes AssetsAvailable +
 AssetsDeployed above the largest XRP amount ends in an error, while every other condition holds (FV_M4_59). -/
@@ -322,8 +330,8 @@ theorem Lending.loanPay_no_exception_total_attained :
       (loan.payInstalments l.vault .late amount l.now).run = .ok (.ok q) ∧
       l.vault.assetsAvailable.toRat + q.amounts.principalPaid.toRat + q.amounts.interestPaid.toRat + 1 ≤ 10 ^ 17 ∧
       (10 : ℚ) ^ 17 < l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + q.amounts.interestPaid.toRat ∧
-      (l.apply (.loanPay i .late amount)).run = .error .outOfRange := by
-  sorry
+      (l.apply (.loanPay i .late amount)).run = .error .outOfRange :=
+  LendingLedger.loanPay_total_out_of_range_witness
 
 /-- Witness for `loanPay_no_exception`: on a reachable MPT ledger a late payment that takes AssetsAvailable +
 AssetsDeployed above the largest MPT amount ends in an error, while every other condition holds. -/
@@ -341,7 +349,7 @@ theorem Lending.loanPay_no_exception_mpt_attained :
         l.vault.numericType.maxValue.toNat ∧
       (l.vault.numericType.maxValue.toNat : ℚ) <
         l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + q.amounts.interestPaid.toRat ∧
-      (l.apply (.loanPay i .late amount)).run = .error .overflow := by
-  sorry
+      (l.apply (.loanPay i .late amount)).run = .error .overflow :=
+  LendingLedger.loanPay_total_out_of_range_mpt_witness
 
 end XRPL.Model
