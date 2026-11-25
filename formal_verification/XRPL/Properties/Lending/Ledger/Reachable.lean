@@ -1,0 +1,185 @@
+import XRPL.Properties.Lending.Ledger.Common.BaseGrid
+import XRPL.Properties.Lending.Ledger.Common.DebtInv
+import XRPL.Properties.Lending.Ledger.Common.ExtraInterestSum
+import XRPL.Properties.Lending.Ledger.Common.IntegralCoverInv
+import XRPL.Properties.Lending.Ledger.Common.LoanCountInv
+import XRPL.Properties.Lending.Ledger.Common.LossInv
+import XRPL.Properties.Lending.Ledger.Common.OpenZoneSteps
+import XRPL.Properties.Lending.Ledger.Common.OpenZoneWitness
+import XRPL.Properties.Lending.Ledger.Common.ReservedInv
+import XRPL.Properties.Lending.Ledger.Common.PhaseProofs
+import XRPL.Properties.Lending.Ledger.Common.Scope
+import XRPL.Properties.Lending.Ledger.Common.VaultScaleProofs
+import XRPL.Properties.Lending.Ledger.Common.YieldSum
+import XRPL.Properties.Lending.Ledger.Common.CapacityMonotone
+import XRPL.Properties.Lending.Ledger.Common.CoverOpenZone
+import XRPL.Properties.Lending.Ledger.Common.CoverOpenZoneWitness
+import XRPL.Properties.Lending.Ledger.Common.PayUnimpair
+import XRPL.Properties.Lending.Ledger.Common.PayUnimpairWitness
+
+/-! # Lending ledger reachability
+
+Every reachable vault, broker and loan is lawful, and the vault's balances equal the sums over its brokers and
+loans. Each kind of transaction changes only the vault, broker or loan it names. -/
+
+namespace XRPL.Model
+
+open XRPL.Model.Protocol
+open XRPL.Model.Lending
+open XRPL.Model.SingleAssetVault (Vault)
+
+variable (l l' : LendingLedger) (tx : LendingTx)
+
+/-- Every vault, broker and loan reachable by vault, broker and loan transactions is lawful. -/
+theorem Lending.Reachable.lawful (_hr : l.Reachable) :
+    (l.vault.toRawVault.WF ∧ l.vault.toRawVault.Valid) ∧
+      (∀ b ∈ l.brokers, ∀ lb ∈ b, lb.toRawLoanBroker.WF ∧ lb.toRawLoanBroker.Valid) ∧
+      (∀ e ∈ l.loans, ∀ le ∈ e, le.loan.toRawLoan.WF ∧ le.loan.toRawLoan.Valid) := by
+  sorry
+
+/-- Loan transaction -> at most one loan and one broker change, never shares or SharesTotal. LoanBroker transaction ->
+at most one broker changes, never loans, shares or the vault. Vault transaction -> no loan or broker. -/
+theorem Lending.ops_scope (h : (l.apply tx).run = .ok (.ok l')) :
+    (tx.isLoan = true →
+      (∃ k : ℕ, ∀ j : ℕ, j ≠ k → l'.loans[j]? = l.loans[j]?) ∧
+        (∃ k : ℕ, ∀ j : ℕ, j ≠ k → l'.brokers[j]? = l.brokers[j]?) ∧
+        l'.shares = l.shares ∧ l'.vault.sharesTotal = l.vault.sharesTotal) ∧
+    (tx.isBroker = true →
+      l'.loans = l.loans ∧ l'.shares = l.shares ∧ l'.vault = l.vault ∧
+        ∃ k : ℕ, ∀ j : ℕ, j ≠ k → l'.brokers[j]? = l.brokers[j]?) ∧
+    (tx.isVault = true ∨ tx = .vaultDelete → l'.loans = l.loans ∧ l'.brokers = l.brokers) := by
+  sorry
+
+/-- Impaired loan with payments left -> when NextPaymentDueDate < now, then only a late payment can pay it. -/
+theorem Lending.Reachable.impaired_late (hr : l.Reachable) (j : Nat) (e : LoanEntry) (he : l.loan? j = some e)
+    (hi : e.loan.isImpaired = true) (hp : e.loan.paymentRemaining ≠ 0) :
+    e.loan.isPaymentLate l.now = true := by
+  sorry
+
+/-- Payment on an impaired loan with payments left -> when the loan is still late after it, it stays impaired. -/
+theorem Lending.Reachable.pay_unimpairs_only_current (hr : l.Reachable) (i : Nat) (paymentType : LoanPaymentType)
+    (amount : Number) (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan loan' : Loan)
+    (hat : l.LoanAt i loan) (hat' : l'.LoanAt i loan') (hi : loan.isImpaired = true)
+    (hp : loan'.paymentRemaining ≠ 0)
+    -- at most one instalment is overdue, so the payment leaves the loan current and not impaired (FV_M4_47)
+    (hdue : l.now.toNat ≤ loan.nextPaymentDueDate.toNat + loan.schedule.paymentInterval.toNat) :
+    loan'.isImpaired = false ∧ loan'.isPaymentLate l'.now = false := by
+  sorry
+
+/-- Witness: a run where one late payment clears the impairment of a loan three instalments overdue, which stays late.
+On a loan of 100 at 10% due every 30 days, a payment of 20.5 clears the LossUnrealized of 100. -/
+theorem Lending.Reachable.pay_unimpairs_only_current_attained :
+    ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan loan' : Loan),
+      l.Reachable ∧
+      (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      l'.LoanAt i loan' ∧
+      loan.isImpaired = true ∧
+      loan'.paymentRemaining ≠ 0 ∧
+      loan.nextPaymentDueDate.toNat + 2 * loan.schedule.paymentInterval.toNat < l.now.toNat ∧
+      loan'.isImpaired = false ∧
+      loan'.isPaymentLate l'.now = true := by
+  sorry
+
+/-- Unimpair -> the loan is not late. False as stated: every impaired loan with payments left is late
+(`impaired_late`), so every unimpair is on a late loan. -/
+def Lending.Reachable.unimpair_requires_current_claim : Prop :=
+  ∀ (l l' : LendingLedger) (i : Nat) (loan : Loan), l.Reachable →
+    (l.apply (.loanManage i .unimpair)).run = .ok (.ok l') → l.LoanAt i loan → loan.isPaymentLate l.now = false
+
+/-- AssetsTotal + YieldUnrealized ≤ the Open limit + extraInterest, where extraInterest = the interest payments
+collected beyond the schedule, such as late interest, close interest and overpayment interest. -/
+theorem Lending.Reachable.within_open_zone (genesis l : LendingLedger) (txs : List LendingTx)
+    (hg : genesis.Genesis) (hrun : LendingLedger.Reaches genesis txs l)
+    -- the vault is not coarsened before any step of the sequence
+    (hnc : ∀ (pre : List LendingTx) (tx : LendingTx) (l₁ : LendingLedger), pre ++ [tx] <+: txs →
+      LendingLedger.Reaches genesis pre l₁ → l₁.NotCoarsened) :
+    l.vault.toRawVault.toExact.assetsTotal + l.vault.yieldUnrealized.toRat ≤
+      l.openLimit + genesis.extraInterestPaid txs := by
+  sorry
+
+/-- Witness: a run where deleting a pending loan raises AssetsTotal by rounding. On a coarsened vault a pending
+loan of 0.6 is credited back as 1, which leaves the sum 0.4 above the bound. -/
+theorem Lending.Reachable.within_open_zone_attained :
+    ∃ (genesis l : LendingLedger) (txs : List LendingTx),
+      genesis.Genesis ∧
+      LendingLedger.Reaches genesis txs l ∧
+      ¬ l.vault.toRawVault.toExact.assetsTotal + l.vault.yieldUnrealized.toRat ≤ l.openLimit + genesis.extraInterestPaid
+        txs := by
+  sorry
+
+/-- AssetsDeployed + YieldUnrealized ≤ the Open limit. -/
+theorem Lending.Reachable.deployed_within_open_zone (hr : l.Reachable) :
+    l.vault.assetsDeployed.toRat + l.vault.yieldUnrealized.toRat ≤ l.openLimit := by
+  sorry
+
+/-- CoverAvailable ≤ the Open limit + Σ fees the payments paid into the cover. -/
+theorem Lending.Reachable.cover_within_open_zone (genesis l : LendingLedger) (txs : List LendingTx)
+    (hg : genesis.Genesis) (hrun : LendingLedger.Reaches genesis txs l)
+    -- the vault is not coarsened before any step of the sequence
+    (hnc : ∀ (pre : List LendingTx) (tx : LendingTx) (l₁ : LendingLedger), pre ++ [tx] <+: txs →
+      LendingLedger.Reaches genesis pre l₁ → l₁.NotCoarsened)
+    (j : Nat) (b : LoanBroker) (hb : l.broker? j = some b) :
+    b.coverAvailable.toRat ≤ l.openLimit + genesis.coverFees j txs := by
+  sorry
+
+/-- Witness: a run where a default raises the cover past the bound. Broker 1 holds a cover at the Open limit, and on
+the coarsened vault defaulting loan B pays the vault a cover of −0.9. -/
+theorem Lending.Reachable.cover_within_open_zone_attained :
+    ∃ (genesis l : LendingLedger) (txs : List LendingTx) (j : Nat) (b : LoanBroker),
+      genesis.Genesis ∧
+      LendingLedger.Reaches genesis txs l ∧
+      l.broker? j = some b ∧
+      ¬ b.coverAvailable.toRat ≤ l.openLimit + genesis.coverFees j txs := by
+  sorry
+
+/-- Regular payment, default, VaultWithdraw or VaultClawback -> AssetsTotal' + YieldUnrealized' ≤ AssetsTotal +
+YieldUnrealized. -/
+theorem Lending.capacity_monotone (hr : l.Reachable)
+    (htx : (∃ i amount, tx = .loanPay i .regular amount) ∨ tx.isOutflow = true)
+    (h : (l.apply tx).run = .ok (.ok l'))
+    -- an MPT vault and a broker's cover hold less than `2^63` units together, the supply limit the model does not track
+    (hsupply : l.vault.numericType = NumericType.int64 → ∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
+      l.vault.assetsAvailable.toRat + b.coverAvailable.toRat < 2 ^ 63) :
+    l'.vault.toRawVault.toExact.assetsTotal + l'.vault.yieldUnrealized.toRat ≤
+      l.vault.toRawVault.toExact.assetsTotal + l.vault.yieldUnrealized.toRat := by
+  sorry
+
+/-- On a reachable ledger -> AssetsDeployed, every broker's DebtTotal and LoanCount, LossUnrealized, AssetsReserved
+and YieldUnrealized = the matching sums over the vault's brokers and loans. -/
+theorem Lending.Reachable.ledger_sums (hr : l.Reachable) :
+    l.vault.assetsDeployed.toRat = l.debtSum ∧
+    (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b → b.debtTotal.toRat = l.brokerPrincipal j) ∧
+    (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b → b.loanCount.toNat = l.loansOf j) ∧
+    l.vault.lossUnrealized.toRat = l.principalSum (·.isImpaired) ∧
+    l.vault.assetsReserved.toRat = l.principalSum (·.isPending) ∧
+    l.vault.yieldUnrealized.toRat = l.interestSum (!·.isPending) := by
+  sorry
+
+/-- LossUnrealized + AssetsReserved ≤ AssetsDeployed. -/
+theorem Lending.Reachable.loss_reserved_deployed (hr : l.Reachable) :
+    l.vault.lossUnrealized.toRat + l.vault.assetsReserved.toRat ≤ l.vault.assetsDeployed.toRat := by
+  sorry
+
+/-- AssetsAvailable, AssetsDeployed, AssetsReserved, LossUnrealized, YieldUnrealized and every broker's DebtTotal
+and CoverAvailable are whole numbers of base units. -/
+theorem Lending.Reachable.base_grid (hr : l.Reachable) :
+    Number.OnGrid l.vault.baseExponent l.vault.assetsAvailable ∧
+      Number.OnGrid l.vault.baseExponent l.vault.assetsDeployed ∧
+      Number.OnGrid l.vault.baseExponent l.vault.assetsReserved ∧
+      Number.OnGrid l.vault.baseExponent l.vault.lossUnrealized ∧
+      Number.OnGrid l.vault.baseExponent l.vault.yieldUnrealized ∧
+      ∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
+        Number.OnGrid l.vault.baseExponent b.debtTotal ∧ Number.OnGrid l.vault.baseExponent b.coverAvailable := by
+  sorry
+
+/-- Reachable ledger, current vault scale = initial vault scale -> a transaction that raises the current vault scale
+above the initial vault scale is a payment. -/
+theorem Lending.vault_scale_changes (hr : l.Reachable) (h : (l.apply tx).run = .ok (.ok l')) (e e' : Int)
+    (he : AssetPool.exponent l.vault l.vault.numericType = .ok e)
+    (he' : AssetPool.exponent l'.vault l'.vault.numericType = .ok e')
+    (hle : e ≤ l.vault.baseExponent) (hgt : l'.vault.baseExponent < e') :
+    ∃ i paymentType amount, tx = .loanPay i paymentType amount := by
+  sorry
+
+end XRPL.Model
