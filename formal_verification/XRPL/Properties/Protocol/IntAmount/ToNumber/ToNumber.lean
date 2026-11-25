@@ -8,7 +8,7 @@ namespace XRPL.Model.Protocol
 `maxRep = 2^63 - 1` and gets rounded. -/
 theorem IntAmount.toNumber_exact (x : IntAmount) (mode : rounding_mode)
     (h_ne_min : x.value ≠ Int64.minValue) :
-    ∃ xn : Number, x.toNumber mode = .ok xn ∧ xn.toRat = x.toRat ∧ xn.isNormalized := by
-  sorry
+    ∃ xn : Number, x.toNumber mode = .ok xn ∧ xn.toRat = x.toRat ∧ xn.isNormalized :=
+  IntAmount.toNumber_exact_proof x mode h_ne_min
 
 end XRPL.Model.Protocol

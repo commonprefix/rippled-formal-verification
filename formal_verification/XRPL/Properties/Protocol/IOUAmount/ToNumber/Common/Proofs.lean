@@ -1,0 +1,22 @@
+import Mathlib.Tactic
+import XRPL.Model.Protocol.IOUAmount
+import XRPL.Properties.Protocol.IOUAmount.Common.Defs
+import XRPL.Properties.Protocol.IOUAmount.Common.ToRatLemmas
+import XRPL.Properties.Protocol.Number.Constructors.FromRepExact
+
+/-! # Proof of the `IOUAmount.toNumber` theorem
+
+The `Int64` mantissa scales into the `Number` range exactly, so the conversion never rounds. -/
+
+namespace XRPL.Model.Protocol
+
+/-- On a `ToNumberExact` amount, `toNumber` succeeds with a normalized `Number` of the
+same value. -/
+theorem IOUAmount.toNumber_exact_proof (a : IOUAmount) (mode : rounding_mode)
+    (ha : a.ToNumberExact) :
+    ∃ xn : Number, a.toNumber mode = .ok xn ∧ xn.toRat = a.toRat ∧ xn.isNormalized := by
+  obtain ⟨xn, hok, hval, hnorm⟩ :=
+    Number.from_rep_exact a.mantissa_ a.exponent_ mode ha.mant_ne_min ha.exp_lo ha.exp_hi
+  exact ⟨xn, hok, by rw [hval, IOUAmount.toRat_eq], hnorm⟩
+
+end XRPL.Model.Protocol

@@ -6,23 +6,23 @@ namespace XRPL.Model.Protocol
 
 /-- Correctness of `operator_lt`. -/
 theorem STAmount.operator_lt_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_lt lhs rhs = .ok (decide (lhs.toRat < rhs.toRat)) := by
-  sorry
+    STAmount.operator_lt lhs rhs = .ok (decide (lhs.toRat < rhs.toRat)) :=
+  STAmount.operator_lt_eq_proof lhs rhs h
 
 /-- Correctness of `operator_le`. -/
 theorem STAmount.operator_le_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_le lhs rhs = .ok (decide (lhs.toRat ≤ rhs.toRat)) := by
-  sorry
+    STAmount.operator_le lhs rhs = .ok (decide (lhs.toRat ≤ rhs.toRat)) :=
+  STAmount.operator_le_eq_proof lhs rhs h
 
 /-- Correctness of `operator_gt`. -/
 theorem STAmount.operator_gt_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_gt lhs rhs = .ok (decide (rhs.toRat < lhs.toRat)) := by
-  sorry
+    STAmount.operator_gt lhs rhs = .ok (decide (rhs.toRat < lhs.toRat)) :=
+  STAmount.operator_gt_eq_proof lhs rhs h
 
 /-- Correctness of `operator_eq`. On comparable operands, field equality decides
 rational equality (the shared numericType is part of `CmpFaithful`). -/
 theorem STAmount.operator_eq_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_eq lhs rhs = decide (lhs.toRat = rhs.toRat) := by
-  sorry
+    STAmount.operator_eq lhs rhs = decide (lhs.toRat = rhs.toRat) :=
+  STAmount.operator_eq_eq_proof lhs rhs h
 
 end XRPL.Model.Protocol
