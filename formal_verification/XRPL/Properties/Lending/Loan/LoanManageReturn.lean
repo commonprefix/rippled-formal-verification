@@ -25,14 +25,17 @@ theorem Loan.canManage_exits :
     (loan.isPending = false → loan.isDefault = false → loan.paymentRemaining ≠ 0 →
       (action = .impair → loan.isImpaired = false) → (action = .unimpair → loan.isImpaired = true) →
       (action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) →
-      loan.canManage action now = .ok .tesSUCCESS) := by
-  sorry
+      loan.canManage action now = .ok .tesSUCCESS) :=
+  ⟨Loan.canManage_pending_proof loan action now, Loan.canManage_defaulted_proof loan action now,
+    Loan.canManage_already_impaired_proof loan now, Loan.canManage_not_impaired_proof loan now,
+    Loan.canManage_paid_off_proof loan action now, Loan.canManage_default_too_soon_proof loan now,
+    Loan.canManage_success_proof loan action now⟩
 
 /-- Error codes: success, tecNO_PERMISSION or tecTOO_SOON. -/
 theorem Loan.canManage_error_codes :
     loan.canManage action now = .ok .tesSUCCESS ∨ loan.canManage action now = .ok .tecNO_PERMISSION ∨
-      loan.canManage action now = .ok .tecTOO_SOON := by
-  sorry
+      loan.canManage action now = .ok .tecTOO_SOON :=
+  Loan.canManage_error_codes_proof loan action now
 
 /-- Success ⟺ the loan is active and not paid off, an impair needs a loan that isn't impaired, an unimpair an
 impaired one, and a default now > NextPaymentDueDate + GracePeriod. -/
@@ -40,8 +43,8 @@ theorem Loan.canManage_lawful_iff :
     loan.canManage action now = .ok .tesSUCCESS ↔
       loan.isPending = false ∧ loan.isDefault = false ∧ loan.paymentRemaining ≠ 0 ∧
         (action = .impair → loan.isImpaired = false) ∧ (action = .unimpair → loan.isImpaired = true) ∧
-        (action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) := by
-  sorry
+        (action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) :=
+  Loan.canManage_lawful_iff_proof loan action now
 
 open XRPL.Model.SingleAssetVault (Vault RawVault)
 
@@ -105,14 +108,19 @@ theorem Loan.manage_exits :
       (loan.defaultedBroker debtTotal' coverAvailable').to_lawful = .ok broker' →
       ∃ loan', (loan.manageDefault v).run =
           .ok (.ok { loan' := loan', pool' := v', amountToPool := defaultCovered, amountToBroker := Number.zero }) ∧
-        loan'.toRawLoan = loan.defaultedLoan broker') := by
-  sorry
+        loan'.toRawLoan = loan.defaultedLoan broker') :=
+  ⟨Loan.manageImpair_not_late_proof loan v now, Loan.manageImpair_limit_exceeded_proof loan v now,
+    Loan.manageImpair_success_proof loan v now, Loan.manageUnimpair_bad_ledger_proof loan v,
+    Loan.manageUnimpair_success_proof loan v, Loan.manageDefault_impaired_bad_ledger_proof loan v,
+    Loan.manageDefault_deployed_bad_ledger_proof loan v, Loan.manageDefault_yield_bad_ledger_proof loan v,
+    Loan.manageDefault_limit_exceeded_proof loan v, Loan.manageDefault_success_proof loan v⟩
 
 /-- The only rejections of an impair, an unimpair and a default. -/
 theorem Loan.manage_error_codes (ter : TER) :
     ((loan.manageImpair v now).run = .ok (.error ter) → ter = .tecTOO_SOON ∨ ter = .tecLIMIT_EXCEEDED) ∧
     ((loan.manageUnimpair v).run = .ok (.error ter) → ter = .tefBAD_LEDGER) ∧
-    ((loan.manageDefault v).run = .ok (.error ter) → ter = .tefBAD_LEDGER ∨ ter = .tecLIMIT_EXCEEDED) := by
-  sorry
+    ((loan.manageDefault v).run = .ok (.error ter) → ter = .tefBAD_LEDGER ∨ ter = .tecLIMIT_EXCEEDED) :=
+  ⟨Loan.manageImpair_error_codes_proof loan v now ter, Loan.manageUnimpair_error_codes_proof loan v ter,
+    Loan.manageDefault_error_codes_proof loan v ter⟩
 
 end XRPL.Model.Lending

@@ -58,6 +58,8 @@ import XRPL.Properties.Lending.Loan.LoanAccept
 import XRPL.Properties.Lending.Loan.LoanAcceptReturn
 import XRPL.Properties.Lending.Loan.LoanDelete
 import XRPL.Properties.Lending.Loan.LoanDeleteReturn
+import XRPL.Properties.Lending.Loan.LoanManage
+import XRPL.Properties.Lending.Loan.LoanManageReturn
 import XRPL.Properties.Lending.Loan.LoanSet
 import XRPL.Properties.Lending.Loan.LoanSetReturn
 import XRPL.Properties.Lending.Loan.Reachable
