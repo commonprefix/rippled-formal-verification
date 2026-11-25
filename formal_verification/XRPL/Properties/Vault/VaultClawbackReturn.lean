@@ -67,8 +67,25 @@ theorem Vault.clawback_exits (assets holderShares : STAmount) (waive : Bool) (hn
     ∀ t0 : UInt32, Vault.Reachable v t0 → assets.CanonicalOrZero → holderShares.ShareBalance →
       (∀ amounts : VaultAmounts, (computeClawback v assets holderShares waive).run = .ok (.ok amounts) →
         amounts.shares.toRat = v.toExact.sharesTotal) →
-      (v.clawback assets holderShares waive hnn).run ≠ .error .notLawful := by
-  sorry
+      (v.clawback assets holderShares waive hnn).run ≠ .error .notLawful :=
+  ⟨Vault.clawback_no_permission_proof v assets holderShares waive hnn,
+    fun hxrp => Vault.clawback_compute_rejected_proof v assets holderShares waive hnn hxrp _,
+    fun shares recovered capped shares' recovered' recoveredNumber recoveredNumber' hxrp =>
+      Vault.clawback_capped_internal_proof v assets holderShares waive hnn hxrp shares recovered capped shares'
+        recovered' recoveredNumber recoveredNumber',
+    fun shares recovered sharesTotalAmount hxrp =>
+      Vault.clawback_has_obligations_proof v assets holderShares waive hnn hxrp shares recovered sharesTotalAmount,
+    fun shares recovered sharesTotalAmount clamped hxrp =>
+      Vault.clawback_clamp_precision_loss_proof v assets holderShares waive hnn hxrp shares recovered
+        sharesTotalAmount clamped,
+    fun amounts hxrp => Vault.clawback_zero_shares_proof v assets holderShares waive hnn hxrp amounts,
+    fun amounts assetsNumber ter hxrp =>
+      Vault.clawback_recovery_too_small_proof v assets holderShares waive hnn hxrp amounts assetsNumber ter,
+    Vault.clawback_success_proof v assets holderShares waive hnn,
+    fun t0 r hr hc hhs hok hfinal => Vault.clawback_final_proof v assets holderShares waive t0 hnn hr hc hhs
+      (Vault.Reachable.maxValue_fits v t0 hr
+        (Vault.Reachable.clawback_sharesTotal_pos v t0 hr assets holderShares waive hhs hnn r hok)) r hok hfinal,
+    fun t0 => Vault.clawback_final_success_proof v assets holderShares waive t0 hnn⟩
 
 /-- Every rejection of a clawback. -/
 theorem Vault.clawback_error_codes (assets holderShares : STAmount) (waive : Bool) (hnn : 0 ≤ assets.toRat)
@@ -78,7 +95,7 @@ theorem Vault.clawback_error_codes (assets holderShares : STAmount) (waive : Boo
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
     (ter : TER) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.error ter)) :
     ter = .tecNO_PERMISSION ∨ ter = .tecINTERNAL ∨ ter = .tecHAS_OBLIGATIONS ∨ ter = .tecPRECISION_LOSS ∨
-      ter = .tecPATH_DRY ∨ ter = .tecINSUFFICIENT_FUNDS := by
-  sorry
+      ter = .tecPATH_DRY ∨ ter = .tecINSUFFICIENT_FUNDS :=
+  Vault.clawback_error_codes_proof v assets holderShares waive hnn hc hhs hmax ter hok
 
 end XRPL.Model.SingleAssetVault

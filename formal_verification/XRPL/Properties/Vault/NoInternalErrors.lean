@@ -36,8 +36,18 @@ theorem Vault.Reachable.no_internal_errors (v : Vault) (t0 : UInt32) (hr : Vault
       -- a canonical amount, or zero to claw back the holding
       assets.CanonicalOrZero → holderShares.ShareBalance →
       assets.toRat ≤ 9 * 10 ^ (15 + v.baseExponent) → holderShares.toRat ≤ v.toExact.sharesTotal →
-      (v.clawback assets holderShares waive hnn).run ≠ .ok (.error .tecPATH_DRY) := by
-  sorry
+      (v.clawback assets holderShares waive hnn).run ≠ .ok (.error .tecPATH_DRY) :=
+  ⟨fun amount isDonation t hpos hc hty hsmall =>
+      Vault.deposit_no_internal_proof v amount isDonation t hpos hc hty hsmall,
+    fun amount waive t hpos => Vault.withdraw_no_internal_proof v amount waive t hpos,
+    fun assets holderShares waive hnn =>
+      Vault.Reachable.clawback_no_internal_proof v t0 hr assets holderShares waive hnn,
+    fun amount isDonation t hpos hc hty hl =>
+      Vault.Reachable.deposit_no_path_dry_proof v t0 hr amount isDonation t hpos hc hty hl,
+    fun amount waive t hpos hc hassets hshares =>
+      Vault.Reachable.withdraw_no_path_dry_proof v t0 hr amount waive t hpos hc hassets hshares,
+    fun assets holderShares waive hnn hc hhs hl hhl =>
+      Vault.Reachable.clawback_no_path_dry_proof v t0 hr assets holderShares waive hnn hc hl hhs hhl⟩
 
 /-- Witness for `no_internal_errors`: on a reachable MPT vault of 2 units a deposit of `5000000000000000003` prices
 `5000000000000000005` shares worth `5000000000000000005` and returns `tecINTERNAL`. -/
@@ -52,8 +62,8 @@ theorem Vault.Reachable.no_internal_errors_deposit_attained :
       sharesToAssetsDeposit v shares = .ok assets ∧
       shares.toRat = 5000000000000000005 ∧
       assets.toRat = 5000000000000000005 ∧
-      (v.deposit amount false t hpos).run = .ok (.error .tecINTERNAL) := by
-  sorry
+      (v.deposit amount false t hpos).run = .ok (.error .tecINTERNAL) :=
+  Vault.deposit_internal_witness
 
 /-- Witness for `no_internal_errors`: on a reachable scale-10 IOU vault of 10 assets and `10^11` shares a deposit of
 `10^9`, past the Open limit, prices `10^19` shares and returns `tecPATH_DRY`. -/
@@ -63,8 +73,8 @@ theorem Vault.Reachable.no_internal_errors_deposit_path_dry_attained :
       amount.Canonical ∧
       amount.mNumericType = v.numericType ∧
       9 * 10 ^ (15 + v.baseExponent) < amount.toRat ∧
-      (v.deposit amount false t hpos).run = .ok (.error .tecPATH_DRY) := by
-  sorry
+      (v.deposit amount false t hpos).run = .ok (.error .tecPATH_DRY) :=
+  Vault.deposit_path_dry_witness
 
 /-- Witness for `no_internal_errors`: on the same vault a withdrawal of `10^9`, past the Open limit, by a holder of
 half the shares returns `tecPATH_DRY`. -/
@@ -78,8 +88,8 @@ theorem Vault.Reachable.no_internal_errors_withdraw_path_dry_attained :
       (waive = true ↔ v.IsSoleShareholder holderShares) ∧
       holderShares.toRat ≤ v.toExact.sharesTotal ∧
       (∃ assets, amount = .vaultAssets assets ∧ 9 * 10 ^ (15 + v.baseExponent) < assets.toRat) ∧
-      (v.withdraw amount waive t hpos).run = .ok (.error .tecPATH_DRY) := by
-  sorry
+      (v.withdraw amount waive t hpos).run = .ok (.error .tecPATH_DRY) :=
+  Vault.withdraw_path_dry_witness
 
 /-- Witness for `no_internal_errors`: on the same vault a clawback of `10^9`, past the Open limit, from a holder of
 half the shares returns `tecPATH_DRY`. -/
@@ -92,7 +102,7 @@ theorem Vault.Reachable.no_internal_errors_clawback_path_dry_attained :
       (waive = true ↔ v.IsSoleShareholder holderShares) ∧
       holderShares.toRat ≤ v.toExact.sharesTotal ∧
       9 * 10 ^ (15 + v.baseExponent) < assets.toRat ∧
-      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecPATH_DRY) := by
-  sorry
+      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecPATH_DRY) :=
+  Vault.clawback_path_dry_witness
 
 end XRPL.Model.SingleAssetVault

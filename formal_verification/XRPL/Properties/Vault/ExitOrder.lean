@@ -32,8 +32,11 @@ theorem Vault.redemption_exit_order (v : Vault) (t t0 : UInt32) (hr : Vault.Reac
     ((∃ k : ℤ, v.idealAssetsWithdraw waiveA sA.toRat = k * 10 ^ v.baseExponent) →
       (∃ k : ℤ, v.idealAssetsWithdraw waiveB sB.toRat = k * 10 ^ v.baseExponent) →
       rA1.assets.toRat - rA2.assets.toRat ≤ 0) ∧
-    rA2.assets.toRat - rA1.assets.toRat ≤ 2 * (10 : ℚ) ^ v.baseExponent := by
-  sorry
+    rA2.assets.toRat - rA1.assets.toRat ≤ 2 * (10 : ℚ) ^ v.baseExponent :=
+  ⟨Vault.redemption_exit_order_upper_bound_intended_proof v t t0 hr ht hphase sA sB hA hB hposA hposB hsum waiveA
+      waiveB waiveA' rA1 rB2 rA2 hA1 hB2 hA2,
+    Vault.redemption_exit_order_lower_bound_proof v t t0 hr ht hphase sA sB hA hB hposA hposB hsum waiveA waiveB
+      waiveA' rA1 rB2 rA2 hA1 hB2 hA2⟩
 
 /-- In the redemption phase, when A and B are the only holders and redeem all their shares, A's
 payout when B goes first exceeds A's payout when A goes first by at most one base unit. -/
@@ -49,8 +52,9 @@ theorem Vault.redemption_exit_order_lower_bound_final (v : Vault) (t t0 : UInt32
     -- B goes first, then A
     (hB2 : (v.withdraw (.vaultShares sB) waiveB t hposB).run = .ok (.ok rB2))
     (hA2 : (rB2.vault'.withdraw (.vaultShares sA) waiveA' t hposA).run = .ok (.ok rA2)) :
-    rA2.assets.toRat - rA1.assets.toRat ≤ (10 : ℚ) ^ v.baseExponent := by
-  sorry
+    rA2.assets.toRat - rA1.assets.toRat ≤ (10 : ℚ) ^ v.baseExponent :=
+  Vault.redemption_exit_order_lower_bound_final_proof v t t0 hr ht hphase sA sB hA hB hposA hposB hsum waiveA
+    waiveB waiveA' rA1 rB2 rA2 hA1 hB2 hA2
 
 /-- Witness for the first line of `redemption_exit_order`: a run where A gets one base unit more by going first (`2`
 alone, `1` after B, from a vault of `3` assets and `2` shares). -/
@@ -66,8 +70,8 @@ theorem Vault.redemption_exit_order_upper_bound_attained :
       (v.withdraw (.vaultShares sA) waiveA t hposA).run = .ok (.ok rA1) ∧
       (v.withdraw (.vaultShares sB) waiveB t hposB).run = .ok (.ok rB2) ∧
       (rB2.vault'.withdraw (.vaultShares sA) waiveA' t hposA).run = .ok (.ok rA2) ∧
-      rA1.assets.toRat - rA2.assets.toRat = (10 : ℚ) ^ v.baseExponent := by
-  sorry
+      rA1.assets.toRat - rA2.assets.toRat = (10 : ℚ) ^ v.baseExponent :=
+  Vault.redemption_exit_order_upper_bound_witness
 
 /-- Witness for the second line of `redemption_exit_order`: A gets two base units more after B (`999999999999999`
 alone, `1000000000000001` after B), holding `9·10^14` of `1800000000000001` shares on `2000000000000001`. -/
@@ -83,8 +87,8 @@ theorem Vault.redemption_exit_order_lower_bound_attained :
       (v.withdraw (.vaultShares sA) waiveA t hposA).run = .ok (.ok rA1) ∧
       (v.withdraw (.vaultShares sB) waiveB t hposB).run = .ok (.ok rB2) ∧
       (rB2.vault'.withdraw (.vaultShares sA) waiveA' t hposA).run = .ok (.ok rA2) ∧
-      rA2.assets.toRat - rA1.assets.toRat = 2 * (10 : ℚ) ^ v.baseExponent := by
-  sorry
+      rA2.assets.toRat - rA1.assets.toRat = 2 * (10 : ℚ) ^ v.baseExponent :=
+  Vault.redemption_exit_order_lower_bound_witness
 
 /-- Witness for `redemption_exit_order_lower_bound_final`: A, one of the two holders, gets one base unit more
 after B (`2` alone, `3` after B, from a vault of `5` assets and `2` shares). -/
@@ -100,7 +104,7 @@ theorem Vault.redemption_exit_order_lower_bound_final_attained :
       (v.withdraw (.vaultShares sA) waiveA t hposA).run = .ok (.ok rA1) ∧
       (v.withdraw (.vaultShares sB) waiveB t hposB).run = .ok (.ok rB2) ∧
       (rB2.vault'.withdraw (.vaultShares sA) waiveA' t hposA).run = .ok (.ok rA2) ∧
-      rA2.assets.toRat - rA1.assets.toRat = (10 : ℚ) ^ v.baseExponent := by
-  sorry
+      rA2.assets.toRat - rA1.assets.toRat = (10 : ℚ) ^ v.baseExponent :=
+  Vault.redemption_exit_order_lower_bound_final_witness
 
 end XRPL.Model.SingleAssetVault
