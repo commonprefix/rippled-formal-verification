@@ -1,0 +1,172 @@
+import XRPL.Properties.Protocol.STAmount.Common.OfNumberRounding
+import XRPL.Model.Protocol.TenthBips
+import XRPL.Properties.Protocol.Common.Reduction
+import XRPL.Properties.Protocol.Number.Div.RoundsToRepresentable
+import XRPL.Properties.Protocol.Number.Mul.RoundsToRepresentable
+
+/-! # Rates in tenth basis points
+
+`tenthBipsOfValue` multiplies a value by a rate and divides by `100000`. These lemmas cover the rate itself, a zero
+value and the upward rounding of the product. -/
+
+namespace XRPL.Model.Protocol
+
+/-- With a zero value, upward `tenthBipsOfValue` gives zero. -/
+lemma tenthBipsOfValue_zero (rate : TenthBips32) :
+    tenthBipsOfValue Number.zero rate .upward = .ok Number.zero := by
+  have hz : Number.zero.operator_eq Number.zero = true :=
+    (Number.operator_eq_iff _ _ Number.zero_isNormalized Number.zero_isNormalized).mpr rfl
+  obtain ⟨r, hok, hval, hnorm⟩ := Number.from_rep_exact (100000 : Int64) 0 .upward
+    (by decide) (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)
+  have hunit : (kTenthBipsPerUnity.toNumber .upward) = r := by
+    unfold kTenthBipsPerUnity TenthBips32.toNumber Number.ofInt64 UInt32.toInt64
+    rw [show ((⟨100000⟩ : UInt32).toUInt64.toInt64) = (100000 : Int64) from by decide, hok]; rfl
+  have hu : (kTenthBipsPerUnity.toNumber .upward).operator_eq Number.zero = false := by
+    rw [hunit, Bool.eq_false_iff]
+    intro h
+    have := (Number.operator_eq_iff _ _ hnorm Number.zero_isNormalized).mp h
+    rw [hval, Number.toRat_zero] at this
+    norm_num at this
+  simp [tenthBipsOfValue, Number.operator_mul, Number.operator_div, hz, hu, bind, Except.bind, pure,
+    Except.pure]
+
+/-- A rate converts to a normalized `Number` holding exactly its value. -/
+lemma TenthBips32.toNumber_facts (rate : TenthBips32) (mode : rounding_mode := .to_nearest) :
+    (rate.toNumber mode).isNormalized ∧ (rate.toNumber mode).toRat = rate.toNat := by
+  have hlt : rate.toUInt64.toNat < 2 ^ 63 := by
+    have := rate.toNat_lt_size
+    have hs : UInt32.size = 2 ^ 32 := rfl
+    simp only [UInt32.toNat_toUInt64]
+    omega
+  have hval := UInt64.toInt64_toInt_of_lt rate.toUInt64 hlt
+  have hne : rate.toUInt64.toInt64 ≠ Int64.minValue := by
+    intro h
+    have h' := congrArg Int64.toInt h
+    rw [hval, show Int64.minValue.toInt = -2 ^ 63 from by decide] at h'
+    have := Int.natCast_nonneg rate.toUInt64.toNat
+    linarith
+  obtain ⟨r, hok, hv, hnorm⟩ := Number.from_rep_exact rate.toUInt64.toInt64 0 mode hne
+    (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)
+  have h : (rate.toNumber mode) = r := by
+    unfold TenthBips32.toNumber Number.ofInt64 UInt32.toInt64
+    rw [hok]
+    rfl
+  rw [h]
+  refine ⟨hnorm, ?_⟩
+  rw [hv, hval, UInt32.toNat_toUInt64]
+  simp
+
+/-- Zero divided by unity is zero. -/
+lemma zero_div_unity (mode : rounding_mode) :
+    Number.zero.operator_div (kTenthBipsPerUnity.toNumber mode) mode = .ok Number.zero := by
+  obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity mode
+  have hu : (kTenthBipsPerUnity.toNumber mode).operator_eq Number.zero = false := by
+    rw [Bool.eq_false_iff]
+    intro h
+    have := (Number.operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
+    rw [huv, Number.toRat_zero] at this
+    exact absurd this (by decide)
+  unfold Number.operator_div
+  rw [ite_eq_right (by rw [hu]; decide), ite_eq_left (by decide)]
+  rfl
+
+/-- A zero share of a normalized value is zero. -/
+lemma tenthBipsOfValue_zero_rate (x : Number) (hx : x.isNormalized) (mode : rounding_mode) :
+    tenthBipsOfValue x 0 mode = .ok Number.zero := by
+  have h0 : ((0 : TenthBips32).toNumber mode) = Number.zero := rfl
+  have heq : tenthBipsOfValue x 0 mode =
+      (x.operator_mul Number.zero mode) >>= (fun p => p.operator_div (kTenthBipsPerUnity.toNumber mode) mode) := by
+    rw [← h0]; rfl
+  rw [heq]
+  have hm : x.operator_mul Number.zero mode = .ok Number.zero := by
+    rw [Number.operator_mul_eq_spec]
+    unfold Number.operator_mulSpec
+    by_cases hxz : x.operator_eq Number.zero = true
+    · rw [ite_eq_left hxz]
+      rw [Number.eq_zero_of_mantissa_zero x hx (Number.mantissa_eq_zero_of_operator_eq_zero hxz)]
+      rfl
+    · rw [ite_eq_right hxz, ite_eq_left (by decide)]
+      rfl
+  rw [hm]
+  exact zero_div_unity mode
+
+/-- A rate's `Number` is not negative. -/
+lemma TenthBips32.toNumber_nonneg (rate : TenthBips32) (mode : rounding_mode := .to_nearest) :
+    0 ≤ (rate.toNumber mode).toRat := by
+  rw [(TenthBips32.toNumber_facts rate mode).2]
+  positivity
+
+/-- An upward `tenthBipsOfValue` of a normalized nonnegative value is normalized and not negative. -/
+lemma tenthBipsOfValue_upward_facts (d : Number) (rate : TenthBips32) (raw : Number)
+    (hd : d.isNormalized) (h0 : 0 ≤ d.toRat)
+    (hok : tenthBipsOfValue d rate .upward = .ok raw) :
+    raw.isNormalized ∧ 0 ≤ raw.toRat := by
+  have hrn := (TenthBips32.toNumber_facts rate .upward).1
+  have hr0 := TenthBips32.toNumber_nonneg rate .upward
+  have hun := (TenthBips32.toNumber_facts kTenthBipsPerUnity .upward).1
+  have hu0 := TenthBips32.toNumber_nonneg kTenthBipsPerUnity .upward
+  unfold tenthBipsOfValue at hok
+  dsimp only at hok
+  obtain ⟨p, hp, hok⟩ := bind_ok_peel _ _ _ hok
+  have hpn := Number.operator_mul_isNormalized _ _ _ _ hd hrn hp
+  -- a rounded-up result is zero, or at least its true value
+  have hge (q : Number) (t : ℚ) (ht : 0 ≤ t)
+      (hq : q.mantissa_ = 0 ∨ Number.RoundsToRepresentable q t .upward) : 0 ≤ q.toRat := by
+    rcases hq with h0' | ⟨n, hn, hv⟩
+    · exact le_of_eq (Number.toRat_eq_zero_of_mantissa_zero q h0').symm
+    · rw [hv]
+      exact le_trans ht (Number.le_upper _ _ hn)
+  have hp0 : 0 ≤ p.toRat := hge p _ (mul_nonneg h0 hr0) (by
+    by_cases h : p.mantissa_ = 0
+    · exact Or.inl h
+    · exact Or.inr (Number.operator_mul_rounded_upward _ _ _ hd hrn hp h))
+  refine ⟨Number.operator_div_isNormalized _ _ _ _ hpn hun hok, hge raw _ (div_nonneg hp0 hu0) ?_⟩
+  by_cases h : raw.mantissa_ = 0
+  · exact Or.inl h
+  · exact Or.inr (Number.operator_div_rounded_upward _ _ _ hpn hun hok h)
+
+/-- Upward `tenthBipsOfValue` keeps the order of nonnegative products when the larger result is nonzero. The
+multiplication by the rate and the division by unity both round up, and rounding up keeps the order. -/
+lemma tenthBipsOfValue_upward_le (d d' : Number) (rate rate' : TenthBips32) (raw raw' : Number)
+    (hd : d.isNormalized) (hd' : d'.isNormalized) (h0 : 0 ≤ d.toRat)
+    (hprod : d.toRat * (rate.toNumber .upward).toRat ≤ d'.toRat * (rate'.toNumber .upward).toRat)
+    (hok : tenthBipsOfValue d rate .upward = .ok raw)
+    (hok' : tenthBipsOfValue d' rate' .upward = .ok raw') (hnz' : raw'.mantissa_ ≠ 0) :
+    raw.toRat ≤ raw'.toRat := by
+  have hrn := (TenthBips32.toNumber_facts rate .upward).1
+  have hr0 := TenthBips32.toNumber_nonneg rate .upward
+  have hrn' := (TenthBips32.toNumber_facts rate' .upward).1
+  have hun := (TenthBips32.toNumber_facts kTenthBipsPerUnity .upward).1
+  have hu0 := TenthBips32.toNumber_nonneg kTenthBipsPerUnity .upward
+  unfold tenthBipsOfValue at hok hok'
+  dsimp only at hok hok'
+  obtain ⟨p, hp, hok⟩ := bind_ok_peel _ _ _ hok
+  obtain ⟨p', hp', hok'⟩ := bind_ok_peel _ _ _ hok'
+  have hpn := Number.operator_mul_isNormalized _ _ _ _ hd hrn hp
+  have hpn' := Number.operator_mul_isNormalized _ _ _ _ hd' hrn' hp'
+  have hrawn' := Number.operator_div_isNormalized _ _ _ _ hpn' hun hok'
+  have hpr : p.mantissa_ = 0 ∨
+      Number.RoundsToRepresentable p (d.toRat * (rate.toNumber .upward).toRat) .upward := by
+    by_cases h : p.mantissa_ = 0
+    · exact Or.inl h
+    · exact Or.inr (Number.operator_mul_rounded_upward _ _ _ hd hrn hp h)
+  have hp0 : 0 ≤ p.toRat := by
+    rcases hpr with h0' | ⟨n, hn, hv⟩
+    · exact le_of_eq (Number.toRat_eq_zero_of_mantissa_zero p h0').symm
+    · rw [hv]
+      exact le_trans (mul_nonneg h0 hr0) (Number.le_upper _ _ hn)
+  -- the larger side is nonzero all the way back
+  have hp'0 : p'.mantissa_ ≠ 0 := (Number.operator_div_operands_ne_zero hpn' hun hok' hnz').1
+  have hple : p.toRat ≤ p'.toRat :=
+    Number.toRat_le_of_rounds_upward p p' _ _ hpn' (mul_nonneg h0 hr0) hprod hpr
+      (Number.operator_mul_rounded_upward _ _ _ hd' hrn' hp' hp'0)
+  have hrr : raw.mantissa_ = 0 ∨
+      Number.RoundsToRepresentable raw (p.toRat / (kTenthBipsPerUnity.toNumber .upward).toRat) .upward := by
+    by_cases h : raw.mantissa_ = 0
+    · exact Or.inl h
+    · exact Or.inr (Number.operator_div_rounded_upward _ _ _ hpn hun hok h)
+  exact Number.toRat_le_of_rounds_upward raw raw' _ _ hrawn' (div_nonneg hp0 hu0)
+    (div_le_div_of_nonneg_right hple hu0) hrr
+    (Number.operator_div_rounded_upward _ _ _ hpn' hun hok' hnz')
+
+end XRPL.Model.Protocol

@@ -93,8 +93,22 @@ theorem Vault.withdraw_exits (amount : WithdrawAmount) (waive : Bool) (t : UInt3
     ∀ t0 : UInt32, Vault.Reachable v t0 → amount.amount.Canonical → amount.InAsset v.numericType →
       (∀ amounts : VaultAmounts, (computeWithdraw v amount waive).run = .ok (.ok amounts) →
         amounts.shares.toRat = v.toExact.sharesTotal) →
-      (v.withdraw amount waive t hpos).run ≠ .error .notLawful := by
-  sorry
+      (v.withdraw amount waive t hpos).run ≠ .error .notLawful :=
+  ⟨Vault.withdraw_too_soon_proof v amount waive t hpos,
+    fun assets shares hpos' => Vault.withdraw_zero_shares_proof v assets shares waive t hpos',
+    Vault.withdraw_compute_rejected_proof v amount waive t hpos _,
+    Vault.withdraw_has_obligations_proof v amount waive t hpos,
+    fun shares hpos' => Vault.withdraw_zero_payout_proof v shares waive t hpos',
+    Vault.withdraw_payout_too_small_proof v amount waive t hpos,
+    Vault.withdraw_insufficient_funds_proof v amount waive t hpos,
+    Vault.withdraw_clamp_precision_loss_proof v amount waive t hpos,
+    Vault.withdraw_payout_insufficient_funds_proof v amount waive t hpos,
+    Vault.withdraw_final_insufficient_funds_proof v amount waive t hpos,
+    Vault.withdraw_success_proof v amount waive t hpos,
+    fun t0 r hr hc hty hok hfinal => Vault.withdraw_final_proof v amount waive t t0 hpos hr hc hty
+      (Vault.Reachable.maxValue_fits v t0 hr (Vault.withdraw_sharesTotal_pos v amount waive t hpos hc hty r hok))
+      r hok hfinal,
+    fun t0 => Vault.withdraw_final_success_proof v amount waive t t0 hpos⟩
 
 /-- Every rejection of a withdrawal. -/
 theorem Vault.withdraw_error_codes (amount : WithdrawAmount) (waive : Bool) (t : UInt32)
@@ -104,7 +118,9 @@ theorem Vault.withdraw_error_codes (amount : WithdrawAmount) (waive : Bool) (t :
     (ter : TER) (hok : (v.withdraw amount waive t hpos).run = .ok (.error ter)) :
     ter = .tecTOO_SOON ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecPATH_DRY ∨ ter = .tecHAS_OBLIGATIONS ∨
       ter = .tecINSUFFICIENT_FUNDS := by
-  sorry
+  -- a lawful vault stores its cash exactly, so the `tefBAD_LEDGER` branch never runs
+  simpa [v.valid.assetsAvailable_representable] using
+    Vault.withdraw_error_codes_proof v amount waive t hpos hmax ter hok
 
 /-- Witness for `withdraw_error_codes`: on a reachable XRP vault of 100 drops and 100 shares, a withdrawal of
 `10^17 + 1` shares ends in an error, not a result code. The shares are worth more than the largest XRP amount. -/
@@ -113,7 +129,7 @@ theorem Vault.withdraw_error_codes_attained :
       Vault.Reachable v t0 ∧
       amount.amount.Canonical ∧
       (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
-      (v.withdraw amount waive t hpos).run = .error .outOfRange := by
-  sorry
+      (v.withdraw amount waive t hpos).run = .error .outOfRange :=
+  Vault.withdraw_out_of_range_witness
 
 end XRPL.Model.SingleAssetVault

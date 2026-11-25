@@ -14,5 +14,10 @@ import XRPL.Properties.Protocol.STAmount.Range.Overflow
 import XRPL.Properties.Protocol.STAmount.Range.Wrap
 import XRPL.Properties.Protocol.STAmount.Compare.Compare
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
+import XRPL.Properties.Vault.Defs
+import XRPL.Properties.Vault.VaultDepositReturn
+import XRPL.Properties.Vault.VaultWithdrawReturn
+import XRPL.Properties.Vault.VaultDeposit
+import XRPL.Properties.Vault.VaultWithdraw
 import XRPL.Properties.Protocol.Number.AtExponent
 import XRPL.Properties.Protocol.Number.Totality
