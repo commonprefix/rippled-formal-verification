@@ -1,0 +1,119 @@
+import XRPL.Properties.Vault.Proofs.WithdrawExits
+import XRPL.Properties.Vault.Proofs.MaxValueFits
+import XRPL.Properties.Vault.Proofs.WithdrawRangeWitness
+
+/-! # `Vault.withdraw` exits
+
+One line per exit of `Vault.withdraw_exits`, in check order. A rejection carries only its code, and the later exits
+assume the earlier checks passed (`Vault.WithdrawPriced`, then `Vault.WithdrawNonFinal` before the fee). -/
+
+namespace XRPL.Model.SingleAssetVault
+
+open XRPL.Model.Protocol
+
+variable (v : Vault)
+
+/-- The exits of `withdraw`, in the order it runs its checks, then its success lines. Each line assumes the checks
+before it passed. -/
+theorem Vault.withdraw_exits (amount : WithdrawAmount) (waive : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat) :
+    ((v.earlyExitFeeRate.isNone && v.phase t == .investment) = true →
+      (v.withdraw amount waive t hpos).run = .ok (.error .tecTOO_SOON)) ∧
+    (∀ (assets shares : STAmount) (hpos' : 0 < (WithdrawAmount.vaultAssets assets).amount.toRat),
+      (v.earlyExitFeeRate.isNone && v.phase t == .investment) = false →
+      assetsToSharesWithdraw v assets true waive = .ok shares → shares.isZero = true →
+      (v.withdraw (.vaultAssets assets) waive t hpos').run = .ok (.error .tecPRECISION_LOSS)) ∧
+    ((v.earlyExitFeeRate.isNone && v.phase t == .investment) = false →
+      (computeWithdraw v amount waive).run = .ok (.error .tecPATH_DRY) →
+      (v.withdraw amount waive t hpos).run = .ok (.error .tecPATH_DRY)) ∧
+    (∀ (amounts : VaultAmounts) (sharesTotalAmount : STAmount),
+      (v.earlyExitFeeRate.isNone && v.phase t == .investment) = false →
+      (computeWithdraw v amount waive).run = .ok (.ok amounts) →
+      STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount →
+      amounts.shares.operator_eq sharesTotalAmount = true → v.assetsDeployed.operator_ne Number.zero = true →
+      (v.withdraw amount waive t hpos).run = .ok (.error .tecHAS_OBLIGATIONS)) ∧
+    (∀ (shares : STAmount) (hpos' : 0 < (WithdrawAmount.vaultShares shares).amount.toRat) (amounts : VaultAmounts)
+        (sharesTotalAmount : STAmount) (assetsNumber netAssetValue : Number),
+      v.WithdrawPriced (.vaultShares shares) waive t amounts sharesTotalAmount →
+      amounts.shares.operator_eq sharesTotalAmount = false →
+      amounts.assets.toNumber .to_nearest = .ok assetsNumber → v.assetsTotalForWithdrawal waive = .ok netAssetValue →
+      amounts.assets.isZero = true → netAssetValue.operator_ne Number.zero = true →
+      (v.withdraw (.vaultShares shares) waive t hpos').run = .ok (.error .tecPRECISION_LOSS)) ∧
+    (∀ (amounts : VaultAmounts) (sharesTotalAmount : STAmount) (assetsNumber netAssetValue : Number) (ter : TER),
+      v.WithdrawPriced amount waive t amounts sharesTotalAmount →
+      amounts.shares.operator_eq sharesTotalAmount = false →
+      amounts.assets.toNumber .to_nearest = .ok assetsNumber → v.assetsTotalForWithdrawal waive = .ok netAssetValue →
+      (amount.isByShares && amounts.assets.isZero && netAssetValue.operator_ne Number.zero) = false →
+      v.checkDebitNotDust assetsNumber = .ok ter → (ter != .tesSUCCESS) = true →
+      (v.withdraw amount waive t hpos).run = .ok (.error ter)) ∧
+    (∀ (amounts : VaultAmounts) (sharesTotalAmount : STAmount) (assetsNumber : Number),
+      v.WithdrawNonFinal amount waive t amounts sharesTotalAmount assetsNumber → v.earlyExitFeeRateAt t = 0 →
+      v.assetsAvailable.operator_lt assetsNumber = true →
+      (v.withdraw amount waive t hpos).run = .ok (.error .tecINSUFFICIENT_FUNDS)) ∧
+    (∀ (amounts : VaultAmounts) (sharesTotalAmount : STAmount) (assetsNumber fee payoutNumber : Number)
+        (payout : STAmount),
+      v.WithdrawNonFinal amount waive t amounts sharesTotalAmount assetsNumber →
+      (v.earlyExitFeeRateAt t == 0 && v.assetsAvailable.operator_lt assetsNumber) = false →
+      (v.earlyExitFeeRateAt t == maxEarlyExitFeeRate) = false →
+      tenthBipsOfValue assetsNumber (v.earlyExitFeeRateAt t) .upward = .ok fee →
+      assetsNumber.operator_sub fee .downward = .ok payoutNumber →
+      STAmount.ofNumber v.numericType payoutNumber .downward = .ok payout →
+      (payout.isZero = true ∨ ∃ clamped : STAmount,
+        clampToSumExponent v.assetsAvailable payout.operator_neg v.baseExponent = .ok clamped ∧
+          clamped.isFractionalNonPositive = .ok true) →
+      (v.withdraw amount waive t hpos).run = .ok (.error .tecPRECISION_LOSS)) ∧
+    (∀ (amounts : VaultAmounts) (sharesTotalAmount : STAmount) (assetsNumber fee payoutNumber clampedNumber : Number)
+        (payout clamped : STAmount),
+      v.WithdrawNonFinal amount waive t amounts sharesTotalAmount assetsNumber →
+      (v.earlyExitFeeRateAt t == 0 && v.assetsAvailable.operator_lt assetsNumber) = false →
+      (v.earlyExitFeeRateAt t == maxEarlyExitFeeRate) = false →
+      tenthBipsOfValue assetsNumber (v.earlyExitFeeRateAt t) .upward = .ok fee →
+      assetsNumber.operator_sub fee .downward = .ok payoutNumber →
+      STAmount.ofNumber v.numericType payoutNumber .downward = .ok payout → payout.isZero = false →
+      clampToSumExponent v.assetsAvailable payout.operator_neg v.baseExponent = .ok clamped →
+      clamped.isFractionalNonPositive = .ok false → clamped.toNumber .to_nearest = .ok clampedNumber →
+      v.assetsAvailable.operator_lt clampedNumber = true →
+      (v.withdraw amount waive t hpos).run = .ok (.error .tecINSUFFICIENT_FUNDS)) ∧
+    (∀ (amounts : VaultAmounts) (sharesTotalAmount : STAmount) (assetsNumber : Number),
+      v.WithdrawPriced amount waive t amounts sharesTotalAmount →
+      amounts.shares.operator_eq sharesTotalAmount = true →
+      amounts.assets.toNumber .to_nearest = .ok assetsNumber → v.assetsAvailable.operator_lt assetsNumber = true →
+      (v.withdraw amount waive t hpos).run = .ok (.error .tecINSUFFICIENT_FUNDS)) ∧
+    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
+    (amount.amount.Canonical → amount.InAsset v.numericType →
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) →
+      (∀ amounts : VaultAmounts, (computeWithdraw v amount waive).run = .ok (.ok amounts) →
+        amounts.shares.toRat < v.toExact.sharesTotal) →
+      (v.withdraw amount waive t hpos).run ≠ .error .notLawful) ∧
+    (∀ (t0 : UInt32) (r : VaultWithAmounts), Vault.Reachable v t0 → amount.amount.Canonical →
+      amount.InAsset v.numericType → (v.withdraw amount waive t hpos).run = .ok (.ok r) →
+      r.shares.toRat = v.toExact.sharesTotal →
+      r.assets.toRat = v.assetsAvailable.toRat ∧ r.vault'.assetsAvailable = Number.zero ∧
+        r.vault'.sharesTotal = Number.zero) ∧
+    -- the holder redeems every outstanding share
+    ∀ t0 : UInt32, Vault.Reachable v t0 → amount.amount.Canonical → amount.InAsset v.numericType →
+      (∀ amounts : VaultAmounts, (computeWithdraw v amount waive).run = .ok (.ok amounts) →
+        amounts.shares.toRat = v.toExact.sharesTotal) →
+      (v.withdraw amount waive t hpos).run ≠ .error .notLawful := by
+  sorry
+
+/-- Every rejection of a withdrawal. -/
+theorem Vault.withdraw_error_codes (amount : WithdrawAmount) (waive : Bool) (t : UInt32)
+    (hpos : 0 < amount.amount.toRat)
+    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (ter : TER) (hok : (v.withdraw amount waive t hpos).run = .ok (.error ter)) :
+    ter = .tecTOO_SOON ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecPATH_DRY ∨ ter = .tecHAS_OBLIGATIONS ∨
+      ter = .tecINSUFFICIENT_FUNDS := by
+  sorry
+
+/-- Witness for `withdraw_error_codes`: on a reachable XRP vault of 100 drops and 100 shares, a withdrawal of
+`10^17 + 1` shares ends in an error, not a result code. The shares are worth more than the largest XRP amount. -/
+theorem Vault.withdraw_error_codes_attained :
+    ∃ (v : Vault) (t0 t : UInt32) (amount : WithdrawAmount) (waive : Bool) (hpos : 0 < amount.amount.toRat),
+      Vault.Reachable v t0 ∧
+      amount.amount.Canonical ∧
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
+      (v.withdraw amount waive t hpos).run = .error .outOfRange := by
+  sorry
+
+end XRPL.Model.SingleAssetVault
